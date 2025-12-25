@@ -65,9 +65,10 @@ class ServerConfig:
 class GeminiConfig:
     """Gemini API configuration."""
     api_key: Optional[str] = None
-    model: str = "gemini-pro"
+    model: str = "gemini-3-flash-preview"
     max_tokens: int = 1000
     temperature: float = 0.7
+    thinking_level: str = "HIGH"  # HIGH thinking for better analysis
 
 
 # Global config instances
@@ -75,5 +76,9 @@ game_config = GameConfig()
 ai_config = AIConfig()
 elo_config = ELOConfig()
 server_config = ServerConfig()
-gemini_config = GeminiConfig()
+
+# Gemini API key from environment or hardcoded for testing
+import os
+_gemini_api_key = os.environ.get("GEMINI_API_KEY", "AIzaSyBGdpw3KuRFiLzxNIPjCMphUzlInLLx-Pk")
+gemini_config = GeminiConfig(api_key=_gemini_api_key)
 

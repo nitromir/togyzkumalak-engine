@@ -236,9 +236,11 @@ async def analyze_position(game_id: str, request: AnalysisRequest):
     if not board:
         raise HTTPException(status_code=404, detail="Game not found")
     
+    # Convert board to dictionary for Gemini analyzer
+    board_state = board.get_state_dict()
     history = game_manager.get_move_history(game_id) if request.include_history else None
     
-    analysis = await gemini_analyzer.analyze_position(board, history)
+    analysis = await gemini_analyzer.analyze_position(board_state, history)
     return analysis
 
 
@@ -249,8 +251,10 @@ async def suggest_move(game_id: str):
     if not board:
         raise HTTPException(status_code=404, detail="Game not found")
     
+    # Convert board to dictionary for Gemini analyzer
+    board_state = board.get_state_dict()
     history = game_manager.get_move_history(game_id)
-    suggestion = await gemini_analyzer.suggest_move(board, history)
+    suggestion = await gemini_analyzer.suggest_move(board_state, history)
     return suggestion
 
 
@@ -372,13 +376,17 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
             elif data["type"] == "request_analysis":
                 board = game_manager.get_board(game_id)
                 if board:
-                    analysis = await gemini_analyzer.analyze_position(board)
+                    board_state = board.get_state_dict()
+                    history = game_manager.get_move_history(game_id)
+                    analysis = await gemini_analyzer.analyze_position(board_state, history)
                     await websocket.send_json({"type": "analysis", "data": analysis})
             
             elif data["type"] == "request_suggestion":
                 board = game_manager.get_board(game_id)
                 if board:
-                    suggestion = await gemini_analyzer.suggest_move(board)
+                    board_state = board.get_state_dict()
+                    history = game_manager.get_move_history(game_id)
+                    suggestion = await gemini_analyzer.suggest_move(board_state, history)
                     await websocket.send_json({"type": "suggestion", "data": suggestion})
             
             elif data["type"] == "resign":
