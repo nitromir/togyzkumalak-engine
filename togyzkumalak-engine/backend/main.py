@@ -92,6 +92,21 @@ manager = ConnectionManager()
 # REST API Endpoints
 # =============================================================================
 
+import numpy as np
+
+def convert_numpy(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy(i) for i in obj]
+    return obj
+
 @app.get("/")
 async def root():
     """Serve the frontend."""
@@ -134,7 +149,7 @@ async def create_game(request: NewGameRequest):
         ai_move, thinking_time = ai_engine.get_move(board, request.ai_level)
         success, state = game_manager.make_move(game.game_id, ai_move, thinking_time)
     
-    return state
+    return convert_numpy(state)
 
 
 @app.get("/api/games/{game_id}")
@@ -143,7 +158,7 @@ async def get_game(game_id: str):
     state = game_manager.get_game_state(game_id)
     if "error" in state:
         raise HTTPException(status_code=404, detail=state["error"])
-    return state
+    return convert_numpy(state)
 
 
 @app.post("/api/games/{game_id}/move")
@@ -180,8 +195,8 @@ async def make_move(game_id: str, request: MoveRequest):
             ai_move, thinking_time = ai_engine.get_move(board, game.ai_level)
             success, state = game_manager.make_move(game_id, ai_move, thinking_time)
             state["ai_move"] = {
-                "move": ai_move,
-                "thinking_time_ms": thinking_time
+                "move": int(ai_move),
+                "thinking_time_ms": int(thinking_time)
             }
     
     # Handle game end
@@ -197,7 +212,7 @@ async def make_move(game_id: str, request: MoveRequest):
         state["elo_change"] = player_change
         state["new_elo"] = elo_system.get_or_create_player("human").current_elo
     
-    return state
+    return convert_numpy(state)
 
 
 @app.get("/api/games/{game_id}/history")

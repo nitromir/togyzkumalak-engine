@@ -111,55 +111,49 @@ class GeminiAnalyzer:
         return "\n".join(lines[-20:])  # Last 20 moves
     
     def _build_analysis_prompt(self, position_text: str, history_text: str) -> str:
-        """Build the analysis prompt."""
-        return f"""You are an expert Togyzkumalak (Toguz Kumalak / Тоғыз Құмалақ) player and analyst.
-Analyze the following position and provide strategic advice.
+        """Build the analysis prompt in Russian."""
+        return f"""Вы — эксперт по игре Тогыз Кумалак (Тоғыз Құмалақ).
+Проанализируйте следующую позицию и дайте стратегический совет.
 
-RULES REMINDER:
-- Togyzkumalak is a two-player mancala game with 9 pits per side
-- Each pit starts with 9 kumalaks (stones), totaling 162
-- Players move counterclockwise, sowing stones one per pit
-- Capture: If last stone lands in opponent's pit making it even, capture all
-- Tuzduk: If last stone lands making exactly 3 in opponent's pit (not 9th pit), it becomes tuzduk (marked X)
-- Tuzduk belongs to you permanently, opponent's stones falling there go to your kazan
-- Each player can have only one tuzduk, and they cannot be symmetric
-- Win: First to get more than 81 in kazan (or opponent has no moves)
-- Draw: Both have exactly 81
+ОТВЕЧАЙТЕ СТРОГО НА РУССКОМ ЯЗЫКЕ.
 
 {position_text}
 
 {history_text}
 
-Please provide analysis in the following format:
+Пожалуйста, предоставьте анализ в следующем формате:
 
-**EVALUATION:** Rate the position from -10 (Black winning) to +10 (White winning). Example: "+2.5 (slight White advantage)"
+**ОЦЕНКА:** Оцените позицию от -10 (черные выигрывают) до +10 (белые выигрывают). Пример: "+2.5 (небольшое преимущество белых)"
 
-**BEST MOVE:** Recommend the best move (pit number 1-9) for the current player with reasoning.
+**ЛУЧШИЙ ХОД:** Рекомендуйте лучший ход (номер лунки 1-9) для текущего игрока с обоснованием.
 
-**KEY FACTORS:** List 2-3 key strategic factors in this position.
+**КЛЮЧЕВЫЕ ФАКТОРЫ:** Перечислите 2-3 ключевых стратегических фактора в этой позиции.
 
-**THREATS:** Any tactical threats the current player should be aware of.
+**УГРОЗЫ:** Любые тактические угрозы, о которых должен знать текущий игрок.
 
-Keep your response concise but insightful. Use Kazakh pit names where helpful."""
-    
+Пишите кратко, но содержательно. Используйте казахские названия лунок, где это уместно."""
+
     def _build_suggest_prompt(self, position_text: str, legal_moves: List[int]) -> str:
-        """Build the move suggestion prompt."""
-        return f"""You are an expert Togyzkumalak player. Recommend the best move for this position.
+        """Build the move suggestion prompt in Russian - optimized for quick response."""
+        return f"""Вы — эксперт по Тогыз Кумалак. 
+
+ВАЖНО: Начните ответ СРАЗУ с рекомендации в формате ниже, без вступления!
 
 {position_text}
 
-Legal moves: {legal_moves}
+Доступные ходы: {legal_moves}
 
-Analyze each legal move briefly:
-- Where does the last stone land?
-- Any captures possible?
-- Any tuzduk opportunities?
-- Does it leave you vulnerable?
+ОТВЕТЬТЕ СТРОГО В ЭТОМ ФОРМАТЕ:
 
-Then provide your recommendation:
+**РЕКОМЕНДУЕМЫЙ ХОД:** [число 1-9]
 
-**RECOMMENDED MOVE:** [single number 1-9]
-**REASONING:** [2-3 sentences explaining why]"""
+**ОБОСНОВАНИЕ:** Краткое объяснение (2-3 предложения).
+
+**АНАЛИЗ ХОДОВ:**
+- Ход X: куда приземлится, захват?
+- Ход Y: ...
+
+Отвечайте на русском языке."""
 
     async def analyze_position(
         self,
@@ -201,6 +195,12 @@ Then provide your recommendation:
                 )
             )
             
+            # #region agent log
+            import json, time
+            with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"location":"gemini_analyzer.py:202", "message":"Gemini Analysis Raw Output", "data":{"raw_text":response.text}, "timestamp":int(time.time()*1000), "sessionId":"debug-session", "hypothesisId":"G"}) + "\n")
+            # #endregion
+
             return {
                 "available": True,
                 "analysis": response.text,
@@ -242,25 +242,50 @@ Then provide your recommendation:
                     model=self.model,
                     contents=prompt,
                     config={
-                        "max_output_tokens": 500,
+                        "max_output_tokens": 1200,
                         "temperature": 0.3  # Lower for focused response
                     }
                 )
             )
             
             text = response.text
+            
+            # #region agent log
+            import json, time
+            with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"location":"gemini_analyzer.py:250", "message":"Gemini Suggestion Raw Output", "data":{"raw_text":text, "legal_moves":legal_moves}, "timestamp":int(time.time()*1000), "sessionId":"debug-session", "hypothesisId":"E"}) + "\n")
+            # #endregion
+
             suggested_move = None
             
-            # Try to extract move number
-            for move in legal_moves:
-                if f"RECOMMENDED MOVE:** {move}" in text or f"RECOMMENDED MOVE: {move}" in text:
-                    suggested_move = move
-                    break
+            # Try to extract move number (English and Russian keys)
+            search_keys = ["RECOMMENDED MOVE:", "РЕКОМЕНДУЕМЫЙ ХОД:"]
+            for key in search_keys:
+                if f"{key}**" in text:
+                    parts = text.split(f"{key}**")
+                    if len(parts) > 1:
+                        import re
+                        match = re.search(r'(\d)', parts[1])
+                        if match:
+                            num = int(match.group(1))
+                            if num in legal_moves:
+                                suggested_move = num
+                                break
+                if key in text:
+                    parts = text.split(key)
+                    if len(parts) > 1:
+                        import re
+                        match = re.search(r'(\d)', parts[1])
+                        if match:
+                            num = int(match.group(1))
+                            if num in legal_moves:
+                                suggested_move = num
+                                break
             
-            # Fallback extraction
+            # Fallback extraction if suggested_move still None
             if not suggested_move:
                 import re
-                match = re.search(r'RECOMMENDED MOVE[:\*\s]+(\d)', text)
+                match = re.search(r'(?:RECOMMENDED MOVE|РЕКОМЕНДУЕМЫЙ ХОД)[:\*\s]+(\d)', text)
                 if match:
                     num = int(match.group(1))
                     if num in legal_moves:

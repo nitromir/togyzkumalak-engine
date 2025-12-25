@@ -1,6 +1,6 @@
 /**
  * Togyzkumalak Engine - Modern Board Renderer
- * HTML/CSS-based board visualization.
+ * HTML/CSS-based board with stacked kumalak visualization.
  */
 
 class ModernBoard {
@@ -68,7 +68,7 @@ class ModernBoard {
     }
 
     /**
-     * Create a pit element.
+     * Create a pit element with kumalak container.
      */
     createPit(index, color) {
         const pit = document.createElement('div');
@@ -79,7 +79,12 @@ class ModernBoard {
         pit.setAttribute('tabindex', '0');
         pit.setAttribute('aria-label', `Pit ${index + 1} - ${this.pitNames[index]}`);
         
-        // Kumalak count
+        // Kumalak container (for visual stones)
+        const kumalakContainer = document.createElement('div');
+        kumalakContainer.className = 'kumalak-container';
+        pit.appendChild(kumalakContainer);
+        
+        // Kumalak count overlay
         const count = document.createElement('span');
         count.className = 'pit-count';
         count.textContent = '9';
@@ -122,6 +127,118 @@ class ModernBoard {
     }
 
     /**
+     * Generate stacked kumalak positions.
+     */
+    getKumalakPositions(count, pitWidth, pitHeight) {
+        const positions = [];
+        const maxVisual = 12;
+        const displayCount = Math.min(count, maxVisual);
+        const radius = 8;
+        const centerX = pitWidth / 2;
+        const centerY = pitHeight / 2;
+        
+        // Pseudo-random for consistent jitter
+        const jitter = (i, mult) => ((Math.sin(i * 9999 + mult) * 10000) % 1) * 4 - 2;
+        
+        if (displayCount <= 2) {
+            // 1-2: horizontal center
+            const spacing = 18;
+            const startX = centerX - ((displayCount - 1) * spacing / 2);
+            for (let i = 0; i < displayCount; i++) {
+                positions.push({
+                    left: startX + i * spacing + jitter(i, 1) - radius,
+                    top: centerY + jitter(i, 2) - radius,
+                    z: i
+                });
+            }
+        } else if (displayCount <= 5) {
+            // 3-5: two rows with overlap
+            const row1 = Math.ceil(displayCount / 2);
+            const row2 = displayCount - row1;
+            const spacing = 16;
+            
+            // Bottom row
+            let startX = centerX - ((row1 - 1) * spacing / 2);
+            for (let i = 0; i < row1; i++) {
+                positions.push({
+                    left: startX + i * spacing + jitter(i, 3) - radius,
+                    top: centerY + 10 + jitter(i, 4) - radius,
+                    z: i
+                });
+            }
+            
+            // Top row (overlapping)
+            startX = centerX - ((row2 - 1) * spacing / 2);
+            for (let i = 0; i < row2; i++) {
+                positions.push({
+                    left: startX + i * spacing + jitter(i + 10, 5) - radius,
+                    top: centerY - 10 + jitter(i + 10, 6) - radius,
+                    z: row1 + i
+                });
+            }
+        } else {
+            // 6+: Multi-layer stacking
+            const cols = 2;
+            const spacingX = 18;
+            const spacingY = 14;
+            const overlapY = 4;
+            
+            for (let i = 0; i < displayCount; i++) {
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                const rowY = 10 + row * (spacingY - overlapY);
+                const startX = centerX - ((cols - 1) * spacingX / 2);
+                
+                positions.push({
+                    left: startX + col * spacingX + jitter(i, 7) - radius,
+                    top: rowY + jitter(i, 8) - radius,
+                    z: i
+                });
+            }
+        }
+        
+        return { positions, overflow: count > maxVisual ? count - maxVisual : 0 };
+    }
+
+    /**
+     * Render kumalaks in a pit with stacking.
+     */
+    renderKumalaks(pit, count) {
+        const container = pit.querySelector('.kumalak-container');
+        container.innerHTML = '';
+        
+        if (count <= 0) return;
+        
+        const { positions, overflow } = this.getKumalakPositions(count, 70, 70);
+        
+        // Sort by z-index for proper overlap
+        positions.sort((a, b) => a.z - b.z);
+        
+        positions.forEach((pos, i) => {
+            const kumalak = document.createElement('div');
+            kumalak.className = 'kumalak';
+            kumalak.style.left = `${pos.left}px`;
+            kumalak.style.top = `${pos.top}px`;
+            kumalak.style.zIndex = pos.z;
+            
+            // Add red marker on top kumalak
+            if (i === positions.length - 1) {
+                kumalak.classList.add('top-kumalak');
+            }
+            
+            container.appendChild(kumalak);
+        });
+        
+        // Show overflow indicator
+        if (overflow > 0) {
+            const indicator = document.createElement('span');
+            indicator.className = 'kumalak-overflow';
+            indicator.textContent = `+${overflow}`;
+            container.appendChild(indicator);
+        }
+    }
+
+    /**
      * Render the board state.
      */
     render(boardState) {
@@ -148,9 +265,11 @@ class ModernBoard {
                 // This is black's tuzduk
                 count.textContent = 'X';
                 pit.classList.add('tuzduk');
+                pit.querySelector('.kumalak-container').innerHTML = '';
             } else {
                 count.textContent = value;
                 pit.classList.remove('tuzduk');
+                this.renderKumalaks(pit, value);
             }
             
             // Playable?
@@ -174,9 +293,11 @@ class ModernBoard {
                 // This is white's tuzduk
                 count.textContent = 'X';
                 pit.classList.add('tuzduk');
+                pit.querySelector('.kumalak-container').innerHTML = '';
             } else {
                 count.textContent = value;
                 pit.classList.remove('tuzduk');
+                this.renderKumalaks(pit, value);
             }
             
             // Playable?
@@ -261,4 +382,3 @@ class ModernBoard {
 
 // Export
 window.ModernBoard = ModernBoard;
-

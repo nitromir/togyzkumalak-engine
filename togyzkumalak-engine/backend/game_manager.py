@@ -221,13 +221,8 @@ class TogyzkumalakBoard:
         # Check for atsyrau (opponent has no moves)
         self._check_atsyrau()
         
-        # Generate notation
-        if current < 9:
-            landing = current + 1
-        else:
-            landing = current - 8
-        
-        notation = f"{move}{landing}"
+        # Generate notation (just the pit number, with x for tuzduk)
+        notation = str(move)
         if tuzduk_captured:
             notation += "x"
         
@@ -257,16 +252,20 @@ class TogyzkumalakBoard:
                     self.fields[pit_index] = 0
     
     def get_state_dict(self) -> Dict:
-        """Get board state as dictionary."""
+        """Get board state as dictionary with JSON-serializable types."""
+        # Convert numpy types to native Python types
+        def to_int(val):
+            return int(val) if hasattr(val, 'item') else val
+        
         return {
-            "white_pits": self.fields[0:9],
-            "black_pits": self.fields[9:18],
-            "white_tuzduk": self.fields[18],
-            "black_tuzduk": self.fields[19],
-            "white_kazan": self.fields[20],
-            "black_kazan": self.fields[21],
+            "white_pits": [to_int(v) for v in self.fields[0:9]],
+            "black_pits": [to_int(v) for v in self.fields[9:18]],
+            "white_tuzduk": to_int(self.fields[18]),
+            "black_tuzduk": to_int(self.fields[19]),
+            "white_kazan": to_int(self.fields[20]),
+            "black_kazan": to_int(self.fields[21]),
             "current_player": self.current_player,
-            "legal_moves": self.get_legal_moves(),
+            "legal_moves": [to_int(m) for m in self.get_legal_moves()],
             "is_finished": self.is_finished,
             "winner": self.winner
         }
@@ -276,29 +275,32 @@ class TogyzkumalakBoard:
         # Similar to gym environment observation
         obs = []
         
+        def to_float(val):
+            return float(val) if hasattr(val, 'item') else float(val)
+        
         # White pits (9 values, normalized)
         for i in range(9):
             val = self.fields[i] if self.fields[i] != self.TUZDUK else 0
-            obs.append(val / 81.0)
+            obs.append(to_float(val) / 81.0)
         
         # Black pits (9 values, normalized)
         for i in range(9, 18):
             val = self.fields[i] if self.fields[i] != self.TUZDUK else 0
-            obs.append(val / 81.0)
+            obs.append(to_float(val) / 81.0)
         
         # Kazans (normalized)
-        obs.append(self.fields[20] / 162.0)
-        obs.append(self.fields[21] / 162.0)
+        obs.append(to_float(self.fields[20]) / 162.0)
+        obs.append(to_float(self.fields[21]) / 162.0)
         
         # Tuzduk positions (one-hot encoded, 9 positions each)
         for i in range(9):
-            obs.append(1.0 if self.fields[18] == i + 1 else 0.0)
+            obs.append(1.0 if int(self.fields[18]) == i + 1 else 0.0)
         for i in range(9):
-            obs.append(1.0 if self.fields[19] == i + 1 else 0.0)
+            obs.append(1.0 if int(self.fields[19]) == i + 1 else 0.0)
         
         # Current player (one-hot)
-        obs.append(1.0 if self.fields[22] == 0 else 0.0)
-        obs.append(1.0 if self.fields[22] == 1 else 0.0)
+        obs.append(1.0 if int(self.fields[22]) == 0 else 0.0)
+        obs.append(1.0 if int(self.fields[22]) == 1 else 0.0)
         
         # Pad to 128 dimensions
         while len(obs) < 128:
@@ -372,16 +374,19 @@ class GameManager:
         if game.status != GameStatus.IN_PROGRESS:
             return False, {"error": "Game is not in progress"}
         
+        # Remember who made the move BEFORE switching
+        current_player = board.current_player
+        
         # Make the move
         success, notation = board.make_move(move)
         
         if not success:
             return False, {"error": "Invalid move"}
         
-        # Record the move
+        # Record the move with the player who made it
         move_record = MoveRecord(
             move_number=len(game.moves) + 1,
-            player=board.current_player,  # This is now the next player
+            player=current_player,  # Player who made this move
             action=move - 1,  # Convert to 0-based
             notation=notation,
             timestamp=datetime.now().isoformat(),

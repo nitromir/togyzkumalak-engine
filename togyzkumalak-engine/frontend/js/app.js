@@ -1,6 +1,6 @@
 /**
  * Togyzkumalak Engine - Main Application
- * Handles game flow, UI interactions, and state management.
+ * Simplified: Classic Board only
  */
 
 class TogyzkumalakApp {
@@ -10,11 +10,9 @@ class TogyzkumalakApp {
         this.gameState = null;
         this.playerColor = 'white';
         this.aiLevel = 3;
-        this.isClassicView = false;
         this.isMyTurn = false;
         
-        // Board renderers
-        this.modernBoard = null;
+        // Board renderer (Classic only)
         this.classicBoard = null;
         
         // DOM elements
@@ -29,7 +27,7 @@ class TogyzkumalakApp {
     init() {
         this.cacheElements();
         this.bindEvents();
-        this.initBoards();
+        this.initBoard();
         this.loadEloStats();
     }
 
@@ -54,11 +52,8 @@ class TogyzkumalakApp {
             playerElo: document.getElementById('playerElo'),
             lastMove: document.getElementById('lastMove'),
             
-            // Boards
-            modernBoard: document.getElementById('modernBoard'),
+            // Board
             classicBoard: document.getElementById('classicBoard'),
-            btnViewToggle: document.getElementById('btnViewToggle'),
-            viewIcon: document.getElementById('viewIcon'),
             
             // Controls
             btnUndo: document.getElementById('btnUndo'),
@@ -117,9 +112,6 @@ class TogyzkumalakApp {
         // Start game
         this.elements.btnStartGame.addEventListener('click', () => this.startGame());
         
-        // View toggle
-        this.elements.btnViewToggle.addEventListener('click', () => this.toggleView());
-        
         // Game controls
         this.elements.btnNewGame.addEventListener('click', () => this.showSetup());
         this.elements.btnResign.addEventListener('click', () => this.resign());
@@ -140,21 +132,10 @@ class TogyzkumalakApp {
     }
 
     /**
-     * Initialize board renderers.
+     * Initialize Classic Board.
      */
-    initBoards() {
-        this.modernBoard = new ModernBoard({
-            whitePits: 'whitePits',
-            blackPits: 'blackPits',
-            kazanWhite: 'kazanWhite',
-            kazanBlack: 'kazanBlack',
-            pitLabels: 'pitLabels'
-        });
-        
+    initBoard() {
         this.classicBoard = new ClassicBoard('classicBoard');
-        
-        // Set move callbacks
-        this.modernBoard.setMoveCallback((move) => this.makeMove(move));
         this.classicBoard.setMoveCallback((move) => this.makeMove(move));
     }
 
@@ -197,8 +178,7 @@ class TogyzkumalakApp {
             this.gameId = response.game_id;
             this.gameState = response;
             
-            // Configure boards
-            this.modernBoard.setHumanColor(this.playerColor);
+            // Configure board
             this.classicBoard.setHumanColor(this.playerColor);
             
             // Update UI
@@ -264,7 +244,6 @@ class TogyzkumalakApp {
                 
                 // Highlight AI move
                 const aiPlayer = this.playerColor === 'white' ? 'black' : 'white';
-                this.modernBoard.highlightLastMove(response.ai_move.move, aiPlayer);
                 this.classicBoard.highlightLastMove(response.ai_move.move, aiPlayer);
                 
                 // Update history again after AI move
@@ -288,8 +267,7 @@ class TogyzkumalakApp {
     updateBoard(state) {
         const board = state.board;
         
-        // Update boards
-        this.modernBoard.render(board);
+        // Update board
         this.classicBoard.render(board);
         
         // Update turn indicator
@@ -445,17 +423,14 @@ class TogyzkumalakApp {
             const response = await api.suggestMove();
             
             if (response.available) {
+                const moveLabel = response.suggested_move ? response.suggested_move : '?';
+                
                 this.elements.analysisContent.innerHTML = `
                     <div class="suggestion-result">
-                        <p><strong>Suggested Move: ${response.suggested_move}</strong></p>
-                        <p>${response.explanation}</p>
+                        <p><strong>Рекомендуемый ход: ${moveLabel}</strong></p>
+                        <p>${this.formatAnalysis(response.explanation)}</p>
                     </div>
                 `;
-                
-                // Highlight suggested move on board
-                if (response.suggested_move) {
-                    // Could add visual highlight here
-                }
             } else {
                 this.elements.analysisContent.innerHTML = `
                     <p class="error">${response.error || 'Suggestion not available'}</p>
@@ -480,36 +455,16 @@ class TogyzkumalakApp {
             .replace(/\n/g, '<br>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/EVALUATION:/g, '<strong>📊 EVALUATION:</strong>')
+            .replace(/ОЦЕНКА:/g, '<strong>📊 ОЦЕНКА:</strong>')
             .replace(/BEST MOVE:/g, '<strong>🎯 BEST MOVE:</strong>')
+            .replace(/ЛУЧШИЙ ХОД:/g, '<strong>🎯 ЛУЧШИЙ ХОД:</strong>')
+            .replace(/РЕКОМЕНДУЕМЫЙ ХОД:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
+            .replace(/ОБОСНОВАНИЕ:/g, '<strong>💡 ОБОСНОВАНИЕ:</strong>')
             .replace(/KEY FACTORS:/g, '<strong>🔑 KEY FACTORS:</strong>')
-            .replace(/WARNING:/g, '<strong>⚠️ WARNING:</strong>');
-    }
-
-    /**
-     * Toggle between modern and classic view.
-     */
-    toggleView() {
-        this.isClassicView = !this.isClassicView;
-        const boardWrapper = document.querySelector('.board-wrapper');
-        
-        if (this.isClassicView) {
-            this.elements.modernBoard.classList.add('hidden');
-            this.elements.classicBoard.classList.remove('hidden');
-            boardWrapper.classList.add('classic-active');
-            this.elements.viewIcon.textContent = '🎨';
-            this.elements.btnViewToggle.innerHTML = '<span>🎨</span> Modern View';
-            
-            // Re-render classic board
-            if (this.gameState) {
-                this.classicBoard.render(this.gameState.board);
-            }
-        } else {
-            this.elements.modernBoard.classList.remove('hidden');
-            this.elements.classicBoard.classList.add('hidden');
-            boardWrapper.classList.remove('classic-active');
-            this.elements.viewIcon.textContent = '🎨';
-            this.elements.btnViewToggle.innerHTML = '<span>🪵</span> Classic View';
-        }
+            .replace(/КЛЮЧЕВЫЕ ФАКТОРЫ:/g, '<strong>🔑 КЛЮЧЕВЫЕ ФАКТОРЫ:</strong>')
+            .replace(/WARNING:/g, '<strong>⚠️ WARNING:</strong>')
+            .replace(/УГРОЗЫ:/g, '<strong>⚠️ УГРОЗЫ:</strong>')
+            .replace(/АНАЛИЗ ХОДОВ:/g, '<strong>📝 АНАЛИЗ ХОДОВ:</strong>');
     }
 
     /**
@@ -545,4 +500,3 @@ class TogyzkumalakApp {
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new TogyzkumalakApp();
 });
-

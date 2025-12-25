@@ -14,10 +14,24 @@
                 <span class="logo-icon">🎮</span>
                 <h1>Тоғыз Құмалақ</h1>
             </div>
+            
+            <!-- Statistics in header -->
+            <div class="header-stats" id="headerStats">
+                <div class="stat-item">
+                    <span class="stat-label">ELO:</span>
+                    <span class="stat-value" id="currentElo">1500</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Games:</span>
+                    <span class="stat-value" id="totalGames">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Wins:</span>
+                    <span class="stat-value" id="totalWins">0</span>
+                </div>
+            </div>
+            
             <div class="header-controls">
-                <button id="btnViewToggle" class="btn btn-secondary">
-                    <span id="viewIcon">🎨</span> Classic View
-                </button>
                 <button id="btnSettings" class="btn btn-icon">⚙️</button>
             </div>
         </header>
@@ -94,41 +108,9 @@
                     </div>
                 </div>
 
-                <!-- Board Container -->
-                <div class="board-wrapper">
-                    <!-- Modern Board View -->
-                    <div id="modernBoard" class="board-modern">
-                        <!-- Black Side (Top) -->
-                        <div class="board-row black-side">
-                            <div class="kazan kazan-black" id="kazanBlack">
-                                <span class="kazan-label">Қазан</span>
-                                <span class="kazan-value">0</span>
-                            </div>
-                            <div class="pits-row" id="blackPits">
-                                <!-- Pits 9-1 (reversed) -->
-                            </div>
-                        </div>
-
-                        <!-- Pit Labels -->
-                        <div class="pit-labels">
-                            <div class="label-spacer"></div>
-                            <div class="labels-row" id="pitLabels"></div>
-                        </div>
-
-                        <!-- White Side (Bottom) -->
-                        <div class="board-row white-side">
-                            <div class="kazan kazan-white" id="kazanWhite">
-                                <span class="kazan-label">Қазан</span>
-                                <span class="kazan-value">0</span>
-                            </div>
-                            <div class="pits-row" id="whitePits">
-                                <!-- Pits 1-9 -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Classic Board View (Canvas) -->
-                    <canvas id="classicBoard" class="board-classic hidden" width="900" height="400"></canvas>
+                <!-- Board Container - Only Classic View -->
+                <div class="board-wrapper classic-active">
+                    <canvas id="classicBoard" class="board-classic" width="900" height="450"></canvas>
                 </div>
 
                 <!-- Last Move Info -->
@@ -165,25 +147,6 @@
                         <p class="placeholder">Click "Analyze Position" to get Gemini's analysis of the current position.</p>
                     </div>
                 </div>
-
-                <!-- ELO Stats -->
-                <div class="panel elo-panel">
-                    <h3>📊 Statistics</h3>
-                    <div class="elo-stats" id="eloStats">
-                        <div class="stat-row">
-                            <span>Your ELO:</span>
-                            <span id="currentElo">1500</span>
-                        </div>
-                        <div class="stat-row">
-                            <span>Games:</span>
-                            <span id="totalGames">0</span>
-                        </div>
-                        <div class="stat-row">
-                            <span>Wins:</span>
-                            <span id="totalWins">0</span>
-                        </div>
-                    </div>
-                </div>
             </aside>
         </main>
 
@@ -212,9 +175,7 @@
 
     <!-- Scripts -->
     <script src="js/api.js"></script>
-    <script src="js/board-modern.js"></script>
     <script src="js/board-classic.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
-

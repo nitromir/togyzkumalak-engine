@@ -220,9 +220,9 @@ class AIEngine:
         
         # Sample from distribution (stochastic) or argmax (deterministic)
         if level < 5:
-            return np.random.choice(9, p=masked_probs)
+            return int(np.random.choice(9, p=masked_probs))
         else:
-            return np.argmax(masked_probs)
+            return int(np.argmax(masked_probs))
     
     def get_move_probabilities(
         self,

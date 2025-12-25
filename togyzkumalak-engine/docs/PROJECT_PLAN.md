@@ -392,3 +392,6 @@ google-genai>=1.0.0  # New SDK for Gemini API
 *Document Version: 1.0*
 *Created: December 25, 2025*
 
+- [ ] Интеграция продвинутой нейросети (RL модели) — для уровней 4-5
+- [ ] Система сохранения/загрузки в формате PGN
+- [ ] Training Monitor UI для контроля RL обучения
