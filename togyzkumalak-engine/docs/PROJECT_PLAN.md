@@ -322,29 +322,29 @@ POST /api/import-log       - Import game log for training
 
 ## 8. Implementation Phases
 
-### Phase 1: Core Game (Week 1)
-- [ ] FastAPI backend setup
-- [ ] WebSocket game communication
-- [ ] Modern board UI (HTML/CSS)
-- [ ] Human vs AI gameplay
-- [ ] Move validation and execution
+### Phase 1: Core Game (Week 1) ✅ COMPLETED
+- [x] FastAPI backend setup
+- [x] WebSocket game communication
+- [x] Modern board UI (HTML/CSS)
+- [x] Human vs AI gameplay
+- [x] Move validation and execution
 
-### Phase 2: Classic View + ELO (Week 2)
-- [ ] Canvas board renderer
-- [ ] Port 9qumalaq graphics
-- [ ] ELO rating system
-- [ ] Game logging
+### Phase 2: Classic View + ELO (Week 2) ✅ COMPLETED
+- [x] Canvas board renderer
+- [x] Port 9qumalaq graphics (adapted style)
+- [x] ELO rating system
+- [x] Game logging
 
-### Phase 3: Advanced AI (Week 3)
-- [ ] Multiple AI difficulty levels
+### Phase 3: Advanced AI (Week 3) 🔄 PARTIAL
+- [x] Multiple AI difficulty levels (5 levels: Random to Expert)
 - [ ] Model checkpoint management
 - [ ] Training monitor UI
 
-### Phase 4: Gemini Integration (Week 4)
-- [ ] Gemini SDK setup
-- [ ] Position encoding for LLM
-- [ ] Move explanation prompts
-- [ ] Analysis panel UI
+### Phase 4: Gemini Integration (Week 4) ✅ COMPLETED
+- [x] Gemini SDK setup (google-genai + gemini-3-flash-preview)
+- [x] Position encoding for LLM
+- [x] Move explanation prompts
+- [x] Analysis panel UI
 
 ---
 
@@ -358,7 +358,7 @@ websockets>=12.0
 torch>=2.0.0
 numpy<2.0
 gym>=0.26.0
-google-generativeai>=0.3.0
+google-genai>=1.0.0  # New SDK for Gemini API
 
 # Frontend
 # Vanilla JS (no framework)
