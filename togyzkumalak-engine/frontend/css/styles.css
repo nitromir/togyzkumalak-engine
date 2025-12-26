@@ -693,6 +693,7 @@ body {
 .analysis-panel {
     flex: 1;
     min-height: 300px;
+    max-height: 600px;
     display: flex;
     flex-direction: column;
 }
@@ -706,8 +707,8 @@ body {
 
 .analysis-content {
     flex: 1;
-    font-size: 13px;
-    line-height: 1.7;
+    font-size: 14px;
+    line-height: 1.6;
     color: var(--text-secondary);
     overflow-y: auto;
     padding-right: 8px;
@@ -719,17 +720,98 @@ body {
 }
 
 .analysis-content strong {
-    color: var(--text-primary);
+    color: var(--accent-gold-light);
 }
 
 .analysis-content .suggestion-result,
 .analysis-content .analysis-result {
     background: var(--bg-tertiary);
-    padding: 12px;
-    border-radius: 8px;
-    border-left: 3px solid var(--accent-gold);
+    padding: 16px;
+    border-radius: 10px;
+    border-left: 4px solid var(--accent-gold);
     white-space: pre-wrap;
     word-wrap: break-word;
+    box-shadow: var(--shadow-sm);
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* =============================================================================
+   Replay Viewer Fixes
+   ============================================================================= */
+
+#replaysMode {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.replay-selector-panel {
+    width: 100%;
+}
+
+.replay-viewer {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.replay-viewer .board-wrapper {
+    margin: 20px auto;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
+}
+
+.replay-controls-container {
+    width: 100%;
+    max-width: 900px;
+    background: var(--bg-secondary);
+    padding: 24px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.replay-controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.replay-progress {
+    width: 100%;
+}
+
+.speed-control {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.replay-bottom-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    width: 100%;
+    max-width: 900px;
+    margin-top: 20px;
+}
+
+@media (max-width: 900px) {
+    .replay-bottom-info {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* =============================================================================

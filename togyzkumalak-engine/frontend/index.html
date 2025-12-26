@@ -166,10 +166,10 @@
                 </div>
             </div>
 
-            <!-- Replay Viewer -->
-            <div id="replayViewer" class="panel replay-viewer hidden">
+            <!-- Replay Viewer Wrapper -->
+            <div id="replayViewer" class="replay-viewer hidden">
                 <!-- Replay Info Bar -->
-                <div class="info-bar">
+                <div class="info-bar" style="max-width: 900px; width: 100%;">
                     <div class="player-info player-black">
                         <div class="player-label">⚫ ҚАРА (Black)</div>
                         <div class="player-elo" id="replayBlackScore">Казан: 0</div>
@@ -189,50 +189,50 @@
                     <canvas id="replayBoard" class="board-classic" width="900" height="450"></canvas>
                 </div>
 
-                <!-- Replay Progress Bar -->
-                <div class="replay-progress">
-                    <div class="progress-bar" id="replayProgressBar">
-                        <div class="progress-fill" id="replayProgressFill"></div>
+                <!-- Replay Controls Container -->
+                <div class="replay-controls-container">
+                    <div class="replay-progress">
+                        <div class="progress-bar" id="replayProgressBar">
+                            <div class="progress-fill" id="replayProgressFill"></div>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Replay Controls -->
-                <div class="replay-controls">
-                    <button id="btnReplayFirst" class="btn btn-secondary">⏮ Начало</button>
-                    <button id="btnReplayPrev" class="btn btn-secondary">⏪ Назад</button>
-                    <button id="btnReplayPlay" class="btn btn-primary">▶️ Воспроизвести</button>
-                    <button id="btnReplayNext" class="btn btn-secondary">⏩ Вперёд</button>
-                    <button id="btnReplayLast" class="btn btn-secondary">⏭ Конец</button>
-                </div>
+                    <div class="replay-controls">
+                        <button id="btnReplayFirst" class="btn btn-secondary">⏮ Начало</button>
+                        <button id="btnReplayPrev" class="btn btn-secondary">⏪ Назад</button>
+                        <button id="btnReplayPlay" class="btn btn-primary">▶️ Воспроизвести</button>
+                        <button id="btnReplayNext" class="btn btn-secondary">⏩ Вперёд</button>
+                        <button id="btnReplayLast" class="btn btn-secondary">⏭ Конец</button>
+                    </div>
 
-                <!-- Speed Control -->
-                <div class="speed-control">
-                    <label>Скорость:</label>
-                    <input type="range" id="replaySpeed" min="100" max="2000" value="500">
-                    <span id="replaySpeedValue">500ms</span>
+                    <div class="speed-control">
+                        <label>Скорость: </label>
+                        <input type="range" id="replaySpeed" min="100" max="2000" value="500">
+                        <span id="replaySpeedValue" style="margin-left: 10px;">500ms</span>
+                    </div>
                 </div>
 
                 <!-- Winner Banner -->
-                <div class="winner-banner hidden" id="replayWinnerBanner">
+                <div class="winner-banner hidden" id="replayWinnerBanner" style="max-width: 900px; width: 100%;">
                     🏆 Победитель: WHITE (83:57) 🏆
                 </div>
-            </div>
 
-            <!-- Replay Side Panel -->
-            <aside class="side-panel">
-                <div class="panel">
-                    <h3>📊 Информация о Партии</h3>
-                    <div id="replayInfo" class="replay-info">
-                        <p class="placeholder">Выберите партию для просмотра</p>
+                <!-- Replay Info Panels -->
+                <div class="replay-bottom-info">
+                    <div class="panel">
+                        <h3>📊 Информация о Партии</h3>
+                        <div id="replayInfo" class="replay-info">
+                            <p class="placeholder">Выберите партию для просмотра</p>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <h3>🔍 Последнее Действие</h3>
+                        <div id="replayLastAction" class="last-action-info">
+                            -
+                        </div>
                     </div>
                 </div>
-                <div class="panel">
-                    <h3>🔍 Последнее Действие</h3>
-                    <div id="replayLastAction" class="last-action-info">
-                        -
-                    </div>
-                </div>
-            </aside>
+            </div>
         </main>
 
         <!-- Game Over Modal -->
