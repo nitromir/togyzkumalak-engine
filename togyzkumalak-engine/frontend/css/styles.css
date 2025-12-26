@@ -187,31 +187,64 @@ body::after {
     gap: 12px;
 }
 
+/* Utilities */
+.hidden {
+    display: none !important;
+}
+
+/* Base Layout Fixes */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    position: relative;
+    width: 100vw;
+}
+
 .main-content {
     flex: 1;
-    display: flex;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: 1fr 360px;
     gap: 24px;
     padding: 24px;
-    max-width: 1500px;
+    max-width: 1600px;
     margin: 0 auto;
     width: 100%;
 }
 
-.main-content:not(.hidden) {
-    display: grid;
-    grid-template-columns: 1fr 360px;
-}
-
-/* If setup panel is active, center it and hide sidebar if needed, or just make it single column */
-.main-content:has(.setup-panel:not(.hidden)) {
+/* If setup panel is active, hide sidebar and center setup */
+#playMode:has(#setupPanel:not(.hidden)) {
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center;
 }
 
-.main-content:has(.setup-panel:not(.hidden)) .side-panel {
-    display: none;
+#playMode:has(#setupPanel:not(.hidden)) .side-panel,
+#playMode:has(#setupPanel:not(.hidden)) #gamePanel {
+    display: none !important;
+}
+
+#playMode:has(#gamePanel:not(.hidden)) #setupPanel {
+    display: none !important;
+}
+
+/* Thinking Indicator - Center Properly */
+.thinking-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(13, 25, 48, 0.95);
+    backdrop-filter: blur(20px);
+    border: 2px solid var(--accent-primary);
+    border-radius: 16px;
+    padding: 30px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 0 100px rgba(0, 242, 255, 0.4);
+    z-index: 9999;
 }
 
 /* =============================================================================
