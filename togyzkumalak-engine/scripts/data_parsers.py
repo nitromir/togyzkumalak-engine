@@ -569,11 +569,32 @@ def parse_all_data(
         for game in all_games:
             f.write(json.dumps(game.to_dict(), ensure_ascii=False) + '\n')
     
-    # Save transitions
+    # Save transitions (full format - large file)
     transitions_file = os.path.join(output_dir, 'human_transitions.jsonl')
     with open(transitions_file, 'w', encoding='utf-8') as f:
         for t in all_transitions:
             f.write(json.dumps(t, ensure_ascii=False) + '\n')
+    
+    # Save compact transitions (minimal format for training - much smaller)
+    compact_file = os.path.join(output_dir, 'transitions_compact.jsonl')
+    with open(compact_file, 'w', encoding='utf-8') as f:
+        for t in all_transitions:
+            # Compact format: only essential fields
+            # State reduced to 20 values (18 pits + 2 kazans)
+            state_compact = t['state'][:20] if len(t['state']) >= 20 else t['state']
+            # Round floats to 4 decimals
+            state_compact = [round(v, 4) for v in state_compact]
+            
+            compact = {
+                "s": state_compact,  # state (20 values)
+                "a": t['action'],    # action (0-8)
+                "r": t['reward'],    # reward
+                "d": 1 if t['done'] else 0,  # done (0/1)
+                "p": 1 if t['player'] == 'white' else 0  # player (0/1)
+            }
+            f.write(json.dumps(compact, separators=(',', ':')) + '\n')
+    
+    print(f"Created compact transitions: {compact_file}")
     
     # Save statistics
     stats_file = os.path.join(output_dir, 'parse_stats.json')

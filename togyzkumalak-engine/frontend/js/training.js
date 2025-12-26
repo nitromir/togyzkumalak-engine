@@ -6,7 +6,9 @@
 class TrainingController {
     constructor() {
         this.currentSessionId = null;
+        this.humanTrainingSessionId = null;
         this.pollInterval = null;
+        this.humanPollInterval = null;
         this.init();
     }
 
@@ -14,17 +16,256 @@ class TrainingController {
         // Configuration controls
         document.getElementById('btnStartTraining').addEventListener('click', () => this.startTraining());
         
+        // Data management buttons
+        document.getElementById('btnParseData')?.addEventListener('click', () => this.parseData());
+        document.getElementById('btnTrainOnHuman')?.addEventListener('click', () => this.trainOnHumanData());
+        
         // Load initial data
         this.loadModels();
         this.loadSessions();
+        this.loadDataStats();
+        this.loadTrainingFiles();
         
         // Set up periodic refresh when training mode is active
         setInterval(() => {
             if (!document.getElementById('trainingMode').classList.contains('hidden')) {
                 this.loadModels();
                 this.loadSessions();
+                this.loadDataStats();
             }
         }, 5000);
+    }
+
+    /**
+     * Load training data statistics
+     */
+    async loadDataStats() {
+        try {
+            const response = await fetch('/api/data/stats');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            
+            if (data.parsed && data.stats) {
+                const stats = data.stats;
+                document.getElementById('statOpeningBook').textContent = stats.opening_book || 0;
+                document.getElementById('statTournament').textContent = stats.human_tournament || 0;
+                document.getElementById('statPlayOK').textContent = stats.playok || 0;
+                document.getElementById('statTotalGamesData').textContent = stats.total_games || 0;
+                document.getElementById('statTransitions').textContent = this.formatNumber(stats.total_transitions || 0);
+            }
+        } catch (error) {
+            console.error('Error loading data stats:', error);
+        }
+    }
+
+    /**
+     * Load list of training files
+     */
+    async loadTrainingFiles() {
+        try {
+            const response = await fetch('/api/data/training-files');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const filesList = document.getElementById('dataFilesList');
+            
+            if (!data.files || data.files.length === 0) {
+                filesList.innerHTML = '<p class="empty-text">Нет файлов данных. Нажмите "Обновить парсинг"</p>';
+                return;
+            }
+            
+            filesList.innerHTML = data.files.map(file => `
+                <div class="data-file-item">
+                    <span class="data-file-name">📄 ${file.name}</span>
+                    <div class="data-file-info">
+                        <span class="data-file-size">${file.size_mb} MB</span>
+                        ${file.lines > 0 ? `<span class="data-file-lines">${this.formatNumber(file.lines)} записей</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+            
+        } catch (error) {
+            console.error('Error loading training files:', error);
+        }
+    }
+
+    /**
+     * Parse all training data from sources
+     */
+    async parseData() {
+        const btn = document.getElementById('btnParseData');
+        btn.disabled = true;
+        btn.textContent = '⏳ Парсинг...';
+        
+        try {
+            const response = await fetch('/api/data/parse-auto', { method: 'POST' });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Parsing failed');
+            }
+            
+            const data = await response.json();
+            
+            alert(`✅ Парсинг завершён!\n\nИгр: ${data.stats.total_games}\nПереходов: ${data.stats.total_transitions}`);
+            
+            // Reload stats and files
+            this.loadDataStats();
+            this.loadTrainingFiles();
+            
+        } catch (error) {
+            console.error('Error parsing data:', error);
+            alert('❌ Ошибка парсинга: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔄 Обновить парсинг';
+        }
+    }
+
+    /**
+     * Start training on human data
+     */
+    async trainOnHumanData() {
+        const btn = document.getElementById('btnTrainOnHuman');
+        btn.disabled = true;
+        btn.textContent = '⏳ Запуск...';
+        
+        try {
+            const response = await fetch('/api/training/human-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    batch_size: 64,
+                    epochs: 10,
+                    learning_rate: 0.001,
+                    model_name: 'policy_net_human',
+                    use_transitions: true
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Training start failed');
+            }
+            
+            const data = await response.json();
+            this.humanTrainingSessionId = data.session_id;
+            
+            // Show progress section
+            const progressSection = document.getElementById('humanTrainingProgress');
+            progressSection.classList.remove('hidden');
+            
+            btn.textContent = '🔄 Обучение...';
+            
+            // Start polling for progress
+            this.startHumanTrainingPolling();
+            
+        } catch (error) {
+            console.error('Error starting human training:', error);
+            alert('❌ Ошибка запуска: ' + error.message);
+            btn.disabled = false;
+            btn.textContent = '🎓 Дообучить на человеческих данных';
+        }
+    }
+
+    /**
+     * Start polling for human training progress
+     */
+    startHumanTrainingPolling() {
+        if (this.humanPollInterval) {
+            clearInterval(this.humanPollInterval);
+        }
+        
+        this.humanPollInterval = setInterval(() => this.updateHumanTrainingProgress(), 1000);
+    }
+
+    /**
+     * Update human training progress display
+     */
+    async updateHumanTrainingProgress() {
+        if (!this.humanTrainingSessionId) return;
+        
+        try {
+            const response = await fetch(`/api/training/human-data/${this.humanTrainingSessionId}`);
+            if (!response.ok) return;
+            
+            const progress = await response.json();
+            
+            const progressBar = document.getElementById('humanTrainingBar');
+            const progressText = document.getElementById('humanTrainingText');
+            
+            progressBar.style.width = `${progress.progress || 0}%`;
+            
+            if (progress.status === 'loading') {
+                progressText.textContent = '📂 Загрузка данных...';
+            } else if (progress.status === 'training') {
+                progressText.innerHTML = `
+                    <div>Эпоха ${progress.epoch}/${progress.total_epochs} | 
+                    Loss: ${(progress.loss || 0).toFixed(4)} | 
+                    Accuracy: ${(progress.accuracy || 0).toFixed(1)}%</div>
+                    <div class="training-metrics-grid">
+                        <div class="training-metric">
+                            <div class="value">${this.formatNumber(progress.samples_trained || 0)}</div>
+                            <div class="label">Примеров</div>
+                        </div>
+                        <div class="training-metric">
+                            <div class="value">${progress.epoch || 0}</div>
+                            <div class="label">Эпоха</div>
+                        </div>
+                        <div class="training-metric">
+                            <div class="value">${(progress.loss || 0).toFixed(4)}</div>
+                            <div class="label">Loss</div>
+                        </div>
+                        <div class="training-metric">
+                            <div class="value">${(progress.accuracy || 0).toFixed(1)}%</div>
+                            <div class="label">Accuracy</div>
+                        </div>
+                    </div>
+                `;
+            } else if (progress.status === 'completed') {
+                clearInterval(this.humanPollInterval);
+                this.humanPollInterval = null;
+                
+                progressText.innerHTML = `
+                    ✅ Обучение завершено!<br>
+                    Accuracy: ${(progress.accuracy || 0).toFixed(1)}% | 
+                    Final Loss: ${(progress.loss || 0).toFixed(4)}<br>
+                    Модель сохранена.
+                `;
+                
+                const btn = document.getElementById('btnTrainOnHuman');
+                btn.disabled = false;
+                btn.textContent = '🎓 Дообучить на человеческих данных';
+                
+                this.loadModels();
+                
+            } else if (progress.status === 'error') {
+                clearInterval(this.humanPollInterval);
+                this.humanPollInterval = null;
+                
+                progressText.textContent = `❌ Ошибка: ${progress.error || 'Unknown error'}`;
+                
+                const btn = document.getElementById('btnTrainOnHuman');
+                btn.disabled = false;
+                btn.textContent = '🎓 Дообучить на человеческих данных';
+            }
+            
+        } catch (error) {
+            console.error('Error updating human training progress:', error);
+        }
+    }
+
+    /**
+     * Format large numbers
+     */
+    formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
     }
 
     async startTraining() {

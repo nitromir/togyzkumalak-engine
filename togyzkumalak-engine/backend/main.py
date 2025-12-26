@@ -1217,6 +1217,266 @@ async def get_data_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class HumanTrainingRequest(BaseModel):
+    batch_size: int = 64
+    epochs: int = 10
+    learning_rate: float = 0.001
+    model_name: str = "policy_net_human"
+    use_compact: bool = True  # Use compact format (smaller, faster)
+
+
+@app.post("/api/training/human-data")
+async def train_on_human_data(request: HumanTrainingRequest, background_tasks: BackgroundTasks):
+    """
+    Start training the model on parsed human game data.
+    
+    This uses behavioral cloning (supervised learning) to train
+    the policy network on human expert moves.
+    """
+    try:
+        engine_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Check for training data - prefer compact format
+        if request.use_compact:
+            data_file = os.path.join(engine_dir, "training_data", "transitions_compact.jsonl")
+            if not os.path.exists(data_file):
+                # Fall back to full format
+                data_file = os.path.join(engine_dir, "training_data", "human_transitions.jsonl")
+        else:
+            data_file = os.path.join(engine_dir, "training_data", "human_games.jsonl")
+        
+        if not os.path.exists(data_file):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Training data not found: {data_file}. Run POST /api/data/parse-auto first."
+            )
+        
+        # Create training session
+        session_id = f"human_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Start training in background
+        background_tasks.add_task(
+            run_human_data_training,
+            session_id=session_id,
+            data_file=data_file,
+            batch_size=request.batch_size,
+            epochs=request.epochs,
+            learning_rate=request.learning_rate,
+            model_name=request.model_name,
+            use_compact=request.use_compact
+        )
+        
+        return {
+            "status": "started",
+            "session_id": session_id,
+            "data_file": data_file,
+            "config": {
+                "batch_size": request.batch_size,
+                "epochs": request.epochs,
+                "learning_rate": request.learning_rate,
+                "model_name": request.model_name
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Store human training progress
+human_training_sessions = {}
+
+
+async def run_human_data_training(
+    session_id: str,
+    data_file: str,
+    batch_size: int,
+    epochs: int,
+    learning_rate: float,
+    model_name: str,
+    use_compact: bool
+):
+    """Background task for human data training."""
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from torch.utils.data import DataLoader, TensorDataset
+    
+    try:
+        human_training_sessions[session_id] = {
+            "status": "loading",
+            "progress": 0,
+            "epoch": 0,
+            "total_epochs": epochs,
+            "loss": 0,
+            "samples_trained": 0,
+            "total_samples": 0,
+            "start_time": datetime.datetime.now().isoformat()
+        }
+        
+        # Load training data
+        print(f"[Human Training] Loading data from {data_file}")
+        states = []
+        actions = []
+        
+        is_compact = 'compact' in data_file
+        
+        with open(data_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                try:
+                    record = json.loads(line.strip())
+                    
+                    if is_compact:
+                        # Compact format: {"s": [...], "a": N, "r": N, "d": 0/1, "p": 0/1}
+                        state = record.get('s', [])
+                        action = record.get('a', 0)
+                        if len(state) >= 18 and 0 <= action <= 8:
+                            states.append(state[:20])
+                            actions.append(action)
+                    elif 'state' in record:
+                        # Full transitions format: {"state": [...], "action": N, ...}
+                        state = record.get('state', [])
+                        action = record.get('action', 0)
+                        if len(state) >= 18 and 0 <= action <= 8:
+                            states.append(state[:20])
+                            actions.append(action)
+                    elif 'moves' in record:
+                        # Games format: {"moves": [...]}
+                        for move in record.get('moves', []):
+                            state = move.get('board_before', {})
+                            action = move.get('action', 0)
+                            if isinstance(state, dict):
+                                white_pits = state.get('white_pits', [0]*9)
+                                black_pits = state.get('black_pits', [0]*9)
+                                flat_state = white_pits + black_pits
+                                flat_state.append(state.get('white_kazan', 0))
+                                flat_state.append(state.get('black_kazan', 0))
+                            elif isinstance(state, list):
+                                flat_state = state
+                            else:
+                                continue
+                            if len(flat_state) >= 18 and 0 <= action <= 8:
+                                states.append(flat_state[:20])
+                                actions.append(action)
+                except json.JSONDecodeError:
+                    continue
+        
+        if len(states) < 100:
+            human_training_sessions[session_id]["status"] = "error"
+            human_training_sessions[session_id]["error"] = f"Not enough samples: {len(states)}"
+            return
+        
+        print(f"[Human Training] Loaded {len(states)} samples")
+        human_training_sessions[session_id]["total_samples"] = len(states)
+        human_training_sessions[session_id]["status"] = "training"
+        
+        # Prepare tensors - pad to 20 features
+        padded_states = []
+        for s in states:
+            if len(s) < 20:
+                s = list(s) + [0] * (20 - len(s))
+            padded_states.append(s[:20])
+        
+        X = torch.FloatTensor(padded_states)
+        y = torch.LongTensor(actions)
+        
+        dataset = TensorDataset(X, y)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        
+        # Create or load model
+        from .ai_engine import ai_engine
+        model = ai_engine.policy_net
+        
+        # Training setup
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+        
+        # Training loop
+        total_batches = len(dataloader) * epochs
+        current_batch = 0
+        
+        for epoch in range(epochs):
+            epoch_loss = 0
+            correct = 0
+            total = 0
+            
+            for batch_idx, (batch_X, batch_y) in enumerate(dataloader):
+                optimizer.zero_grad()
+                
+                # Forward pass
+                outputs = model(batch_X)
+                loss = criterion(outputs, batch_y)
+                
+                # Backward pass
+                loss.backward()
+                optimizer.step()
+                
+                epoch_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += batch_y.size(0)
+                correct += (predicted == batch_y).sum().item()
+                
+                current_batch += 1
+                
+                # Update progress
+                human_training_sessions[session_id].update({
+                    "progress": (current_batch / total_batches) * 100,
+                    "epoch": epoch + 1,
+                    "loss": epoch_loss / (batch_idx + 1),
+                    "accuracy": (correct / total) * 100,
+                    "samples_trained": min(total, len(states))
+                })
+            
+            print(f"[Human Training] Epoch {epoch+1}/{epochs}, Loss: {epoch_loss/len(dataloader):.4f}, Acc: {correct/total*100:.2f}%")
+        
+        # Save model
+        engine_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        models_dir = os.path.join(engine_dir, "models")
+        os.makedirs(models_dir, exist_ok=True)
+        
+        model_path = os.path.join(models_dir, f"{model_name}.pt")
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'training_samples': len(states),
+            'epochs': epochs,
+            'final_loss': human_training_sessions[session_id]["loss"],
+            'final_accuracy': human_training_sessions[session_id]["accuracy"],
+            'timestamp': datetime.datetime.now().isoformat()
+        }, model_path)
+        
+        human_training_sessions[session_id].update({
+            "status": "completed",
+            "progress": 100,
+            "model_path": model_path,
+            "end_time": datetime.datetime.now().isoformat()
+        })
+        
+        print(f"[Human Training] Complete! Model saved to {model_path}")
+        
+    except Exception as e:
+        import traceback
+        human_training_sessions[session_id] = {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+        print(f"[Human Training] Error: {e}")
+
+
+@app.get("/api/training/human-data/{session_id}")
+async def get_human_training_progress(session_id: str):
+    """Get progress of a human data training session."""
+    if session_id not in human_training_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return human_training_sessions[session_id]
+
+
+@app.get("/api/training/human-data/sessions")
+async def list_human_training_sessions():
+    """List all human data training sessions."""
+    return {"sessions": list(human_training_sessions.keys())}
+
+
 # =============================================================================
 # Static Files (Frontend)
 # =============================================================================

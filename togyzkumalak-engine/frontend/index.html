@@ -268,9 +268,66 @@
         <!-- TRAINING MODE -->
         <!-- ============================================ -->
         <main class="main-content hidden" id="trainingMode">
+            <!-- Training Data Panel -->
+            <div class="panel training-data-panel">
+                <h2>📂 Тренировочные Данные</h2>
+                <p class="panel-description">Управление данными для дообучения модели</p>
+                
+                <div class="data-stats-grid" id="trainingDataStats">
+                    <div class="data-stat-card">
+                        <div class="stat-icon">📚</div>
+                        <div class="stat-value" id="statOpeningBook">0</div>
+                        <div class="stat-label">Дебютная книга</div>
+                    </div>
+                    <div class="data-stat-card">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-value" id="statTournament">0</div>
+                        <div class="stat-label">Турниры</div>
+                    </div>
+                    <div class="data-stat-card">
+                        <div class="stat-icon">🎮</div>
+                        <div class="stat-value" id="statPlayOK">0</div>
+                        <div class="stat-label">PlayOK</div>
+                    </div>
+                    <div class="data-stat-card highlight">
+                        <div class="stat-icon">Σ</div>
+                        <div class="stat-value" id="statTotalGamesData">0</div>
+                        <div class="stat-label">Всего игр</div>
+                    </div>
+                    <div class="data-stat-card">
+                        <div class="stat-icon">↔️</div>
+                        <div class="stat-value" id="statTransitions">0</div>
+                        <div class="stat-label">Переходов</div>
+                    </div>
+                </div>
+                
+                <div class="data-files-section">
+                    <h3>📁 Файлы данных</h3>
+                    <div id="dataFilesList" class="data-files-list">
+                        <p class="empty-text">Загрузка...</p>
+                    </div>
+                </div>
+                
+                <div class="data-actions">
+                    <button id="btnParseData" class="btn btn-secondary">
+                        🔄 Обновить парсинг
+                    </button>
+                    <button id="btnTrainOnHuman" class="btn btn-primary btn-large">
+                        🎓 Дообучить на человеческих данных
+                    </button>
+                </div>
+                
+                <div id="humanTrainingProgress" class="human-training-progress hidden">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="humanTrainingBar"></div>
+                    </div>
+                    <p class="progress-text" id="humanTrainingText">Подготовка...</p>
+                </div>
+            </div>
+            
             <!-- Training Configuration Panel -->
             <div class="panel training-config-panel">
-                <h2>⚙️ Настройки Тренировки</h2>
+                <h2>⚙️ Self-Play Тренировка</h2>
                 
                 <div class="config-section">
                     <label for="numGames">Количество игр:</label>
@@ -301,7 +358,7 @@
                 </div>
                 
                 <button id="btnStartTraining" class="btn btn-primary btn-large">
-                    🚀 Запустить Тренировку
+                    🚀 Запустить Self-Play
                 </button>
             </div>
             

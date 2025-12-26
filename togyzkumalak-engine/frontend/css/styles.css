@@ -687,16 +687,195 @@ body::after {
    ============================================================================= */
 
 #trainingMode {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     gap: 20px;
 }
 
+.training-data-panel,
 .training-config-panel,
 .training-progress-panel,
 .training-sessions-panel {
     display: flex;
     flex-direction: column;
     gap: 16px;
+}
+
+/* Training Data Panel */
+.training-data-panel {
+    grid-column: span 2;
+}
+
+.data-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+}
+
+.data-stat-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px 12px;
+    text-align: center;
+    transition: var(--transition-fast);
+}
+
+.data-stat-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+}
+
+.data-stat-card.highlight {
+    border-color: var(--accent-gold);
+    background: rgba(255, 204, 0, 0.1);
+}
+
+.data-stat-card .stat-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+
+.data-stat-card .stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent-primary);
+    text-shadow: var(--glow-text);
+}
+
+.data-stat-card.highlight .stat-value {
+    color: var(--accent-gold);
+}
+
+.data-stat-card .stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 6px;
+}
+
+.data-files-section {
+    margin-top: 16px;
+}
+
+.data-files-section h3 {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.data-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.data-file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: var(--transition-fast);
+}
+
+.data-file-item:hover {
+    border-color: var(--accent-primary);
+}
+
+.data-file-name {
+    font-family: 'Fira Code', 'Monaco', monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.data-file-info {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.data-file-size {
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+.data-file-lines {
+    color: var(--accent-secondary);
+}
+
+.data-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.human-training-progress {
+    margin-top: 16px;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid var(--accent-primary);
+    border-radius: 10px;
+}
+
+.human-training-progress .progress-bar-container {
+    height: 24px;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.human-training-progress .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    border-radius: 12px;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.human-training-progress .progress-text {
+    font-size: 14px;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.training-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.training-metric {
+    text-align: center;
+    padding: 10px;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 8px;
+}
+
+.training-metric .value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent-primary);
+}
+
+.training-metric .label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
 }
 
 .config-section {
