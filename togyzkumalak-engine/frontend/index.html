@@ -24,6 +24,8 @@
                 <button class="mode-tab active" data-mode="play">🎯 Играть</button>
                 <button class="mode-tab" data-mode="replays">📼 Реплеи</button>
                 <button class="mode-tab" data-mode="training">🧠 Тренировка</button>
+                <button class="mode-tab" data-mode="gemini-battle">🤖 Gemini Battle</button>
+                <button class="mode-tab" data-mode="analytics">📊 Аналитика</button>
             </div>
             
             <!-- Statistics in header -->
@@ -168,6 +170,12 @@
                 <h2>📼 Записанные Партии (Gym Simulations)</h2>
                 <div class="replay-list" id="replayList">
                     <p class="placeholder">Загрузка списка партий...</p>
+                </div>
+                
+                <!-- Gemini Battle Replays Section -->
+                <h3 style="margin-top: 24px; color: var(--accent-secondary);">🤖 Батлы против Gemini</h3>
+                <div class="replay-list" id="geminiBattleReplayList">
+                    <p class="placeholder">Загрузка игр против Gemini...</p>
                 </div>
             </div>
 
@@ -346,6 +354,279 @@
             </div>
         </main>
 
+        <!-- ============================================ -->
+        <!-- GEMINI BATTLE MODE -->
+        <!-- ============================================ -->
+        <main class="main-content hidden" id="geminiBattleMode">
+            <!-- Battle Configuration Panel -->
+            <div class="panel battle-config-panel">
+                <h2>⚔️ Настройки Батла vs Gemini</h2>
+                
+                <div class="config-section">
+                    <label for="battleNumGames">Количество игр:</label>
+                    <input type="number" id="battleNumGames" min="1" max="100" value="10" class="input-field">
+                    <small>Модель играет за белых и за чёрных поочерёдно</small>
+                </div>
+                
+                <div class="config-section">
+                    <label for="battleModelLevel">Уровень модели (1-5):</label>
+                    <input type="number" id="battleModelLevel" min="1" max="5" value="5" class="input-field">
+                </div>
+                
+                <div class="config-section">
+                    <label for="battleTimeout">Таймаут Gemini (сек):</label>
+                    <input type="number" id="battleTimeout" min="10" max="120" value="30" class="input-field">
+                </div>
+                
+                <div class="config-section">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="battleSaveReplays" checked>
+                        <span>Сохранять реплеи игр</span>
+                    </label>
+                </div>
+                
+                <div class="config-section">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="battleGenerateSummaries" checked>
+                        <span>Генерировать резюме игр (для LLM)</span>
+                    </label>
+                </div>
+                
+                <button id="btnStartBattle" class="btn btn-primary btn-large">
+                    ⚔️ Начать Батл
+                </button>
+            </div>
+            
+            <!-- Battle Progress Panel -->
+            <div class="panel battle-progress-panel">
+                <h2>📊 Прогресс Батла</h2>
+                
+                <div id="battleStatus" class="battle-status">
+                    <p class="status-text">Ожидание запуска...</p>
+                </div>
+                
+                <div id="battleProgress" class="progress-container hidden">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="battleProgressBar"></div>
+                    </div>
+                    <p class="progress-text" id="battleProgressText">0 / 10 игр</p>
+                </div>
+                
+                <div id="battleStats" class="battle-stats hidden">
+                    <div class="stat-row highlight">
+                        <span class="stat-label">ELO Модели:</span>
+                        <span class="stat-value" id="modelElo">1500</span>
+                        <span class="stat-category" id="modelCategory">(Клубный игрок)</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Побед модели:</span>
+                        <span class="stat-value win" id="battleModelWins">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Побед Gemini:</span>
+                        <span class="stat-value loss" id="battleGeminiWins">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Ничьи:</span>
+                        <span class="stat-value" id="battleDraws">0</span>
+                    </div>
+                </div>
+                
+                <button id="btnStopBattle" class="btn btn-danger hidden">
+                    ⏹️ Остановить Батл
+                </button>
+            </div>
+            
+            <!-- ELO Chart Panel -->
+            <div class="panel battle-chart-panel">
+                <h2>📈 График ELO Рейтинга</h2>
+                <div class="chart-container">
+                    <canvas id="eloChart" width="600" height="300"></canvas>
+                </div>
+                <div class="elo-legend">
+                    <div class="legend-item"><span class="legend-line gm"></span> Гроссмейстер (2400+)</div>
+                    <div class="legend-item"><span class="legend-line im"></span> ММ (2200)</div>
+                    <div class="legend-item"><span class="legend-line master"></span> Мастер (2000)</div>
+                    <div class="legend-item"><span class="legend-line cm"></span> КМС (1800)</div>
+                    <div class="legend-item"><span class="legend-line club"></span> Клубный (1400)</div>
+                </div>
+            </div>
+            
+            <!-- Last Game Summary Panel -->
+            <div class="panel battle-summary-panel">
+                <h2>📝 Резюме Последней Игры</h2>
+                <div id="lastGameSummary" class="game-summary">
+                    <p class="placeholder">Резюме появится после завершения игры...</p>
+                </div>
+            </div>
+            
+            <!-- Battle Sessions History -->
+            <div class="panel battle-sessions-panel">
+                <h2>📜 История Батлов</h2>
+                <div id="battleSessionsList" class="sessions-list">
+                    <p class="empty-text">Нет завершённых батлов</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- ============================================ -->
+        <!-- ANALYTICS MODE - REAL DATA ONLY -->
+        <!-- ============================================ -->
+        <main class="main-content hidden" id="analyticsMode">
+            <!-- Controls Panel -->
+            <div class="panel analytics-controls-panel">
+                <h2>📊 Реальные Метрики</h2>
+                <p class="panel-description">Все данные из реальных файлов игр. Никаких моков.</p>
+                
+                <div class="controls-row">
+                    <button id="btnRefreshMetrics" class="btn btn-primary">
+                        🔄 Обновить
+                    </button>
+                    <button id="btnAutoRefresh" class="btn btn-secondary">
+                        ▶️ Авто
+                    </button>
+                    <button id="btnSyncWandB" class="btn btn-secondary">
+                        ☁️ Синхр. W&B
+                    </button>
+                    <span id="metricsTimestamp" class="timestamp">Ожидание...</span>
+                </div>
+            </div>
+            
+            <!-- Gemini Battle Stats Panel -->
+            <div class="panel analytics-stats-panel">
+                <h2>⚔️ Статистика Gemini Battles</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotalGames">0</div>
+                        <div class="stat-label">Всего игр</div>
+                    </div>
+                    <div class="stat-card win">
+                        <div class="stat-value" id="statModelWins">0</div>
+                        <div class="stat-label">Побед модели</div>
+                    </div>
+                    <div class="stat-card loss">
+                        <div class="stat-value" id="statGeminiWins">0</div>
+                        <div class="stat-label">Побед Gemini</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statDraws">0</div>
+                        <div class="stat-label">Ничьих</div>
+                    </div>
+                    <div class="stat-card highlight">
+                        <div class="stat-value" id="statWinrate">0%</div>
+                        <div class="stat-label">Winrate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statAvgGameLength">0</div>
+                        <div class="stat-label">Ср. длина игры</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ELO Panel -->
+            <div class="panel analytics-elo-panel">
+                <h2>🏆 ELO Рейтинг</h2>
+                <div class="elo-display">
+                    <div class="elo-main">
+                        <span class="elo-value" id="currentElo">1500</span>
+                        <span class="elo-change" id="lastEloChange">+0</span>
+                    </div>
+                    <div class="elo-category" id="eloCategory">Начинающий</div>
+                </div>
+                <div class="elo-details">
+                    <div class="detail-row">
+                        <span>Пик:</span>
+                        <span id="peakElo">1500</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>Игр сыграно:</span>
+                        <span id="eloTotalGames">0</span>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="eloProgressChart" height="200"></canvas>
+                </div>
+            </div>
+            
+            <!-- Dataset Panel -->
+            <div class="panel analytics-dataset-panel">
+                <h2>📚 Датасет для обучения</h2>
+                <div class="dataset-composition">
+                    <div class="composition-bar">
+                        <div class="bar-segment gemini" id="barGemini" style="width: 0%"></div>
+                        <div class="bar-segment self-play" id="barSelfPlay" style="width: 0%"></div>
+                        <div class="bar-segment human" id="barHuman" style="width: 0%"></div>
+                    </div>
+                    <div class="composition-legend">
+                        <span class="legend-item gemini">Gemini</span>
+                        <span class="legend-item self-play">Self-Play</span>
+                        <span class="legend-item human">Турниры</span>
+                    </div>
+                </div>
+                <div class="dataset-stats">
+                    <div class="stat-row">
+                        <span>Gemini игр:</span>
+                        <span id="datasetGeminiGames">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Self-Play игр:</span>
+                        <span id="datasetSelfPlayGames">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Всего переходов:</span>
+                        <span id="datasetTotalTransitions">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Размер на диске:</span>
+                        <span id="datasetDiskSize">0 MB</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Convergence Panel -->
+            <div class="panel analytics-convergence-panel">
+                <h2>📈 Статус обучения</h2>
+                <div class="convergence-display">
+                    <div class="convergence-status" id="convergenceStatus">❓ Мало данных</div>
+                    <div class="convergence-metrics">
+                        <div class="metric-row">
+                            <span>Дисперсия:</span>
+                            <span id="convergenceVariance">N/A</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Тренд:</span>
+                            <span id="convergenceTrend">N/A</span>
+                        </div>
+                    </div>
+                    <p class="recommendation" id="convergenceRecommendation">
+                        Нужно больше данных для анализа
+                    </p>
+                </div>
+            </div>
+            
+            <!-- A/B Testing Panel -->
+            <div class="panel analytics-ab-panel">
+                <h2>🧪 A/B Тестирование Schema</h2>
+                <p class="panel-description">Тестирование разных форматов данных для Gemini</p>
+                
+                <button id="btnCreateExperiment" class="btn btn-secondary">
+                    ➕ Создать эксперимент
+                </button>
+                
+                <div id="experimentsList" class="experiments-list">
+                    <p class="empty-text">Нет активных экспериментов</p>
+                </div>
+            </div>
+            
+            <!-- Recent Games Panel -->
+            <div class="panel analytics-recent-panel">
+                <h2>🕐 Последние игры</h2>
+                <div id="recentGamesList" class="recent-games-list">
+                    <p class="empty-text">Нет сыгранных игр</p>
+                </div>
+            </div>
+        </main>
+
         <!-- AI Thinking Indicator -->
         <div id="aiThinking" class="thinking-indicator hidden">
             <div class="thinking-spinner"></div>
@@ -354,10 +635,13 @@
     </div>
 
     <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/api.js"></script>
     <script src="js/board-classic.js"></script>
     <script src="js/app.js"></script>
     <script src="js/replay.js"></script>
     <script src="js/training.js"></script>
+    <script src="js/gemini-battle.js"></script>
+    <script src="js/analytics.js"></script>
 </body>
 </html>

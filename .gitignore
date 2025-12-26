@@ -49,6 +49,10 @@ dist/
 *.pkl
 !models/.gitkeep
 
+# Training data (large files)
+training_data/human_transitions.jsonl
+training_data/human_games.jsonl
+
 # Environment variables
 .env
 .env.local

@@ -21,6 +21,10 @@ from .ai_engine import ai_engine
 from .elo_system import elo_system
 from .gemini_analyzer import gemini_analyzer
 from .gym_training import training_manager, TrainingConfig
+from .gemini_battle import gemini_battle_manager, BattleConfig
+from .metrics_collector import metrics_collector
+from .schema_ab_testing import ab_test_manager
+from .wandb_integration import wandb_tracker
 
 
 # FastAPI app
@@ -495,6 +499,15 @@ class TrainingConfigRequest(BaseModel):
     model_name: str = "policy_net"
 
 
+class GeminiBattleRequest(BaseModel):
+    """Request to start a Gemini battle session."""
+    num_games: int = 10
+    model_level: int = 5
+    gemini_timeout: int = 30
+    save_replays: bool = True
+    generate_summaries: bool = True
+
+
 @app.post("/api/training/start")
 async def start_training(config: TrainingConfigRequest):
     """Start a new gym training session."""
@@ -581,6 +594,625 @@ async def load_model(model_name: str):
             raise HTTPException(status_code=500, detail="Failed to load model")
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Gemini Battle API Endpoints
+# =============================================================================
+
+@app.post("/api/gemini-battle/start")
+async def start_gemini_battle(request: GeminiBattleRequest):
+    """Start a new Gemini battle session."""
+    try:
+        config = BattleConfig(
+            num_games=request.num_games,
+            model_level=request.model_level,
+            gemini_timeout=request.gemini_timeout,
+            save_replays=request.save_replays,
+            generate_summaries=request.generate_summaries
+        )
+        
+        session_id = gemini_battle_manager.create_session(config)
+        
+        # Run battle session in background
+        asyncio.create_task(
+            gemini_battle_manager.run_battle_session(session_id)
+        )
+        
+        return {
+            "session_id": session_id,
+            "status": "started",
+            "config": {
+                "num_games": config.num_games,
+                "model_level": config.model_level,
+                "gemini_timeout": config.gemini_timeout
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gemini-battle/sessions")
+async def list_gemini_battle_sessions():
+    """List all Gemini battle sessions."""
+    try:
+        sessions = gemini_battle_manager.list_sessions()
+        return {"sessions": sessions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gemini-battle/sessions/{session_id}")
+async def get_gemini_battle_progress(session_id: str):
+    """Get progress of a specific Gemini battle session."""
+    try:
+        progress = gemini_battle_manager.get_session_progress(session_id)
+        if not progress:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return progress
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gemini-battle/sessions/{session_id}/elo-chart")
+async def get_gemini_battle_elo_chart(session_id: str):
+    """Get ELO chart data for a session."""
+    try:
+        chart_data = gemini_battle_manager.get_elo_chart_data(session_id)
+        if not chart_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return chart_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gemini-battle/sessions/{session_id}/summaries")
+async def get_gemini_battle_summaries(session_id: str):
+    """Get all game summaries for a session."""
+    try:
+        summaries = gemini_battle_manager.get_summaries(session_id)
+        return {"summaries": summaries}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/gemini-battle/sessions/{session_id}/stop")
+async def stop_gemini_battle(session_id: str):
+    """Stop a running Gemini battle session."""
+    try:
+        success = gemini_battle_manager.stop_session(session_id)
+        if success:
+            return {"status": "stopping", "session_id": session_id}
+        else:
+            raise HTTPException(status_code=404, detail="Session not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gemini-battle/replays")
+async def list_gemini_battle_replays():
+    """Get list of all Gemini battle game replays."""
+    try:
+        games_dir = os.path.join(gemini_battle_manager.logs_dir, "games")
+        replays = []
+        
+        if os.path.exists(games_dir):
+            for filename in sorted(os.listdir(games_dir), reverse=True):
+                if filename.endswith('.json'):
+                    filepath = os.path.join(games_dir, filename)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            game_data = json.load(f)
+                        replays.append({
+                            "filename": filename,
+                            "game_id": game_data.get("game_id"),
+                            "session_id": game_data.get("session_id"),
+                            "timestamp": game_data.get("timestamp"),
+                            "winner": game_data.get("winner"),
+                            "model_color": game_data.get("model_color"),
+                            "total_moves": game_data.get("total_moves"),
+                            "final_score": game_data.get("final_score"),
+                            "elo_change": game_data.get("elo_change", 0)
+                        })
+                    except Exception as e:
+                        print(f"Error loading game {filename}: {e}")
+        
+        return {"replays": replays, "total": len(replays)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gemini-battle/replays/{filename}")
+async def get_gemini_battle_replay(filename: str):
+    """Get full data for a specific Gemini battle game."""
+    try:
+        filepath = os.path.join(gemini_battle_manager.logs_dir, "games", filename)
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail="Replay not found")
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            game_data = json.load(f)
+        
+        return game_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gemini-battle/summaries")
+async def list_gemini_battle_summaries():
+    """Get list of all Gemini battle game summaries."""
+    try:
+        summaries_dir = os.path.join(gemini_battle_manager.logs_dir, "summaries")
+        summaries = []
+        
+        if os.path.exists(summaries_dir):
+            for filename in sorted(os.listdir(summaries_dir), reverse=True):
+                if filename.endswith('.txt'):
+                    filepath = os.path.join(summaries_dir, filename)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        # Parse filename: summary_SESSIONID_GAMEID.txt
+                        parts = filename.replace('.txt', '').split('_')
+                        session_id = parts[1] if len(parts) > 1 else ""
+                        game_id = parts[2] if len(parts) > 2 else ""
+                        
+                        summaries.append({
+                            "filename": filename,
+                            "session_id": session_id,
+                            "game_id": game_id,
+                            "content": content[:500] + "..." if len(content) > 500 else content
+                        })
+                    except Exception as e:
+                        print(f"Error loading summary {filename}: {e}")
+        
+        return {"summaries": summaries, "total": len(summaries)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gemini-battle/summaries/{filename}")
+async def get_gemini_battle_summary(filename: str):
+    """Get full summary for a specific game."""
+    try:
+        filepath = os.path.join(gemini_battle_manager.logs_dir, "summaries", filename)
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail="Summary not found")
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return {"filename": filename, "content": content}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Real Metrics API - NO MOCKS
+# =============================================================================
+
+@app.get("/api/metrics/all")
+async def get_all_real_metrics():
+    """
+    Get ALL real metrics from actual files.
+    NO MOCKS - all data is computed from real game logs.
+    """
+    try:
+        metrics = metrics_collector.get_all_metrics(force_refresh=True)
+        return metrics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/metrics/gemini-battles")
+async def get_gemini_battle_metrics():
+    """Get real Gemini battle metrics from game files."""
+    try:
+        all_metrics = metrics_collector.get_all_metrics()
+        return all_metrics.get("gemini_battles", {})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/metrics/elo")
+async def get_real_elo_data():
+    """Get real ELO data from session files."""
+    try:
+        all_metrics = metrics_collector.get_all_metrics()
+        return all_metrics.get("elo", {})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/metrics/dataset")
+async def get_dataset_stats():
+    """Get real dataset composition statistics."""
+    try:
+        all_metrics = metrics_collector.get_all_metrics()
+        return all_metrics.get("dataset", {})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/metrics/convergence")
+async def get_convergence_status():
+    """Get real convergence status based on ELO history."""
+    try:
+        all_metrics = metrics_collector.get_all_metrics()
+        return all_metrics.get("convergence", {})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/metrics/training-data")
+async def get_training_data_from_battles():
+    """
+    Get real training data from Gemini battle games.
+    Returns transitions in format usable for Gym training.
+    """
+    try:
+        transitions = metrics_collector.get_training_data_for_gym()
+        return {
+            "total_transitions": len(transitions),
+            "transitions": transitions[:100],  # First 100 for preview
+            "has_more": len(transitions) > 100
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# A/B Testing API - Real Experiments
+# =============================================================================
+
+class ABTestCreateRequest(BaseModel):
+    name: str
+    variants: List[str] = ["structured", "tactical", "beginner"]
+    description: str = ""
+
+
+class ABTestFeedbackRequest(BaseModel):
+    experiment_id: str
+    variant: str
+    game_id: str
+    move_number: int
+    user_rating: Optional[int] = None
+    was_helpful: Optional[bool] = None
+    was_accurate: Optional[bool] = None
+
+
+@app.post("/api/ab-test/experiments")
+async def create_ab_experiment(request: ABTestCreateRequest):
+    """Create a new A/B test experiment."""
+    try:
+        experiment = ab_test_manager.create_experiment(
+            name=request.name,
+            variants=request.variants,
+            description=request.description
+        )
+        return {
+            "experiment_id": experiment.experiment_id,
+            "name": experiment.name,
+            "variants": experiment.variants,
+            "status": "created"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ab-test/experiments")
+async def list_ab_experiments():
+    """List all A/B test experiments."""
+    try:
+        experiments = ab_test_manager.list_experiments()
+        return {"experiments": experiments}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ab-test/experiments/{experiment_id}/stats")
+async def get_ab_experiment_stats(experiment_id: str):
+    """Get REAL statistics for an A/B test experiment."""
+    try:
+        stats = ab_test_manager.get_experiment_stats(experiment_id)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ab-test/feedback")
+async def submit_ab_feedback(request: ABTestFeedbackRequest):
+    """Submit user feedback for A/B test (real data collection)."""
+    try:
+        ab_test_manager.record_feedback(
+            experiment_id=request.experiment_id,
+            variant=request.variant,
+            game_id=request.game_id,
+            move_number=request.move_number,
+            user_rating=request.user_rating,
+            was_helpful=request.was_helpful,
+            was_accurate=request.was_accurate
+        )
+        return {"status": "recorded", "experiment_id": request.experiment_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ab-test/experiments/{experiment_id}/stop")
+async def stop_ab_experiment(experiment_id: str):
+    """Stop an A/B test experiment."""
+    try:
+        success = ab_test_manager.stop_experiment(experiment_id)
+        if success:
+            return {"status": "stopped", "experiment_id": experiment_id}
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# W&B / Analytics API
+# =============================================================================
+
+@app.post("/api/wandb/start")
+async def start_wandb_run(run_name: Optional[str] = None):
+    """Start a W&B tracking run."""
+    try:
+        is_wandb = wandb_tracker.start_run(run_name=run_name)
+        return {
+            "status": "started",
+            "using_wandb": is_wandb,
+            "fallback_log": not is_wandb
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/wandb/stop")
+async def stop_wandb_run():
+    """Stop the current W&B run."""
+    try:
+        wandb_tracker.finish_run()
+        return {"status": "stopped"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/wandb/sync")
+async def sync_metrics_to_wandb():
+    """Sync all real metrics from files to W&B."""
+    try:
+        wandb_tracker.sync_from_files(metrics_collector)
+        return {"status": "synced"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/wandb/local-metrics")
+async def get_local_wandb_metrics(last_n: int = 100):
+    """Get local W&B metrics (fallback when W&B unavailable)."""
+    try:
+        metrics = wandb_tracker.get_local_metrics(last_n=last_n)
+        return {"metrics": metrics, "count": len(metrics)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Human Data Import API
+# =============================================================================
+
+from fastapi import UploadFile, File
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+
+class ImportDataRequest(BaseModel):
+    """Request to import human data for training."""
+    opening_book_paths: Optional[List[str]] = None
+    championship_path: Optional[str] = None
+    playok_path: Optional[str] = None
+    output_dir: str = "training_data"
+
+
+class ParseStatsResponse(BaseModel):
+    """Statistics from data parsing."""
+    opening_book: int = 0
+    human_tournament: int = 0
+    playok: int = 0
+    total_games: int = 0
+    total_moves: int = 0
+    total_transitions: int = 0
+
+
+@app.post("/api/data/parse-all")
+async def parse_all_human_data(request: ImportDataRequest):
+    """
+    Parse all available human training data sources.
+    
+    This will:
+    1. Parse opening book files (open_tree*.txt)
+    2. Parse championship games (games.txt)
+    3. Parse PlayOK PGN games (all_results_combined.txt)
+    4. Convert to unified training format
+    5. Save to training_data/ directory
+    """
+    try:
+        from scripts.data_parsers import parse_all_data
+        
+        stats = parse_all_data(
+            opening_book_paths=request.opening_book_paths,
+            championship_path=request.championship_path,
+            playok_path=request.playok_path,
+            output_dir=request.output_dir
+        )
+        
+        return {
+            "status": "success",
+            "stats": stats,
+            "output_dir": request.output_dir
+        }
+    except ImportError as e:
+        # Try alternative import
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "data_parsers",
+                os.path.join(os.path.dirname(__file__), "..", "scripts", "data_parsers.py")
+            )
+            data_parsers = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(data_parsers)
+            
+            stats = data_parsers.parse_all_data(
+                opening_book_paths=request.opening_book_paths,
+                championship_path=request.championship_path,
+                playok_path=request.playok_path,
+                output_dir=request.output_dir
+            )
+            
+            return {
+                "status": "success",
+                "stats": stats,
+                "output_dir": request.output_dir
+            }
+        except Exception as e2:
+            raise HTTPException(status_code=500, detail=f"Import error: {str(e)} / {str(e2)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/data/parse-auto")
+async def parse_auto_discover():
+    """
+    Automatically discover and parse all training data from standard locations.
+    
+    Looks for:
+    - Android-APK/assets/internal/open_tree*.txt
+    - games.txt
+    - all_results_combined.txt
+    """
+    try:
+        from pathlib import Path
+        import importlib.util
+        
+        # Find project root
+        backend_dir = Path(__file__).parent
+        engine_dir = backend_dir.parent
+        project_root = engine_dir.parent.parent  # gym-togyzkumalak-master parent
+        
+        # Look for files
+        opening_books = list(project_root.glob('**/Android-APK/assets/internal/open_tree*.txt'))
+        championship = list(project_root.glob('**/games.txt'))
+        playok = list(project_root.glob('**/all_results_combined.txt'))
+        
+        opening_book_paths = [str(p) for p in opening_books] if opening_books else None
+        championship_path = str(championship[0]) if championship else None
+        playok_path = str(playok[0]) if playok else None
+        
+        # Import and run parser
+        spec = importlib.util.spec_from_file_location(
+            "data_parsers",
+            os.path.join(os.path.dirname(__file__), "..", "scripts", "data_parsers.py")
+        )
+        data_parsers = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(data_parsers)
+        
+        output_dir = os.path.join(str(engine_dir), "training_data")
+        
+        stats = data_parsers.parse_all_data(
+            opening_book_paths=opening_book_paths,
+            championship_path=championship_path,
+            playok_path=playok_path,
+            output_dir=output_dir
+        )
+        
+        return {
+            "status": "success",
+            "stats": stats,
+            "found_files": {
+                "opening_books": opening_book_paths or [],
+                "championship": championship_path,
+                "playok": playok_path
+            },
+            "output_dir": output_dir
+        }
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"{str(e)}\n{traceback.format_exc()}")
+
+
+@app.get("/api/data/training-files")
+async def list_training_files():
+    """List available training data files."""
+    try:
+        engine_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        training_dir = os.path.join(engine_dir, "training_data")
+        
+        if not os.path.exists(training_dir):
+            return {"files": [], "directory": training_dir, "exists": False}
+        
+        files = []
+        for f in os.listdir(training_dir):
+            filepath = os.path.join(training_dir, f)
+            if os.path.isfile(filepath):
+                size = os.path.getsize(filepath)
+                # Count lines for jsonl files
+                lines = 0
+                if f.endswith('.jsonl'):
+                    with open(filepath, 'r', encoding='utf-8') as file:
+                        lines = sum(1 for _ in file)
+                
+                files.append({
+                    "name": f,
+                    "size_bytes": size,
+                    "size_mb": round(size / (1024 * 1024), 2),
+                    "lines": lines
+                })
+        
+        return {
+            "files": files,
+            "directory": training_dir,
+            "exists": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/data/stats")
+async def get_data_stats():
+    """Get statistics about parsed training data."""
+    try:
+        engine_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        stats_file = os.path.join(engine_dir, "training_data", "parse_stats.json")
+        
+        if not os.path.exists(stats_file):
+            return {
+                "parsed": False,
+                "message": "No parsed data. Call POST /api/data/parse-auto first."
+            }
+        
+        with open(stats_file, 'r', encoding='utf-8') as f:
+            stats = json.load(f)
+        
+        return {
+            "parsed": True,
+            "stats": stats
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

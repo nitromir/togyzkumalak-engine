@@ -301,6 +301,110 @@ class AIEngine:
             path = os.path.join(ai_config.model_dir, f"policy_level_{level}.pth")
         
         torch.save(model.state_dict(), path)
+    
+    def get_policy_output(
+        self,
+        board: TogyzkumalakBoard,
+        level: int = 5
+    ) -> Tuple[List[float], List[float], float]:
+        """
+        Get raw policy output for training data collection.
+        
+        Returns:
+            Tuple of (raw_logits, action_probs, value_estimate)
+            - raw_logits: Raw network output before softmax (for KL regularization)
+            - action_probs: Probabilities after softmax
+            - value_estimate: Position evaluation [-1, 1]
+        """
+        model = self.models.get(level)
+        
+        if not model:
+            # Fallback uniform distribution
+            legal_moves = board.get_legal_moves()
+            uniform_logits = [0.0] * 9
+            uniform_probs = [0.0] * 9
+            for m in legal_moves:
+                uniform_probs[m] = 1.0 / len(legal_moves)
+            value = self.evaluate_position(board)
+            return uniform_logits, uniform_probs, value
+        
+        # Get observation
+        obs = board.to_observation()
+        obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+        
+        with torch.no_grad():
+            # Get intermediate activations before softmax for logits
+            # Since our network has softmax built-in, we need to extract before that
+            x = obs_tensor
+            for i, layer in enumerate(model.network):
+                if isinstance(layer, nn.Softmax):
+                    # This is the layer before softmax - raw logits
+                    raw_logits = x.squeeze().cpu().numpy().tolist()
+                    action_probs = layer(x).squeeze().cpu().numpy().tolist()
+                    break
+                x = layer(x)
+            else:
+                # Fallback if no softmax found
+                action_probs = model(obs_tensor).squeeze().cpu().numpy().tolist()
+                raw_logits = [0.0] * 9
+        
+        # Get position evaluation
+        value = self.evaluate_position(board)
+        
+        return raw_logits, action_probs, value
+    
+    def get_move_with_policy(
+        self,
+        board: TogyzkumalakBoard,
+        level: int = 5,
+        thinking_time_ms: int = None
+    ) -> Tuple[int, int, List[float], List[float], float]:
+        """
+        Get AI move along with full policy output for training.
+        
+        Returns:
+            Tuple of (move, thinking_time_ms, raw_logits, action_probs, value_estimate)
+        """
+        start_time = time.time()
+        
+        legal_moves = board.get_legal_moves()
+        if not legal_moves:
+            return 0, 0, [], [], 0.0
+        
+        # Get policy output first
+        raw_logits, action_probs, value = self.get_policy_output(board, level)
+        
+        # Select move based on level
+        if level == 1:
+            move = self._random_move(legal_moves)
+        elif level == 2:
+            move = self._heuristic_move(board, legal_moves)
+        else:
+            # Use action_probs directly
+            mask = np.zeros(9)
+            for m in legal_moves:
+                mask[m] = 1
+            
+            masked_probs = np.array(action_probs) * mask
+            if masked_probs.sum() > 0:
+                masked_probs = masked_probs / masked_probs.sum()
+            else:
+                masked_probs = mask / mask.sum()
+            
+            epsilon = ai_config.epsilon / level
+            if random.random() < epsilon:
+                move = random.choice(legal_moves)
+            elif level < 5:
+                move = int(np.random.choice(9, p=masked_probs))
+            else:
+                move = int(np.argmax(masked_probs))
+        
+        elapsed = (time.time() - start_time) * 1000
+        if thinking_time_ms and elapsed < thinking_time_ms:
+            time.sleep((thinking_time_ms - elapsed) / 1000)
+            elapsed = thinking_time_ms
+        
+        return move + 1, int(elapsed), raw_logits, action_probs, value
 
 
 # Global AI engine instance

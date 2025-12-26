@@ -56,6 +56,18 @@ class ReplayViewer {
                 document.getElementById('replaysMode').classList.toggle('hidden', mode !== 'replays');
                 document.getElementById('trainingMode').classList.toggle('hidden', mode !== 'training');
                 
+                // Handle Gemini Battle mode
+                const geminiBattleMode = document.getElementById('geminiBattleMode');
+                if (geminiBattleMode) {
+                    geminiBattleMode.classList.toggle('hidden', mode !== 'gemini-battle');
+                }
+                
+                // Handle Analytics mode
+                const analyticsMode = document.getElementById('analyticsMode');
+                if (analyticsMode) {
+                    analyticsMode.classList.toggle('hidden', mode !== 'analytics');
+                }
+                
                 if (mode === 'replays') {
                     this.loadReplayList();
                 } else if (mode === 'training') {
@@ -63,6 +75,14 @@ class ReplayViewer {
                     if (window.trainingController) {
                         trainingController.loadModels();
                         trainingController.loadSessions();
+                    }
+                } else if (mode === 'analytics') {
+                    // Load real analytics data
+                    if (window.analyticsController) {
+                        analyticsController.loadAllMetrics();
+                    }
+                    if (window.abTestController) {
+                        abTestController.loadExperiments();
                     }
                 }
             });
@@ -162,6 +182,95 @@ class ReplayViewer {
             console.error('Failed to load replays:', error);
             listContainer.innerHTML = '<p class="error">Не удалось загрузить список партий</p>';
         }
+        
+        // Also load Gemini Battle replays
+        await this.loadGeminiBattleReplays();
+    }
+
+    async loadGeminiBattleReplays() {
+        const listContainer = document.getElementById('geminiBattleReplayList');
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '<p class="placeholder">Загрузка...</p>';
+
+        try {
+            const response = await fetch('/api/gemini-battle/replays');
+            const data = await response.json();
+
+            if (data.replays.length === 0) {
+                listContainer.innerHTML = '<p class="placeholder">Нет игр против Gemini. Запустите батл во вкладке "Gemini Battle".</p>';
+                return;
+            }
+
+            listContainer.innerHTML = '';
+
+            data.replays.forEach(replay => {
+                const btn = document.createElement('button');
+                btn.className = 'replay-btn gemini-battle-btn';
+                const winnerClass = replay.winner === replay.model_color ? 'win' : 'loss';
+                const winnerText = replay.winner === replay.model_color ? '✅ WIN' : '❌ LOSS';
+                const eloChange = replay.elo_change > 0 ? `+${replay.elo_change}` : replay.elo_change;
+                const eloClass = replay.elo_change >= 0 ? 'elo-up' : 'elo-down';
+                
+                btn.innerHTML = `
+                    <span class="replay-id">Игра #${replay.game_id}</span>
+                    <span class="replay-winner ${winnerClass}">${winnerText}</span>
+                    <span class="replay-score">${replay.final_score?.white_kazan || 0}:${replay.final_score?.black_kazan || 0}</span>
+                    <span class="replay-elo ${eloClass}">${eloChange} ELO</span>
+                    <span class="replay-steps">${replay.total_moves} ходов</span>
+                `;
+                btn.onclick = () => this.showGeminiBattleDetails(replay.filename);
+                listContainer.appendChild(btn);
+            });
+
+        } catch (error) {
+            console.error('Failed to load Gemini battle replays:', error);
+            listContainer.innerHTML = '<p class="error">Не удалось загрузить игры против Gemini</p>';
+        }
+    }
+
+    async showGeminiBattleDetails(filename) {
+        try {
+            const response = await fetch(`/api/gemini-battle/replays/${filename}`);
+            if (!response.ok) throw new Error('Failed to load game');
+            
+            const gameData = await response.json();
+            
+            // Show game details in a modal or info panel
+            const infoPanel = document.getElementById('replayInfo');
+            if (infoPanel) {
+                const winnerClass = gameData.winner === gameData.model_color ? 'win' : 'loss';
+                const eloChange = gameData.elo_change > 0 ? `+${gameData.elo_change}` : gameData.elo_change;
+                
+                infoPanel.innerHTML = `
+                    <div class="info-row"><strong>🤖 Батл против Gemini</strong></div>
+                    <div class="info-row"><strong>Игра:</strong> #${gameData.game_id} (${gameData.session_id})</div>
+                    <div class="info-row"><strong>Дата:</strong> ${gameData.timestamp}</div>
+                    <div class="info-row"><strong>Модель играла:</strong> ${gameData.model_color.toUpperCase()}</div>
+                    <div class="info-row"><strong>Победитель:</strong> <span class="${winnerClass}">${gameData.winner.toUpperCase()}</span></div>
+                    <div class="info-row"><strong>Счёт:</strong> ${gameData.final_score?.white_kazan || 0}:${gameData.final_score?.black_kazan || 0}</div>
+                    <div class="info-row"><strong>Ходов:</strong> ${gameData.total_moves}</div>
+                    <div class="info-row"><strong>Изменение ELO:</strong> ${eloChange}</div>
+                    <div class="info-row"><strong>ELO после:</strong> ${gameData.model_elo_after}</div>
+                `;
+            }
+            
+            // Show move history in last action panel
+            const lastAction = document.getElementById('replayLastAction');
+            if (lastAction && gameData.moves && gameData.moves.length > 0) {
+                const movesHtml = gameData.moves.slice(-10).map(m => 
+                    `<div class="move-item">${m.number}. ${m.player}: ${m.notation} - ${m.explanation}</div>`
+                ).join('');
+                lastAction.innerHTML = `<div class="moves-summary">Последние 10 ходов:<br>${movesHtml}</div>`;
+            }
+            
+            // Note: Full board visualization requires state reconstruction
+            // For now, show info only. Board replay needs states to be saved.
+            
+        } catch (error) {
+            console.error('Failed to load Gemini battle details:', error);
+            alert('Не удалось загрузить детали игры');
+        }
     }
 
     async loadReplay(gameId) {
@@ -169,7 +278,8 @@ class ReplayViewer {
             const response = await fetch(`/api/replays/${gameId}`);
             if (!response.ok) throw new Error('Failed to load replay');
             
-            this.currentReplay = await response.json();
+            const rawReplay = await response.json();
+            this.currentReplay = this.transformReplayData(rawReplay);
             this.currentStep = 0;
 
             // Show viewer
@@ -198,6 +308,52 @@ class ReplayViewer {
             console.error('Failed to load replay:', error);
             alert('Не удалось загрузить партию');
         }
+    }
+
+    /**
+     * Transform replay data from gym format (white_pits, black_pits) 
+     * to renderer format (white.holes, black.holes)
+     */
+    transformReplayData(rawReplay) {
+        // If already in correct format, return as-is
+        if (rawReplay.states && rawReplay.states[0]?.white?.holes) {
+            return rawReplay;
+        }
+
+        // Transform states from gym format
+        const transformedStates = rawReplay.states.map(state => {
+            // Handle tuzduk: replace pit value with -1 if it's a tuzduk
+            const whitePits = [...state.white_pits];
+            const blackPits = [...state.black_pits];
+            
+            // Mark tuzduk positions with -1
+            if (state.white_tuzduk !== null && state.white_tuzduk !== undefined) {
+                blackPits[state.white_tuzduk] = -1;
+            }
+            if (state.black_tuzduk !== null && state.black_tuzduk !== undefined) {
+                whitePits[state.black_tuzduk] = -1;
+            }
+
+            return {
+                white: {
+                    holes: whitePits,
+                    kazan: state.white_kazan
+                },
+                black: {
+                    holes: blackPits,
+                    kazan: state.black_kazan
+                },
+                current_player: state.current_player,
+                action: state.action,
+                player: state.player,
+                step: state.step
+            };
+        });
+
+        return {
+            ...rawReplay,
+            states: transformedStates
+        };
     }
 
     goToStep(step) {
