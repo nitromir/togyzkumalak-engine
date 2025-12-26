@@ -177,6 +177,11 @@ body::after {
     text-shadow: var(--glow-text);
 }
 
+/* Utilities */
+.hidden {
+    display: none !important;
+}
+
 .header-controls {
     display: flex;
     gap: 12px;
@@ -184,13 +189,29 @@ body::after {
 
 .main-content {
     flex: 1;
-    display: grid;
-    grid-template-columns: 1fr 360px;
+    display: flex;
+    justify-content: center;
     gap: 24px;
     padding: 24px;
     max-width: 1500px;
     margin: 0 auto;
     width: 100%;
+}
+
+.main-content:not(.hidden) {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+}
+
+/* If setup panel is active, center it and hide sidebar if needed, or just make it single column */
+.main-content:has(.setup-panel:not(.hidden)) {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.main-content:has(.setup-panel:not(.hidden)) .side-panel {
+    display: none;
 }
 
 /* =============================================================================
