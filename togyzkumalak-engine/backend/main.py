@@ -423,6 +423,65 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
 
 
 # =============================================================================
+# Replay API
+# =============================================================================
+
+@app.get("/api/replays")
+async def get_replays():
+    """Get list of available replays from gym simulations."""
+    replay_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 
+        "..", "..", "visualizer", "replay.json"
+    )
+    
+    if not os.path.exists(replay_file):
+        return {"replays": [], "error": "No replay file found"}
+    
+    try:
+        with open(replay_file, 'r', encoding='utf-8') as f:
+            replays = json.load(f)
+        
+        # Return summary of each replay
+        summary = []
+        for replay in replays:
+            summary.append({
+                "game_id": replay.get("game_id"),
+                "timestamp": replay.get("timestamp"),
+                "total_steps": replay.get("total_steps"),
+                "winner": replay.get("winner"),
+                "final_score": replay.get("final_score")
+            })
+        
+        return {"replays": summary, "total": len(summary)}
+    except Exception as e:
+        return {"replays": [], "error": str(e)}
+
+
+@app.get("/api/replays/{game_id}")
+async def get_replay(game_id: int):
+    """Get full replay data for a specific game."""
+    replay_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 
+        "..", "..", "visualizer", "replay.json"
+    )
+    
+    if not os.path.exists(replay_file):
+        raise HTTPException(status_code=404, detail="No replay file found")
+    
+    try:
+        with open(replay_file, 'r', encoding='utf-8') as f:
+            replays = json.load(f)
+        
+        for replay in replays:
+            if replay.get("game_id") == game_id:
+                return replay
+        
+        raise HTTPException(status_code=404, detail=f"Replay {game_id} not found")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to parse replay file")
+
+
+# =============================================================================
 # Static Files (Frontend)
 # =============================================================================
 

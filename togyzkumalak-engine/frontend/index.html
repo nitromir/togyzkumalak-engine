@@ -15,6 +15,12 @@
                 <h1>Тоғыз Құмалақ</h1>
             </div>
             
+            <!-- Mode Tabs -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" data-mode="play">🎯 Играть</button>
+                <button class="mode-tab" data-mode="replays">📼 Реплеи</button>
+            </div>
+            
             <!-- Statistics in header -->
             <div class="header-stats" id="headerStats">
                 <div class="stat-item">
@@ -22,71 +28,69 @@
                     <span class="stat-value" id="currentElo">1500</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">Games:</span>
+                    <span class="stat-label">Игры:</span>
                     <span class="stat-value" id="totalGames">0</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">Wins:</span>
+                    <span class="stat-label">Победы:</span>
                     <span class="stat-value" id="totalWins">0</span>
                 </div>
             </div>
-            
-            <div class="header-controls">
-                <button id="btnSettings" class="btn btn-icon">⚙️</button>
-            </div>
         </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
+        <!-- ============================================ -->
+        <!-- PLAY MODE -->
+        <!-- ============================================ -->
+        <main class="main-content" id="playMode">
             <!-- Game Setup Panel (shown initially) -->
             <div id="setupPanel" class="panel setup-panel">
-                <h2>🎯 New Game</h2>
+                <h2>🎯 Новая Игра</h2>
                 
                 <div class="setup-section">
-                    <label>Play as:</label>
+                    <label>Играть за:</label>
                     <div class="color-selector">
                         <button class="color-btn active" data-color="white">
-                            ⚪ White (Бастаушы)
+                            ⚪ Белые (Бастаушы)
                         </button>
                         <button class="color-btn" data-color="black">
-                            ⚫ Black (Қостаушы)
+                            ⚫ Чёрные (Қостаушы)
                         </button>
                     </div>
                 </div>
 
                 <div class="setup-section">
-                    <label>AI Level:</label>
+                    <label>Уровень ИИ:</label>
                     <div class="level-selector">
                         <button class="level-btn" data-level="1">
                             <span class="level-num">1</span>
-                            <span class="level-name">Random</span>
+                            <span class="level-name">Случайный</span>
                             <span class="level-elo">~800</span>
                         </button>
                         <button class="level-btn" data-level="2">
                             <span class="level-num">2</span>
-                            <span class="level-name">Beginner</span>
+                            <span class="level-name">Начинающий</span>
                             <span class="level-elo">~1200</span>
                         </button>
                         <button class="level-btn active" data-level="3">
                             <span class="level-num">3</span>
-                            <span class="level-name">Intermediate</span>
+                            <span class="level-name">Средний</span>
                             <span class="level-elo">~1500</span>
                         </button>
                         <button class="level-btn" data-level="4">
                             <span class="level-num">4</span>
-                            <span class="level-name">Advanced</span>
+                            <span class="level-name">Продвинутый</span>
                             <span class="level-elo">~1800</span>
                         </button>
                         <button class="level-btn" data-level="5">
                             <span class="level-num">5</span>
-                            <span class="level-name">Expert</span>
+                            <span class="level-name">Эксперт</span>
                             <span class="level-elo">~2100</span>
                         </button>
                     </div>
                 </div>
 
                 <button id="btnStartGame" class="btn btn-primary btn-large">
-                    ▶️ Start Game
+                    ▶️ Начать Игру
                 </button>
             </div>
 
@@ -99,11 +103,11 @@
                         <div class="player-elo" id="aiElo">ELO: 1500</div>
                     </div>
                     <div class="game-status">
-                        <div class="turn-indicator" id="turnIndicator">Your Turn</div>
-                        <div class="move-counter" id="moveCounter">Move: 0</div>
+                        <div class="turn-indicator" id="turnIndicator">Ваш Ход</div>
+                        <div class="move-counter" id="moveCounter">Ход: 0</div>
                     </div>
                     <div class="player-info player-white">
-                        <div class="player-label">⚪ АҚ (You)</div>
+                        <div class="player-label">⚪ АҚ (Вы)</div>
                         <div class="player-elo" id="playerElo">ELO: 1500</div>
                     </div>
                 </div>
@@ -115,14 +119,14 @@
 
                 <!-- Last Move Info -->
                 <div class="last-move" id="lastMove">
-                    Last move: -
+                    Последний ход: -
                 </div>
 
                 <!-- Game Controls -->
                 <div class="game-controls">
-                    <button id="btnUndo" class="btn btn-secondary" disabled>↩️ Undo</button>
-                    <button id="btnNewGame" class="btn btn-secondary">🔄 New Game</button>
-                    <button id="btnResign" class="btn btn-danger">🏳️ Resign</button>
+                    <button id="btnUndo" class="btn btn-secondary" disabled>↩️ Отменить</button>
+                    <button id="btnNewGame" class="btn btn-secondary">🔄 Новая Игра</button>
+                    <button id="btnResign" class="btn btn-danger">🏳️ Сдаться</button>
                 </div>
             </div>
 
@@ -130,7 +134,7 @@
             <aside class="side-panel">
                 <!-- Move History -->
                 <div class="panel history-panel">
-                    <h3>📜 Move History</h3>
+                    <h3>📜 История Ходов</h3>
                     <div class="move-list" id="moveList">
                         <!-- Moves will be added here -->
                     </div>
@@ -138,13 +142,94 @@
 
                 <!-- Gemini Analysis Panel -->
                 <div class="panel analysis-panel">
-                    <h3>🤖 AI Analysis</h3>
+                    <h3>🤖 AI Анализ</h3>
                     <div class="analysis-controls">
-                        <button id="btnAnalyze" class="btn btn-small">Analyze Position</button>
-                        <button id="btnSuggest" class="btn btn-small">Suggest Move</button>
+                        <button id="btnAnalyze" class="btn btn-small">Анализировать</button>
+                        <button id="btnSuggest" class="btn btn-small">Предложить Ход</button>
                     </div>
                     <div class="analysis-content" id="analysisContent">
-                        <p class="placeholder">Click "Analyze Position" to get Gemini's analysis of the current position.</p>
+                        <p class="placeholder">Нажмите "Анализировать" для получения анализа от Gemini.</p>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- ============================================ -->
+        <!-- REPLAYS MODE -->
+        <!-- ============================================ -->
+        <main class="main-content hidden" id="replaysMode">
+            <!-- Replay Selector -->
+            <div class="panel replay-selector-panel">
+                <h2>📼 Записанные Партии (Gym Simulations)</h2>
+                <div class="replay-list" id="replayList">
+                    <p class="placeholder">Загрузка списка партий...</p>
+                </div>
+            </div>
+
+            <!-- Replay Viewer -->
+            <div id="replayViewer" class="panel replay-viewer hidden">
+                <!-- Replay Info Bar -->
+                <div class="info-bar">
+                    <div class="player-info player-black">
+                        <div class="player-label">⚫ ҚАРА (Black)</div>
+                        <div class="player-elo" id="replayBlackScore">Казан: 0</div>
+                    </div>
+                    <div class="game-status">
+                        <div class="turn-indicator" id="replayCurrentPlayer">WHITE</div>
+                        <div class="move-counter" id="replayStepCounter">Шаг: 0 / 0</div>
+                    </div>
+                    <div class="player-info player-white">
+                        <div class="player-label">⚪ АҚ (White)</div>
+                        <div class="player-elo" id="replayWhiteScore">Казан: 0</div>
+                    </div>
+                </div>
+
+                <!-- Replay Board -->
+                <div class="board-wrapper classic-active">
+                    <canvas id="replayBoard" class="board-classic" width="900" height="450"></canvas>
+                </div>
+
+                <!-- Replay Progress Bar -->
+                <div class="replay-progress">
+                    <div class="progress-bar" id="replayProgressBar">
+                        <div class="progress-fill" id="replayProgressFill"></div>
+                    </div>
+                </div>
+
+                <!-- Replay Controls -->
+                <div class="replay-controls">
+                    <button id="btnReplayFirst" class="btn btn-secondary">⏮ Начало</button>
+                    <button id="btnReplayPrev" class="btn btn-secondary">⏪ Назад</button>
+                    <button id="btnReplayPlay" class="btn btn-primary">▶️ Воспроизвести</button>
+                    <button id="btnReplayNext" class="btn btn-secondary">⏩ Вперёд</button>
+                    <button id="btnReplayLast" class="btn btn-secondary">⏭ Конец</button>
+                </div>
+
+                <!-- Speed Control -->
+                <div class="speed-control">
+                    <label>Скорость:</label>
+                    <input type="range" id="replaySpeed" min="100" max="2000" value="500">
+                    <span id="replaySpeedValue">500ms</span>
+                </div>
+
+                <!-- Winner Banner -->
+                <div class="winner-banner hidden" id="replayWinnerBanner">
+                    🏆 Победитель: WHITE (83:57) 🏆
+                </div>
+            </div>
+
+            <!-- Replay Side Panel -->
+            <aside class="side-panel">
+                <div class="panel">
+                    <h3>📊 Информация о Партии</h3>
+                    <div id="replayInfo" class="replay-info">
+                        <p class="placeholder">Выберите партию для просмотра</p>
+                    </div>
+                </div>
+                <div class="panel">
+                    <h3>🔍 Последнее Действие</h3>
+                    <div id="replayLastAction" class="last-action-info">
+                        -
                     </div>
                 </div>
             </aside>
@@ -153,15 +238,15 @@
         <!-- Game Over Modal -->
         <div id="gameOverModal" class="modal hidden">
             <div class="modal-content">
-                <h2 id="gameOverTitle">🎉 Game Over!</h2>
+                <h2 id="gameOverTitle">🎉 Игра Окончена!</h2>
                 <div class="game-result" id="gameResult">
-                    <p class="winner-text" id="winnerText">You Win!</p>
-                    <p class="score-text" id="scoreText">Score: 82 - 80</p>
+                    <p class="winner-text" id="winnerText">Вы Победили!</p>
+                    <p class="score-text" id="scoreText">Счёт: 82 - 80</p>
                     <p class="elo-change" id="eloChangeText">ELO: +15</p>
                 </div>
                 <div class="modal-buttons">
-                    <button id="btnPlayAgain" class="btn btn-primary">Play Again</button>
-                    <button id="btnCloseModal" class="btn btn-secondary">Close</button>
+                    <button id="btnPlayAgain" class="btn btn-primary">Играть Снова</button>
+                    <button id="btnCloseModal" class="btn btn-secondary">Закрыть</button>
                 </div>
             </div>
         </div>
@@ -169,7 +254,7 @@
         <!-- AI Thinking Indicator -->
         <div id="aiThinking" class="thinking-indicator hidden">
             <div class="thinking-spinner"></div>
-            <span>AI is thinking...</span>
+            <span>ИИ думает...</span>
         </div>
     </div>
 
@@ -177,5 +262,6 @@
     <script src="js/api.js"></script>
     <script src="js/board-classic.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/replay.js"></script>
 </body>
 </html>

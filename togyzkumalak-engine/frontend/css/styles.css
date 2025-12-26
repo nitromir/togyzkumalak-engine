@@ -926,3 +926,215 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
+
+/* =============================================================================
+   Mode Tabs
+   ============================================================================= */
+
+.mode-tabs {
+    display: flex;
+    gap: 8px;
+}
+
+.mode-tab {
+    background: var(--bg-tertiary);
+    border: 2px solid transparent;
+    color: var(--text-secondary);
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: var(--transition-fast);
+}
+
+.mode-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.mode-tab.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+}
+
+/* =============================================================================
+   Replay Styles
+   ============================================================================= */
+
+.replay-selector-panel {
+    margin-bottom: 20px;
+}
+
+.replay-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.replay-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 16px 24px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    min-width: 140px;
+}
+
+.replay-btn:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
+.replay-btn.active {
+    border-color: var(--accent-primary);
+    background: rgba(233, 69, 96, 0.2);
+}
+
+.replay-id {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.replay-winner {
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 4px;
+}
+
+.replay-winner.white {
+    background: #ecf0f1;
+    color: #2c3e50;
+}
+
+.replay-winner.black {
+    background: #2c3e50;
+    color: #ecf0f1;
+}
+
+.replay-score {
+    color: var(--accent-gold);
+    font-weight: 600;
+}
+
+.replay-steps {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.replay-viewer {
+    margin-top: 20px;
+}
+
+.replay-progress {
+    margin: 20px 0;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 10px;
+    background: var(--bg-tertiary);
+    border-radius: 5px;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    transition: width 0.2s ease;
+}
+
+.replay-controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.speed-control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-secondary);
+}
+
+.speed-control input {
+    width: 150px;
+    accent-color: var(--accent-primary);
+}
+
+.winner-banner {
+    text-align: center;
+    padding: 20px;
+    background: linear-gradient(90deg, #d4af37, #f1c40f, #d4af37);
+    color: #1a1a2e;
+    border-radius: 12px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-top: 20px;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+.replay-info {
+    font-size: 0.95rem;
+}
+
+.replay-info .info-row {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.replay-info .info-row:last-child {
+    border-bottom: none;
+}
+
+.replay-info .white {
+    color: #ecf0f1;
+    background: #2c3e50;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.replay-info .black {
+    color: #2c3e50;
+    background: #ecf0f1;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.last-action-info {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--accent-orange);
+    padding: 12px;
+    text-align: center;
+}
+
+.turn-indicator.white {
+    background: #ecf0f1;
+    color: #2c3e50;
+    padding: 6px 16px;
+    border-radius: 6px;
+}
+
+.turn-indicator.black {
+    background: #2c3e50;
+    color: #ecf0f1;
+    padding: 6px 16px;
+    border-radius: 6px;
+}
