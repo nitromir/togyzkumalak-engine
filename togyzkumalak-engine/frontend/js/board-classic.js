@@ -15,18 +15,18 @@ class ClassicBoard {
         this.rowGap = 80; // Increased gap between rows for labels
         
         this.colors = {
-            board: '#e5b16d',           // Sandy board background
-            pit: '#c88c4a',             // Pit background
-            pitBorder: '#8d5a2d',       // Pit border
-            tuzduk: '#fbbf24',          // Bright yellow tuzduk
-            kumalak: '#3d3429',         // Dark kumalak
-            kumalakBorder: '#1a1a1a',   // Kumalak border for depth
-            kumalakHighlight: '#5d4e37', // Light reflection on kumalak
-            text: '#2c3e50',            // Labels
-            textLight: '#6b7280',       // Secondary text
-            lastMove: '#fb923c',        // Orange for last move
-            playable: 'rgba(255,255,255,0.6)',
-            redMarker: '#dc2626'        // Red center marker
+            board: '#0f172a',           // Dark slate tech background
+            pit: '#1e293b',             // Lighter slate for pits
+            pitBorder: '#00f2ff',       // Cyan tech border
+            tuzduk: 'rgba(255, 204, 0, 0.4)', // Golden tuzduk glow
+            kumalak: '#e2e8f0',         // Bright kumalak (light slate/white)
+            kumalakBorder: '#000000',   // Black border for kumalak
+            kumalakHighlight: '#ffffff', // White highlight for 3D effect
+            text: '#00f2ff',            // Cyan labels
+            textLight: '#94a3b8',       // Slate secondary text
+            lastMove: '#ff8800',        // Orange for last move
+            playable: 'rgba(0, 242, 255, 0.4)',
+            redMarker: '#ff0055'        // Neon pink/red center marker
         };
 
         this.gameState = null;

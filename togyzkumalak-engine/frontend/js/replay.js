@@ -23,16 +23,16 @@ class ReplayViewer {
         this.gap = 15;
         
         this.colors = {
-            board: '#e5b16d',
-            pit: '#c88c4a',
-            pitBorder: '#8d5a2d',
-            tuzduk: '#fbbf24',
-            kumalak: '#3d3429',
-            kumalakHighlight: '#5d4e37',
-            text: '#2c3e50',
-            textLight: '#6b7280',
-            lastMove: '#fb923c',
-            redMarker: '#dc2626'
+            board: '#0f172a',
+            pit: '#1e293b',
+            pitBorder: '#00f2ff',
+            tuzduk: 'rgba(255, 204, 0, 0.4)',
+            kumalak: '#e2e8f0',
+            kumalakHighlight: '#ffffff',
+            text: '#00f2ff',
+            textLight: '#94a3b8',
+            lastMove: '#ff8800',
+            redMarker: '#ff0055'
         };
         
         this.init();
