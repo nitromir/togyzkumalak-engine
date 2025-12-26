@@ -23,6 +23,7 @@
             <div class="mode-tabs">
                 <button class="mode-tab active" data-mode="play">🎯 Играть</button>
                 <button class="mode-tab" data-mode="replays">📼 Реплеи</button>
+                <button class="mode-tab" data-mode="training">🧠 Тренировка</button>
             </div>
             
             <!-- Statistics in header -->
@@ -255,6 +256,96 @@
             </div>
         </div>
 
+        <!-- ============================================ -->
+        <!-- TRAINING MODE -->
+        <!-- ============================================ -->
+        <main class="main-content hidden" id="trainingMode">
+            <!-- Training Configuration Panel -->
+            <div class="panel training-config-panel">
+                <h2>⚙️ Настройки Тренировки</h2>
+                
+                <div class="config-section">
+                    <label for="numGames">Количество игр:</label>
+                    <input type="number" id="numGames" min="1" max="1000" value="10" class="input-field">
+                </div>
+                
+                <div class="config-section">
+                    <label for="epsilon">Epsilon (исследование):</label>
+                    <input type="number" id="epsilon" min="0" max="1" step="0.05" value="0.2" class="input-field">
+                    <small>0.0 = жадный, 1.0 = случайный</small>
+                </div>
+                
+                <div class="config-section">
+                    <label for="hiddenSize">Размер скрытого слоя:</label>
+                    <input type="number" id="hiddenSize" min="32" max="256" step="32" value="64" class="input-field">
+                </div>
+                
+                <div class="config-section">
+                    <label for="modelName">Имя модели:</label>
+                    <input type="text" id="modelName" value="policy_net" class="input-field">
+                </div>
+                
+                <div class="config-section">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="saveReplays" checked>
+                        <span>Сохранять реплеи (первые 3 игры)</span>
+                    </label>
+                </div>
+                
+                <button id="btnStartTraining" class="btn btn-primary btn-large">
+                    🚀 Запустить Тренировку
+                </button>
+            </div>
+            
+            <!-- Training Progress Panel -->
+            <div class="panel training-progress-panel">
+                <h2>📊 Прогресс Тренировки</h2>
+                
+                <div id="trainingStatus" class="training-status">
+                    <p class="status-text">Ожидание запуска...</p>
+                </div>
+                
+                <div id="trainingProgress" class="progress-container hidden">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="trainingProgressBar"></div>
+                    </div>
+                    <p class="progress-text" id="trainingProgressText">0 / 10 игр</p>
+                </div>
+                
+                <div id="trainingStats" class="training-stats hidden">
+                    <div class="stat-row">
+                        <span class="stat-label">Побед белых:</span>
+                        <span class="stat-value" id="whiteWins">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Побед чёрных:</span>
+                        <span class="stat-value" id="blackWins">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Ничьи:</span>
+                        <span class="stat-value" id="draws">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Средняя длина:</span>
+                        <span class="stat-value" id="avgSteps">0</span>
+                    </div>
+                </div>
+                
+                <h3>💾 Сохранённые Модели</h3>
+                <div id="modelsList" class="models-list">
+                    <p class="empty-text">Нет сохранённых моделей</p>
+                </div>
+            </div>
+            
+            <!-- Training Sessions Panel -->
+            <div class="panel training-sessions-panel">
+                <h2>📝 История Тренировок</h2>
+                <div id="sessionsList" class="sessions-list">
+                    <p class="empty-text">Нет завершённых сессий</p>
+                </div>
+            </div>
+        </main>
+
         <!-- AI Thinking Indicator -->
         <div id="aiThinking" class="thinking-indicator hidden">
             <div class="thinking-spinner"></div>
@@ -267,5 +358,6 @@
     <script src="js/board-classic.js"></script>
     <script src="js/app.js"></script>
     <script src="js/replay.js"></script>
+    <script src="js/training.js"></script>
 </body>
 </html>

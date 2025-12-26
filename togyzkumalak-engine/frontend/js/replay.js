@@ -54,9 +54,16 @@ class ReplayViewer {
                 const mode = tab.dataset.mode;
                 document.getElementById('playMode').classList.toggle('hidden', mode !== 'play');
                 document.getElementById('replaysMode').classList.toggle('hidden', mode !== 'replays');
+                document.getElementById('trainingMode').classList.toggle('hidden', mode !== 'training');
                 
                 if (mode === 'replays') {
                     this.loadReplayList();
+                } else if (mode === 'training') {
+                    // Refresh training data when switching to training mode
+                    if (window.trainingController) {
+                        trainingController.loadModels();
+                        trainingController.loadSessions();
+                    }
                 }
             });
         });

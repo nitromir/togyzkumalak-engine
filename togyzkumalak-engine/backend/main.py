@@ -20,6 +20,7 @@ from .game_manager import game_manager, TogyzkumalakBoard, GameStatus
 from .ai_engine import ai_engine
 from .elo_system import elo_system
 from .gemini_analyzer import gemini_analyzer
+from .gym_training import training_manager, TrainingConfig
 
 
 # FastAPI app
@@ -479,6 +480,109 @@ async def get_replay(game_id: int):
         raise HTTPException(status_code=404, detail=f"Replay {game_id} not found")
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Failed to parse replay file")
+
+
+# =============================================================================
+# Gym Training API Endpoints
+# =============================================================================
+
+class TrainingConfigRequest(BaseModel):
+    num_games: int = 10
+    epsilon: float = 0.2
+    hidden_size: int = 64
+    learning_rate: float = 0.001
+    save_replays: bool = True
+    model_name: str = "policy_net"
+
+
+@app.post("/api/training/start")
+async def start_training(config: TrainingConfigRequest):
+    """Start a new gym training session."""
+    try:
+        training_config = TrainingConfig(
+            num_games=config.num_games,
+            epsilon=config.epsilon,
+            hidden_size=config.hidden_size,
+            learning_rate=config.learning_rate,
+            save_replays=config.save_replays,
+            model_name=config.model_name
+        )
+        
+        session_id = training_manager.create_session(training_config)
+        
+        # Run training in background
+        asyncio.create_task(
+            training_manager.run_training_session(session_id, training_config)
+        )
+        
+        return {
+            "session_id": session_id,
+            "status": "started",
+            "config": config.dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/sessions")
+async def list_training_sessions():
+    """List all training sessions."""
+    try:
+        sessions = training_manager.list_sessions()
+        return {"sessions": sessions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/sessions/{session_id}")
+async def get_training_progress(session_id: str):
+    """Get progress of a specific training session."""
+    try:
+        progress = training_manager.get_session_progress(session_id)
+        if not progress:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return progress
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/models")
+async def list_models():
+    """List all saved models."""
+    try:
+        models = training_manager.list_models()
+        return {"models": models}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/training/models/{model_name}/load")
+async def load_model(model_name: str):
+    """Load a saved model for use in gameplay."""
+    try:
+        models = training_manager.list_models()
+        model_path = None
+        
+        for model in models:
+            if model["name"] == model_name:
+                model_path = model["path"]
+                break
+        
+        if not model_path:
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        success = training_manager.load_model(model_path)
+        
+        if success:
+            return {"status": "loaded", "model": model_name}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to load model")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================
