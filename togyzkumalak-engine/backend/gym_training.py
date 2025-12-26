@@ -141,13 +141,23 @@ class GymTrainingManager:
     def _get_board_state(self):
         """Extract board state from environment."""
         board = self.env.board
+        
+        # Find tuzduk positions by checking which otau has tuzduk=True
+        white_tuzduk = None
+        black_tuzduk = None
+        for i in range(9):
+            if board.gamers['black'].home[i].tuzduk:  # White's tuzduk is on black's side
+                white_tuzduk = i
+            if board.gamers['white'].home[i].tuzduk:  # Black's tuzduk is on white's side
+                black_tuzduk = i
+        
         return {
-            "white_pits": [int(board.gamers['white'].otaus[i].score) for i in range(9)],
-            "black_pits": [int(board.gamers['black'].otaus[i].score) for i in range(9)],
+            "white_pits": [int(board.gamers['white'].home[i].kumalaks) for i in range(9)],
+            "black_pits": [int(board.gamers['black'].home[i].kumalaks) for i in range(9)],
             "white_kazan": int(board.gamers['white'].kazan.score),
             "black_kazan": int(board.gamers['black'].kazan.score),
-            "white_tuzduk": int(board.gamers['white'].tuzdyk) if board.gamers['white'].tuzdyk else None,
-            "black_tuzduk": int(board.gamers['black'].tuzdyk) if board.gamers['black'].tuzdyk else None,
+            "white_tuzduk": white_tuzduk,
+            "black_tuzduk": black_tuzduk,
             "current_player": board.run.name
         }
     
