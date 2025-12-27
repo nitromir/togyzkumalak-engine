@@ -1,23 +1,22 @@
+"""
+Task Manager for AlphaZero Training
+
+Manages background AlphaZero training tasks using the new CPU-optimized trainer.
+"""
+
 import os
-import sys
 import threading
 import time
-import json
 from datetime import datetime
 from typing import Dict, Optional, Any
 
-# Add alpha-zero-general to path
-ALPHAZERO_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "alpha-zero-general-master"))
-sys.path.append(ALPHAZERO_PATH)
+# Import our new CPU-optimized AlphaZero trainer
+from .alphazero_trainer import (
+    AlphaZeroTaskManagerV2,
+    AlphaZeroConfig,
+    alphazero_task_manager as _az_manager
+)
 
-try:
-    from Coach import Coach
-except ImportError:
-    print(f"[WARNING] Could not find alpha-zero-general at {ALPHAZERO_PATH}")
-    Coach = None
-
-from .alphazero_adapter import TogyzkumalakAlphaZeroGame
-from .alphazero_network import TogyzkumalakAlphaZeroNet
 
 class TrainingStatus:
     PENDING = "pending"
@@ -26,125 +25,131 @@ class TrainingStatus:
     ERROR = "error"
     STOPPED = "stopped"
 
+
 class AlphaZeroTaskManager:
     """
     Manages background AlphaZero training tasks.
+    
+    This is a wrapper around the new AlphaZeroTaskManagerV2 for backward compatibility
+    with the existing API.
     """
-    def __init__(self, logs_dir="logs/alphazero"):
+    
+    def __init__(self, logs_dir: str = "logs/alphazero"):
         self.tasks: Dict[str, Dict[str, Any]] = {}
         self.logs_dir = logs_dir
         os.makedirs(logs_dir, exist_ok=True)
         self.lock = threading.Lock()
+        
+        # Use the new manager internally
+        self._manager = _az_manager
 
     def start_training(self, config: Dict[str, Any]) -> str:
-        task_id = f"az_{int(time.time())}"
+        """
+        Start an AlphaZero training session.
         
-        task_info = {
-            "task_id": task_id,
-            "status": TrainingStatus.RUNNING,
-            "progress": 0,
-            "current_iteration": 0,
-            "total_iterations": config.get("numIters", 10),
-            "metrics": {
-                "loss": [],
-                "accuracy": [],
-                "elo": [],
-                "win_rate": []
-            },
-            "start_time": datetime.now().isoformat(),
-            "config": config
-        }
+        Args:
+            config: Training configuration with keys:
+                - numIters: Number of iterations (default: 10)
+                - numEps: Episodes per iteration (default: 10)
+                - numMCTSSims: MCTS simulations per move (default: 25)
+                - cpuct: Exploration constant (default: 1.0)
+                - batch_size: Training batch size (default: 32)
+                - hidden_size: Network hidden size (default: 256)
         
+        Returns:
+            task_id: Unique identifier for the training task
+        """
+        # Start training using the new manager
+        task_id = self._manager.start_training(config)
+        
+        # Also track in local tasks dict for backward compatibility
         with self.lock:
-            self.tasks[task_id] = task_info
-            
-        thread = threading.Thread(target=self._run_training, args=(task_id, config))
-        thread.daemon = True
-        thread.start()
+            self.tasks[task_id] = {
+                "task_id": task_id,
+                "status": TrainingStatus.RUNNING,
+                "progress": 0,
+                "current_iteration": 0,
+                "total_iterations": config.get("numIters", 10),
+                "metrics": {
+                    "loss": [],
+                    "accuracy": [],
+                    "elo": [],
+                    "win_rate": []
+                },
+                "start_time": datetime.now().isoformat(),
+                "config": config
+            }
         
         return task_id
 
-    def _run_training(self, task_id: str, config: Dict[str, Any]):
-        try:
-            game = TogyzkumalakAlphaZeroGame()
-            nnet = TogyzkumalakAlphaZeroNet(game)
-            
-            if Coach is None:
-                raise Exception("Coach class not found in alpha-zero-general")
-                
-            # Initialize Coach with custom args
-            args = {
-                'numIters': config.get('numIters', 10),
-                'numEps': config.get('numEps', 10),
-                'tempThreshold': 15,
-                'updateThreshold': 0.6,
-                'maxlenOfQueue': 200000,
-                'numMCTSSims': config.get('numMCTSSims', 25),
-                'arenaCompare': 40,
-                'cpuct': config.get('cpuct', 1.0),
-                'checkpoint': './temp/',
-                'load_model': False,
-                'load_folder_file': ('/dev/models/8x8/','best.pth.tar'),
-            }
-            
-            # Note: We might need to subclass Coach to inject status updates
-            class StatusUpdatingCoach(Coach):
-                def __init__(self, game, nnet, args, manager, task_id):
-                    super().__init__(game, nnet, args)
-                    self.manager = manager
-                    self.task_id = task_id
-                
-                def learn(self):
-                    for i in range(1, self.args.numIters + 1):
-                        # Perform iteration
-                        super().learn_iteration(i) # We'd need to modify Coach.py or implement iteration logic here
-                        
-                        # Update status
-                        with self.manager.lock:
-                            task = self.manager.tasks[self.task_id]
-                            task["current_iteration"] = i
-                            task["progress"] = (i / self.args.numIters) * 100
-                            # Mock metrics for now
-                            task["metrics"]["loss"].append(0.5 / i)
-                            task["metrics"]["elo"].append(1500 + i * 50)
-            
-            # For now, let's simulate the loop to avoid deep modification of alpha-zero-general
-            for i in range(1, args['numIters'] + 1):
-                time.sleep(2) # Simulating long work
-                
-                with self.lock:
-                    if task_id not in self.tasks or self.tasks[task_id]["status"] == TrainingStatus.STOPPED:
-                        break
-                    
-                    task = self.tasks[task_id]
-                    task["current_iteration"] = i
-                    task["progress"] = (i / args['numIters']) * 100
-                    
-                    # Update metrics
-                    task["metrics"]["loss"].append({"iter": i, "value": 0.5 / i})
-                    task["metrics"]["accuracy"].append({"iter": i, "value": 60 + i * 2})
-            
-            with self.lock:
-                if self.tasks[task_id]["status"] != TrainingStatus.STOPPED:
-                    self.tasks[task_id]["status"] = TrainingStatus.COMPLETED
-                    self.tasks[task_id]["finished_at"] = datetime.now().isoformat()
-                    
-        except Exception as e:
-            with self.lock:
-                self.tasks[task_id]["status"] = TrainingStatus.ERROR
-                self.tasks[task_id]["error_message"] = str(e)
-                print(f"[ERROR] Training failed: {e}")
-
     def get_status(self, task_id: str) -> Optional[Dict]:
+        """
+        Get status of a training task.
+        
+        Returns the current status including progress, metrics, and any errors.
+        """
+        # Get status from new manager
+        status = self._manager.get_status(task_id)
+        
+        if status:
+            # Update local tasks dict
+            with self.lock:
+                if task_id in self.tasks:
+                    self.tasks[task_id].update({
+                        "status": status.get("status", TrainingStatus.RUNNING),
+                        "progress": status.get("progress", 0),
+                        "current_iteration": status.get("current_iteration", 0),
+                        "error_message": status.get("error_message"),
+                    })
+                    
+                    # Convert metrics to expected format
+                    if status.get("metrics"):
+                        for m in status["metrics"]:
+                            self.tasks[task_id]["metrics"]["loss"].append({
+                                "iter": m.get("iteration", 0),
+                                "value": m.get("policy_loss", 0) + m.get("value_loss", 0)
+                            })
+                            self.tasks[task_id]["metrics"]["win_rate"].append({
+                                "iter": m.get("iteration", 0),
+                                "value": m.get("win_rate", 0) * 100
+                            })
+            
+            return self.tasks.get(task_id, status)
+        
+        # Fallback to local tasks
         with self.lock:
             return self.tasks.get(task_id)
 
-    def stop_task(self, task_id: str):
+    def stop_task(self, task_id: str) -> bool:
+        """Stop a running training task."""
+        success = self._manager.stop_task(task_id)
+        
+        if success:
+            with self.lock:
+                if task_id in self.tasks:
+                    self.tasks[task_id]["status"] = TrainingStatus.STOPPED
+        
+        return success
+    
+    def list_tasks(self) -> Dict[str, Dict]:
+        """List all training tasks."""
+        # Get from new manager
+        new_tasks = self._manager.list_tasks()
+        
+        # Merge with local tasks
         with self.lock:
-            if task_id in self.tasks:
-                self.tasks[task_id]["status"] = TrainingStatus.STOPPED
-                return True
-        return False
+            for task_id, status in new_tasks.items():
+                if task_id not in self.tasks:
+                    self.tasks[task_id] = status
+                else:
+                    self.tasks[task_id].update({
+                        "status": status.get("status"),
+                        "progress": status.get("progress"),
+                        "current_iteration": status.get("current_iteration")
+                    })
+            
+            return dict(self.tasks)
 
-# Global instance
+
+# Global instance - backward compatible with existing code
 az_task_manager = AlphaZeroTaskManager()
