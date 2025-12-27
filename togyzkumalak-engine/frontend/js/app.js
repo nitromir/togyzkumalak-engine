@@ -96,8 +96,8 @@ class TogyzkumalakApp {
             blackBarFill: document.getElementById('blackBarFill'),
             whiteKumalaks: document.getElementById('whiteKumalaks'),
             blackKumalaks: document.getElementById('blackKumalaks'),
-            playerAvatar: document.getElementById('playerAvatar'),
-            aiAvatar: document.getElementById('aiAvatar')
+            leftAvatar: document.getElementById('leftAvatar'),
+            rightAvatar: document.getElementById('rightAvatar')
         };
     }
 
@@ -407,27 +407,59 @@ class TogyzkumalakApp {
 
     /**
      * Update score panel avatars based on player color and AI level.
+     * Left avatar = Black side, Right avatar = White side
      */
     updateScoreAvatars() {
-        const playerAvatar = this.elements.playerAvatar;
-        const aiAvatar = this.elements.aiAvatar;
+        const leftAvatar = this.elements.leftAvatar;
+        const rightAvatar = this.elements.rightAvatar;
         
-        if (!playerAvatar || !aiAvatar) return;
+        if (!leftAvatar || !rightAvatar) return;
         
-        // Update AI avatar based on level
-        if (this.aiLevel === 6) {
-            aiAvatar.classList.add('gemini-active');
-            aiAvatar.querySelector('.avatar-icon').textContent = '✨';
-            aiAvatar.querySelector('.avatar-label').textContent = 'GEMINI';
+        // Score panel layout: [Left Avatar] [BLACK] [VS] [WHITE] [Right Avatar]
+        // If player is BLACK: Left = Player, Right = AI
+        // If player is WHITE: Left = AI, Right = Player
+        
+        const isPlayerBlack = this.playerColor === 'black';
+        
+        if (isPlayerBlack) {
+            // Player is Black (left side)
+            leftAvatar.classList.remove('ai-avatar', 'gemini-active');
+            leftAvatar.classList.add('player-avatar');
+            leftAvatar.querySelector('.avatar-icon').textContent = '👤';
+            leftAvatar.querySelector('.avatar-label').textContent = 'ВЫ';
+            
+            // AI is White (right side)
+            rightAvatar.classList.remove('player-avatar');
+            rightAvatar.classList.add('ai-avatar');
+            if (this.aiLevel === 6) {
+                rightAvatar.classList.add('gemini-active');
+                rightAvatar.querySelector('.avatar-icon').textContent = '✨';
+                rightAvatar.querySelector('.avatar-label').textContent = 'GEMINI';
+            } else {
+                rightAvatar.classList.remove('gemini-active');
+                rightAvatar.querySelector('.avatar-icon').textContent = '🤖';
+                rightAvatar.querySelector('.avatar-label').textContent = `AI L${this.aiLevel}`;
+            }
         } else {
-            aiAvatar.classList.remove('gemini-active');
-            aiAvatar.querySelector('.avatar-icon').textContent = '🤖';
-            aiAvatar.querySelector('.avatar-label').textContent = `AI L${this.aiLevel}`;
+            // AI is Black (left side)
+            leftAvatar.classList.remove('player-avatar');
+            leftAvatar.classList.add('ai-avatar');
+            if (this.aiLevel === 6) {
+                leftAvatar.classList.add('gemini-active');
+                leftAvatar.querySelector('.avatar-icon').textContent = '✨';
+                leftAvatar.querySelector('.avatar-label').textContent = 'GEMINI';
+            } else {
+                leftAvatar.classList.remove('gemini-active');
+                leftAvatar.querySelector('.avatar-icon').textContent = '🤖';
+                leftAvatar.querySelector('.avatar-label').textContent = `AI L${this.aiLevel}`;
+            }
+            
+            // Player is White (right side)
+            rightAvatar.classList.remove('ai-avatar', 'gemini-active');
+            rightAvatar.classList.add('player-avatar');
+            rightAvatar.querySelector('.avatar-icon').textContent = '👤';
+            rightAvatar.querySelector('.avatar-label').textContent = 'ВЫ';
         }
-        
-        // Update player avatar
-        playerAvatar.querySelector('.avatar-icon').textContent = '👤';
-        playerAvatar.querySelector('.avatar-label').textContent = 'ВЫ';
     }
 
     /**

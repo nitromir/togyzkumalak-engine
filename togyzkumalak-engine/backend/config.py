@@ -23,8 +23,8 @@ class AIConfig:
     thinking_time_ms: int = 1000
     epsilon: float = 0.1  # Exploration rate
     
-    # Model paths
-    model_dir: str = "models/checkpoints"
+    # Model paths - models are in 'models/' directory
+    model_dir: str = "models"
     default_model: str = "policy_net_v1.pth"
 
 
