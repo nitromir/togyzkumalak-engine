@@ -330,8 +330,22 @@ class AIEngine:
         board: TogyzkumalakBoard,
         level: int = 3
     ) -> Dict[int, float]:
-        """Get move probabilities for visualization."""
-        model = self.models.get(level)
+        """Get move probabilities for visualization.
+        
+        For Gemini level (6), we use the best available neural network model
+        to calculate probabilities for the human player's moves.
+        """
+        # For Gemini level, use the best available model (level 5)
+        effective_level = 5 if level == 6 else level
+        model = self.models.get(effective_level)
+        
+        # Fallback: try to find any available model
+        if not model:
+            for fallback_level in [5, 4, 3, 2, 1]:
+                model = self.models.get(fallback_level)
+                if model:
+                    break
+        
         if not model:
             legal_moves = board.get_legal_moves()
             return {m: 1.0 / len(legal_moves) for m in legal_moves}
