@@ -66,7 +66,7 @@ class GeminiConfig:
     """Gemini API configuration."""
     api_key: Optional[str] = None
     model: str = "gemini-3-flash-preview"
-    max_tokens: int = 2000
+    max_tokens: int = 4000  # Increased for longer analysis output
     temperature: float = 0.7
     thinking_level: str = "HIGH"  # HIGH thinking for better analysis
 

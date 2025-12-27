@@ -395,22 +395,25 @@ Provide brief commentary (2-3 sentences):
 - Any missed opportunities?"""
 
         try:
+            gen_cfg = self._build_generate_config(
+                max_output_tokens=500,
+                temperature=0.5,
+            )
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
                 lambda: self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
-                    config={
-                        "max_output_tokens": 200,
-                        "temperature": 0.5
-                    }
+                    config=gen_cfg
                 )
             )
             
+            text = self._response_to_text(response)
+            
             return {
                 "available": True,
-                "commentary": response.text,
+                "commentary": text,
                 "move": move,
                 "kazan_gain": kazan_gain
             }

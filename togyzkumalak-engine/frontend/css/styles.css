@@ -2381,3 +2381,106 @@ body::after {
 .level-btn.level-gemini { background: linear-gradient(135deg, #4285f4 0%, #34a853 50%, #fbbc05 75%, #ea4335 100%); border: 2px solid #4285f4; }
 .level-btn.level-gemini:hover { transform: scale(1.08); box-shadow: 0 0 20px rgba(66, 133, 244, 0.5); }
 .level-btn.level-gemini.active { box-shadow: 0 0 25px rgba(66, 133, 244, 0.8); border-color: #fff; }
+
+/* =============================================================================
+   Score Panel (Kazan Display)
+   ============================================================================= */
+
+.score-panel {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    padding: 16px 24px;
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.score-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 120px;
+}
+
+.score-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.score-value {
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+    text-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
+    font-variant-numeric: tabular-nums;
+}
+
+.score-bar {
+    width: 100px;
+    height: 8px;
+    background: rgba(15, 23, 42, 0.8);
+    border-radius: 4px;
+    margin-top: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.score-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease-out;
+}
+
+.score-bar-fill.white-bar {
+    background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.score-bar-fill.black-bar {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+
+.score-kumalaks {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+    height: 12px;
+}
+
+.score-kumalak-icon {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #fff 0%, #cbd5e1 60%, #475569 100%);
+    box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.score-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 20px;
+}
+
+.score-vs {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--accent-primary);
+    text-shadow: var(--glow-text);
+}
+
+.score-target {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}

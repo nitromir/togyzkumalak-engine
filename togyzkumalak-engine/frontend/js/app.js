@@ -30,6 +30,7 @@ class TogyzkumalakApp {
         this.bindEvents();
         this.initBoard();
         this.loadEloStats();
+        this.loadConfidenceSetting();  // Apply saved preference at startup
     }
 
     /**
@@ -86,7 +87,15 @@ class TogyzkumalakApp {
             btnCloseModal: document.getElementById('btnCloseModal'),
             
             // AI thinking
-            aiThinking: document.getElementById('aiThinking')
+            aiThinking: document.getElementById('aiThinking'),
+            
+            // Score panel elements
+            whiteKazan: document.getElementById('whiteKazan'),
+            blackKazan: document.getElementById('blackKazan'),
+            whiteBarFill: document.getElementById('whiteBarFill'),
+            blackBarFill: document.getElementById('blackBarFill'),
+            whiteKumalaks: document.getElementById('whiteKumalaks'),
+            blackKumalaks: document.getElementById('blackKumalaks')
         };
     }
 
@@ -311,6 +320,9 @@ class TogyzkumalakApp {
         // Update board
         this.classicBoard.render(board);
         
+        // Update score panel (kazans)
+        this.updateScorePanel(board);
+        
         // Update turn indicator
         this.isMyTurn = board.current_player === this.playerColor;
         this.elements.turnIndicator.textContent = this.isMyTurn ? 'Your Turn' : 'AI\'s Turn';
@@ -336,6 +348,55 @@ class TogyzkumalakApp {
             }
         } else {
             this.classicBoard.setProbabilities(null);
+        }
+    }
+
+    /**
+     * Update the score panel showing kazans for both players.
+     */
+    updateScorePanel(board) {
+        const whiteKazan = board.white_kazan || 0;
+        const blackKazan = board.black_kazan || 0;
+        const victoryTarget = 82;
+        
+        // Update numbers
+        if (this.elements.whiteKazan) {
+            this.elements.whiteKazan.textContent = whiteKazan;
+        }
+        if (this.elements.blackKazan) {
+            this.elements.blackKazan.textContent = blackKazan;
+        }
+        
+        // Update progress bars
+        const whiteProgress = Math.min((whiteKazan / victoryTarget) * 100, 100);
+        const blackProgress = Math.min((blackKazan / victoryTarget) * 100, 100);
+        
+        if (this.elements.whiteBarFill) {
+            this.elements.whiteBarFill.style.width = `${whiteProgress}%`;
+        }
+        if (this.elements.blackBarFill) {
+            this.elements.blackBarFill.style.width = `${blackProgress}%`;
+        }
+        
+        // Update kumalak icons (1 icon per 20 kumalaks, max 5)
+        this.updateKumalakIcons(this.elements.whiteKumalaks, whiteKazan);
+        this.updateKumalakIcons(this.elements.blackKumalaks, blackKazan);
+    }
+
+    /**
+     * Update kumalak icons in score panel.
+     */
+    updateKumalakIcons(container, count) {
+        if (!container) return;
+        
+        const maxIcons = 5;
+        const iconCount = Math.min(Math.ceil(count / 20), maxIcons);
+        
+        container.innerHTML = '';
+        for (let i = 0; i < iconCount; i++) {
+            const icon = document.createElement('div');
+            icon.className = 'score-kumalak-icon';
+            container.appendChild(icon);
         }
     }
 
