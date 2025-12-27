@@ -87,94 +87,168 @@ class ClassicBoard {
         // Draw rows
         this.drawRow(0, state.black_pits, 'black');
         this.drawRow(1, state.white_pits, 'white');
-
-        // Draw Kazans (Scoring reservoirs)
-        this.drawKazans(state.white_kazan, state.black_kazan);
+        
+        // Draw score panel between rows
+        this.drawScorePanel(state);
     }
 
-    drawKazans(whiteScore, blackScore) {
+    /**
+     * Draw the central score panel showing kazans for both players.
+     * Displays numbers and progress bars toward victory (82 kumalaks).
+     */
+    drawScorePanel(state) {
         const { ctx, canvas } = this;
+        const whiteKazan = state.white_kazan || 0;
+        const blackKazan = state.black_kazan || 0;
+        const victoryTarget = 82;
         
-        // Kazan dimensions
-        const kazanWidth = 120;
-        const kazanHeight = 60;
-        const cornerRadius = 15;
+        // Panel positioned between the two rows (Y: 170 to 280)
+        const panelY = 185;
+        const panelHeight = 80;
+        const panelWidth = 700;
+        const panelX = (canvas.width - panelWidth) / 2;
         
-        // Positions - center area between rows
+        // Draw panel background
+        ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        this.roundRect(ctx, panelX, panelY, panelWidth, panelHeight, 12, true, true);
+        
+        // === WHITE KAZAN (Left Side) ===
+        const whiteX = panelX + 60;
+        const scoreY = panelY + 32;
+        
+        // White label
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '12px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('БЕЛЫЕ', whiteX, panelY + 18);
+        
+        // White score (large number)
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 36px Segoe UI';
+        ctx.fillText(whiteKazan.toString(), whiteX, scoreY + 28);
+        
+        // White progress bar
+        const barWidth = 100;
+        const barHeight = 10;
+        const whiteBarX = whiteX - barWidth / 2;
+        const barY = panelY + panelHeight - 18;
+        
+        // Background bar
+        ctx.fillStyle = '#1e293b';
+        this.roundRect(ctx, whiteBarX, barY, barWidth, barHeight, 5, true, false);
+        
+        // Progress fill
+        const whiteProgress = Math.min(whiteKazan / victoryTarget, 1);
+        if (whiteProgress > 0) {
+            const gradient = ctx.createLinearGradient(whiteBarX, barY, whiteBarX + barWidth * whiteProgress, barY);
+            gradient.addColorStop(0, '#10b981');
+            gradient.addColorStop(1, '#34d399');
+            ctx.fillStyle = gradient;
+            this.roundRect(ctx, whiteBarX, barY, barWidth * whiteProgress, barHeight, 5, true, false);
+        }
+        
+        // === VS / DIVIDER (Center) ===
         const centerX = canvas.width / 2;
-        const centerY = (170 + 280) / 2; // Middle between top and bottom rows
         
-        // --- BLACK KAZAN (Top side score) ---
-        const bX = centerX - kazanWidth - 20;
-        const bY = centerY - kazanHeight / 2;
+        // Decorative divider
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(centerX - 80, panelY + panelHeight / 2);
+        ctx.lineTo(centerX - 30, panelY + panelHeight / 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(centerX + 30, panelY + panelHeight / 2);
+        ctx.lineTo(centerX + 80, panelY + panelHeight / 2);
+        ctx.stroke();
         
-        // Background
-        ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
-        ctx.strokeStyle = '#ff0055'; // Pink/Red for Black AI
-        ctx.lineWidth = 2;
-        this.roundRect(ctx, bX, bY, kazanWidth, kazanHeight, cornerRadius, true, true);
-        
-        // Label
-        ctx.fillStyle = '#ff0055';
-        ctx.font = 'bold 12px Segoe UI';
-        ctx.textAlign = 'center';
-        ctx.fillText('ҚАРА (BLACK)', bX + kazanWidth / 2, bY - 10);
-        
-        // Score
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 24px Segoe UI';
-        ctx.fillText(blackScore.toString(), bX + kazanWidth / 2, bY + kazanHeight / 2 + 8);
-        
-        // Graphical representation (mini kumalaks)
-        this.drawKazanGraphics(bX + 10, bY + 10, kazanWidth - 20, kazanHeight - 20, blackScore, '#ff0055');
-
-        // --- WHITE KAZAN (Bottom side score) ---
-        const wX = centerX + 20;
-        const wY = centerY - kazanHeight / 2;
-        
-        // Background
-        ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
-        ctx.strokeStyle = '#00f2ff'; // Cyan for White Player
-        ctx.lineWidth = 2;
-        this.roundRect(ctx, wX, wY, kazanWidth, kazanHeight, cornerRadius, true, true);
-        
-        // Label
+        // VS text
         ctx.fillStyle = '#00f2ff';
-        ctx.font = 'bold 12px Segoe UI';
+        ctx.font = 'bold 16px Segoe UI';
         ctx.textAlign = 'center';
-        ctx.fillText('АҚ (WHITE)', wX + kazanWidth / 2, wY - 10);
+        ctx.fillText('VS', centerX, panelY + panelHeight / 2 + 5);
         
-        // Score
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 24px Segoe UI';
-        ctx.fillText(whiteScore.toString(), wX + kazanWidth / 2, wY + kazanHeight / 2 + 8);
+        // Victory indicator (small text)
+        ctx.fillStyle = '#64748b';
+        ctx.font = '10px Segoe UI';
+        ctx.fillText(`Цель: ${victoryTarget}`, centerX, panelY + panelHeight - 10);
         
-        // Graphical representation (mini kumalaks)
-        this.drawKazanGraphics(wX + 10, wY + 10, kazanWidth - 20, kazanHeight - 20, whiteScore, '#00f2ff');
+        // === BLACK KAZAN (Right Side) ===
+        const blackX = panelX + panelWidth - 60;
+        
+        // Black label
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '12px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('ЧЁРНЫЕ', blackX, panelY + 18);
+        
+        // Black score (large number)
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 36px Segoe UI';
+        ctx.fillText(blackKazan.toString(), blackX, scoreY + 28);
+        
+        // Black progress bar
+        const blackBarX = blackX - barWidth / 2;
+        
+        // Background bar
+        ctx.fillStyle = '#1e293b';
+        this.roundRect(ctx, blackBarX, barY, barWidth, barHeight, 5, true, false);
+        
+        // Progress fill
+        const blackProgress = Math.min(blackKazan / victoryTarget, 1);
+        if (blackProgress > 0) {
+            const gradient = ctx.createLinearGradient(blackBarX, barY, blackBarX + barWidth * blackProgress, barY);
+            gradient.addColorStop(0, '#f59e0b');
+            gradient.addColorStop(1, '#fbbf24');
+            ctx.fillStyle = gradient;
+            this.roundRect(ctx, blackBarX, barY, barWidth * blackProgress, barHeight, 5, true, false);
+        }
+        
+        // === KUMALAK ICONS (Visual representation) ===
+        // Draw small kumalak icons proportional to score
+        this.drawKazanKumalaks(whiteX, scoreY - 15, whiteKazan, '#e2e8f0');
+        this.drawKazanKumalaks(blackX, scoreY - 15, blackKazan, '#1e1e1e');
     }
 
-    drawKazanGraphics(x, y, w, h, score, color) {
+    /**
+     * Draw small kumalak indicators for kazan score.
+     */
+    drawKazanKumalaks(centerX, y, count, baseColor) {
         const { ctx } = this;
-        const dotRadius = 3;
-        const maxDots = 81; // Half of total kumalaks
-        const displayScore = Math.min(score, maxDots);
+        if (count === 0) return;
         
-        ctx.globalAlpha = 0.4;
-        ctx.fillStyle = color;
+        // Draw up to 5 small kumalaks as visual indicator
+        const maxIcons = 5;
+        const iconCount = Math.min(Math.ceil(count / 20), maxIcons); // 1 icon per ~20 kumalaks
+        const iconRadius = 4;
+        const spacing = 12;
+        const startX = centerX - ((iconCount - 1) * spacing / 2);
         
-        const cols = 9;
-        const rows = 9;
-        const dx = w / cols;
-        const dy = h / rows;
-        
-        for (let i = 0; i < displayScore; i++) {
-            const r = Math.floor(i / cols);
-            const c = i % cols;
+        for (let i = 0; i < iconCount; i++) {
+            const x = startX + i * spacing;
+            
+            // Shadow
             ctx.beginPath();
-            ctx.arc(x + c * dx + dx/2, y + r * dy + dy/2, dotRadius, 0, Math.PI * 2);
+            ctx.arc(x + 1, y + 1, iconRadius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
             ctx.fill();
+            
+            // Main kumalak
+            const gradient = ctx.createRadialGradient(x - 1, y - 1, 0, x, y, iconRadius);
+            gradient.addColorStop(0, '#ffffff');
+            gradient.addColorStop(0.6, baseColor);
+            gradient.addColorStop(1, '#333333');
+            
+            ctx.beginPath();
+            ctx.arc(x, y, iconRadius, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
         }
-        ctx.globalAlpha = 1.0;
     }
 
     drawRow(rowIndex, pits, player) {
