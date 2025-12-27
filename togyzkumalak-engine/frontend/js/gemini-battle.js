@@ -35,6 +35,7 @@
         // Buttons
         btnStart: document.getElementById('btnStartBattle'),
         btnStop: document.getElementById('btnStopBattle'),
+        btnExport: document.getElementById('btnExportGeminiData'),
         
         // Progress
         status: document.getElementById('battleStatus'),
@@ -485,6 +486,39 @@
         }
     }
     
+    async function handleExportData() {
+        const btn = elements.btnExport;
+        if (!btn) return;
+        
+        btn.disabled = true;
+        btn.textContent = '⏳ Экспорт...';
+        
+        try {
+            const response = await fetch('/api/gemini-battle/export-training-data', {
+                method: 'POST'
+            });
+            
+            if (!response.ok) {
+                throw new Error('Export failed');
+            }
+            
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                alert(`✅ Экспорт завершён!\n\nИгр обработано: ${result.games_exported}\nПереходов создано: ${result.transitions_created}\n\nДанные сохранены в: gemini_transitions.jsonl\n\nТеперь можете использовать их для дообучения!`);
+            } else if (result.status === 'no_data') {
+                alert('⚠️ Нет данных для экспорта.\n\nСначала сыграйте несколько игр против Gemini!');
+            }
+            
+        } catch (e) {
+            console.error('Export error:', e);
+            alert('❌ Ошибка экспорта: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '📤 Экспорт для обучения';
+        }
+    }
+    
     // =========================================================================
     // Utility Functions
     // =========================================================================
@@ -518,6 +552,7 @@
         // Event listeners
         elements.btnStart.addEventListener('click', handleStartBattle);
         elements.btnStop.addEventListener('click', handleStopBattle);
+        elements.btnExport?.addEventListener('click', handleExportData);
         
         // Load existing sessions when tab is shown
         const geminiBattleTab = document.querySelector('[data-mode="gemini-battle"]');

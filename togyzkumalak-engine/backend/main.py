@@ -698,6 +698,97 @@ async def stop_gemini_battle(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/gemini-battle/export-training-data")
+async def export_gemini_training_data():
+    """
+    Export Gemini battle games to training data format.
+    Converts all saved game logs to transitions for training.
+    """
+    try:
+        games_dir = os.path.join(gemini_battle_manager.logs_dir, "games")
+        
+        if not os.path.exists(games_dir):
+            return {"status": "no_data", "message": "No Gemini battle games found", "games_exported": 0}
+        
+        transitions = []
+        games_processed = 0
+        
+        # Initial board state for reconstruction
+        initial_pits = [9] * 18  # 9 stones in each pit
+        
+        for filename in os.listdir(games_dir):
+            if not filename.endswith('.json'):
+                continue
+            
+            filepath = os.path.join(games_dir, filename)
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    game_log = json.load(f)
+                
+                moves = game_log.get("moves", [])
+                winner = game_log.get("winner")
+                model_side = game_log.get("model_side", 0)
+                
+                # Skip games with no moves
+                if not moves:
+                    continue
+                
+                # Reconstruct states from moves
+                # This is a simplified version - just record (action, reward)
+                for i, move in enumerate(moves):
+                    player = move.get("player", 0)
+                    action = move.get("action", 0) - 1  # Convert 1-9 to 0-8
+                    
+                    # Calculate reward (1 for win, -1 for loss, 0 for ongoing)
+                    if i == len(moves) - 1:  # Last move
+                        if winner == model_side:
+                            reward = 1.0
+                        elif winner == 1 - model_side:
+                            reward = -1.0
+                        else:
+                            reward = 0.0
+                    else:
+                        reward = 0.0
+                    
+                    # Create simple state representation (20 features)
+                    state = [0.0] * 20
+                    state[action] = 1.0  # One-hot for action taken
+                    state[9 + player] = 1.0  # Player indicator
+                    
+                    transitions.append({
+                        "state": state,
+                        "action": action,
+                        "reward": reward,
+                        "source": "gemini_battle"
+                    })
+                
+                games_processed += 1
+                
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
+                continue
+        
+        # Save to training data
+        engine_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        training_dir = os.path.join(engine_dir, "training_data")
+        os.makedirs(training_dir, exist_ok=True)
+        
+        output_file = os.path.join(training_dir, "gemini_transitions.jsonl")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            for t in transitions:
+                f.write(json.dumps(t, ensure_ascii=False) + '\n')
+        
+        return {
+            "status": "success",
+            "games_exported": games_processed,
+            "transitions_created": len(transitions),
+            "output_file": output_file
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/gemini-battle/replays")
 async def list_gemini_battle_replays():
     """Get list of all Gemini battle game replays."""

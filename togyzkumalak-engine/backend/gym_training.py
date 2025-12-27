@@ -293,7 +293,10 @@ class GymTrainingManager:
             if self.policy_net is None:
                 self._init_network()
             
-            checkpoint = torch.load(model_path, map_location=self.device)
+            # Determine device
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            
+            checkpoint = torch.load(model_path, map_location=device)
             
             # Handle both formats: direct state_dict or {'model_state_dict': ...}
             if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:

@@ -1206,6 +1206,18 @@ body::after {
     line-height: 1.8;
 }
 
+/* Battle Actions */
+.battle-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.battle-actions .btn {
+    flex: 1;
+    min-width: 150px;
+}
+
 .config-section {
     display: flex;
     flex-direction: column;
