@@ -293,10 +293,29 @@ class GymTrainingManager:
             if self.policy_net is None:
                 self._init_network()
             
-            self.policy_net.load_state_dict(torch.load(model_path))
+            checkpoint = torch.load(model_path, map_location=self.device)
+            
+            # Handle both formats: direct state_dict or {'model_state_dict': ...}
+            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                state_dict = checkpoint['model_state_dict']
+                accuracy = checkpoint.get('final_accuracy', 'N/A')
+                print(f"[OK] Loading model with accuracy: {accuracy}%")
+            else:
+                state_dict = checkpoint
+            
+            self.policy_net.load_state_dict(state_dict)
+            
+            # Also apply to ai_engine for gameplay
+            from .ai_engine import ai_engine
+            if 5 in ai_engine.models:
+                ai_engine.models[5].load_state_dict(state_dict)
+                print(f"[OK] Model also loaded to ai_engine level 5")
+            
             return True
         except Exception as e:
             print(f"Error loading model: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def list_models(self) -> List[Dict]:
