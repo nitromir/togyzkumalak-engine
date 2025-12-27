@@ -331,10 +331,46 @@ class AIEngine:
         level: int = 3
     ) -> Dict[int, float]:
         """Get move probabilities for visualization."""
+        # For Gemini level (6), use Gemini API for probabilities
+        if level == 6:
+            try:
+                from .gemini_analyzer import gemini_analyzer
+                if not gemini_analyzer.is_available():
+                    legal_moves = board.get_legal_moves()
+                    return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
+                
+                # Use current event loop if available, else create new one
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                board_state = board.get_state_dict()
+                board_state["legal_moves"] = board.get_legal_moves()
+                
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        future = pool.submit(
+                            lambda: asyncio.run(
+                                gemini_analyzer.get_move_probabilities(board_state)
+                            )
+                        )
+                        return future.result(timeout=30)
+                else:
+                    return loop.run_until_complete(
+                        gemini_analyzer.get_move_probabilities(board_state)
+                    )
+            except Exception as e:
+                print(f"[ERROR] Gemini probabilities failed: {e}")
+                legal_moves = board.get_legal_moves()
+                return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
+
         model = self.models.get(level)
         if not model:
             legal_moves = board.get_legal_moves()
-            return {m: 1.0 / len(legal_moves) for m in legal_moves}
+            return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
         
         obs = board.to_observation()
         obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)

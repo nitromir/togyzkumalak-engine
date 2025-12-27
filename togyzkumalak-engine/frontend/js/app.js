@@ -95,7 +95,9 @@ class TogyzkumalakApp {
             whiteBarFill: document.getElementById('whiteBarFill'),
             blackBarFill: document.getElementById('blackBarFill'),
             whiteKumalaks: document.getElementById('whiteKumalaks'),
-            blackKumalaks: document.getElementById('blackKumalaks')
+            blackKumalaks: document.getElementById('blackKumalaks'),
+            playerAvatar: document.getElementById('playerAvatar'),
+            aiAvatar: document.getElementById('aiAvatar')
         };
     }
 
@@ -246,6 +248,9 @@ class TogyzkumalakApp {
             // Update ELO displays
             this.elements.aiElo.textContent = `ELO: ${response.ai_elo || 1500}`;
             this.elements.playerElo.textContent = `ELO: ${response.player_elo || 1500}`;
+            
+            // Update score panel avatars
+            this.updateScoreAvatars();
             
             // Clear move history
             this.elements.moveList.innerHTML = '';
@@ -398,6 +403,31 @@ class TogyzkumalakApp {
             icon.className = 'score-kumalak-icon';
             container.appendChild(icon);
         }
+    }
+
+    /**
+     * Update score panel avatars based on player color and AI level.
+     */
+    updateScoreAvatars() {
+        const playerAvatar = this.elements.playerAvatar;
+        const aiAvatar = this.elements.aiAvatar;
+        
+        if (!playerAvatar || !aiAvatar) return;
+        
+        // Update AI avatar based on level
+        if (this.aiLevel === 6) {
+            aiAvatar.classList.add('gemini-active');
+            aiAvatar.querySelector('.avatar-icon').textContent = '✨';
+            aiAvatar.querySelector('.avatar-label').textContent = 'GEMINI';
+        } else {
+            aiAvatar.classList.remove('gemini-active');
+            aiAvatar.querySelector('.avatar-icon').textContent = '🤖';
+            aiAvatar.querySelector('.avatar-label').textContent = `AI L${this.aiLevel}`;
+        }
+        
+        // Update player avatar
+        playerAvatar.querySelector('.avatar-icon').textContent = '👤';
+        playerAvatar.querySelector('.avatar-label').textContent = 'ВЫ';
     }
 
     /**

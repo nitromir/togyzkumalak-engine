@@ -429,6 +429,8 @@ body::after {
 .analysis-panel {
     flex: 1; /* Analysis takes remaining space */
     min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .analysis-content {
@@ -436,6 +438,10 @@ body::after {
     overflow-y: auto;
     padding-right: 8px;
     font-size: 13px;
+    min-height: 0;
+    max-height: 300px; /* Ensure scrollable within side panel */
+    word-wrap: break-word;
+    white-space: pre-wrap;
 }
 
 /* =============================================================================
@@ -2483,4 +2489,63 @@ body::after {
     font-size: 10px;
     color: var(--text-muted);
     margin-top: 4px;
+}
+
+/* Score Panel Avatars */
+.score-avatar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 70px;
+    height: 70px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+    border: 2px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.score-avatar .avatar-icon {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.score-avatar .avatar-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+}
+
+.player-avatar {
+    border-color: #10b981;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+}
+
+.player-avatar .avatar-label {
+    color: #10b981;
+}
+
+.ai-avatar {
+    border-color: #f59e0b;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+}
+
+.ai-avatar .avatar-label {
+    color: #f59e0b;
+}
+
+.ai-avatar.gemini-active {
+    border-color: #4285f4;
+    background: linear-gradient(135deg, rgba(66, 133, 244, 0.2) 0%, rgba(52, 168, 83, 0.1) 50%, rgba(251, 188, 5, 0.1) 100%);
+    box-shadow: 0 0 20px rgba(66, 133, 244, 0.4);
+}
+
+.ai-avatar.gemini-active .avatar-icon {
+    background: linear-gradient(135deg, #4285f4 0%, #34a853 50%, #fbbc05 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }

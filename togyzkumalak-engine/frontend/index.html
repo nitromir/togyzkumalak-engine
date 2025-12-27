@@ -110,6 +110,24 @@
             <div id="gamePanel" class="panel game-panel hidden">
                 <!-- Score Panel (Kazans) -->
                 <div class="score-panel" id="scorePanel">
+                    <!-- Player Avatar (Left) -->
+                    <div class="score-avatar player-avatar" id="playerAvatar">
+                        <div class="avatar-icon">👤</div>
+                        <div class="avatar-label">ВЫ</div>
+                    </div>
+
+                    <div class="score-side score-black">
+                        <div class="score-label">ЧЁРНЫЕ</div>
+                        <div class="score-value" id="blackKazan">0</div>
+                        <div class="score-bar">
+                            <div class="score-bar-fill black-bar" id="blackBarFill"></div>
+                        </div>
+                        <div class="score-kumalaks" id="blackKumalaks"></div>
+                    </div>
+                    <div class="score-center">
+                        <div class="score-vs">VS</div>
+                        <div class="score-target">Цель: 82</div>
+                    </div>
                     <div class="score-side score-white">
                         <div class="score-label">БЕЛЫЕ</div>
                         <div class="score-value" id="whiteKazan">0</div>
@@ -118,17 +136,11 @@
                         </div>
                         <div class="score-kumalaks" id="whiteKumalaks"></div>
                     </div>
-                    <div class="score-center">
-                        <div class="score-vs">VS</div>
-                        <div class="score-target">Цель: 82</div>
-                    </div>
-                    <div class="score-side score-black">
-                        <div class="score-label">ЧЁРНЫЕ</div>
-                        <div class="score-value" id="blackKazan">0</div>
-                        <div class="score-bar">
-                            <div class="score-bar-fill black-bar" id="blackBarFill"></div>
-                        </div>
-                        <div class="score-kumalaks" id="blackKumalaks"></div>
+
+                    <!-- AI Avatar (Right) -->
+                    <div class="score-avatar ai-avatar" id="aiAvatar">
+                        <div class="avatar-icon">🤖</div>
+                        <div class="avatar-label">AI</div>
                     </div>
                 </div>
 
