@@ -81,6 +81,47 @@ class AIEngine:
                     print(f"Failed to load model for level {level}: {e}")
             
             self.models[level] = model
+        
+        # Auto-load latest human-trained model for level 5
+        self._load_latest_human_model()
+    
+    def _load_latest_human_model(self):
+        """Auto-load the latest human-trained model for level 5."""
+        try:
+            models_dir = ai_config.model_dir
+            if not os.path.exists(models_dir):
+                return
+            
+            # Find latest policy_net_human_v*.pt file
+            human_models = []
+            for f in os.listdir(models_dir):
+                if f.startswith('policy_net_human_v') and f.endswith('.pt'):
+                    try:
+                        version = int(f.replace('policy_net_human_v', '').replace('.pt', ''))
+                        human_models.append((version, f))
+                    except ValueError:
+                        continue
+            
+            if not human_models:
+                return
+            
+            # Sort by version and get latest
+            human_models.sort(key=lambda x: x[0], reverse=True)
+            latest_version, latest_file = human_models[0]
+            model_path = os.path.join(models_dir, latest_file)
+            
+            # Load model
+            checkpoint = torch.load(model_path, map_location=self.device)
+            if 'model_state_dict' in checkpoint:
+                self.models[5].load_state_dict(checkpoint['model_state_dict'])
+                accuracy = checkpoint.get('final_accuracy', 'N/A')
+                print(f"[OK] Auto-loaded human model v{latest_version} (Accuracy: {accuracy}%)")
+            else:
+                self.models[5].load_state_dict(checkpoint)
+                print(f"[OK] Auto-loaded human model v{latest_version}")
+                
+        except Exception as e:
+            print(f"[WARNING] Could not auto-load human model: {e}")
     
     def get_move(
         self,

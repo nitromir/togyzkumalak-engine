@@ -9,6 +9,8 @@ class TrainingController {
         this.humanTrainingSessionId = null;
         this.pollInterval = null;
         this.humanPollInterval = null;
+        this.trainingChart = null;
+        this.chartData = { epochs: [], loss: [], accuracy: [] };
         this.init();
     }
 
@@ -20,8 +22,12 @@ class TrainingController {
         document.getElementById('btnParseData')?.addEventListener('click', () => this.parseData());
         document.getElementById('btnTrainOnHuman')?.addEventListener('click', () => this.trainOnHumanData());
         
-        // FAQ toggle
-        document.getElementById('faqToggleBtn')?.addEventListener('click', () => this.toggleFaq());
+        // FAQ modal
+        document.getElementById('btnOpenFaq')?.addEventListener('click', () => this.openFaqModal());
+        document.getElementById('closeFaqModal')?.addEventListener('click', () => this.closeFaqModal());
+        document.getElementById('faqModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'faqModal') this.closeFaqModal();
+        });
         
         // Load initial data
         this.loadModels();
@@ -134,16 +140,25 @@ class TrainingController {
         btn.disabled = true;
         btn.textContent = '⏳ Запуск...';
         
+        // Get config from inputs
+        const epochs = parseInt(document.getElementById('humanEpochs')?.value) || 50;
+        const batchSize = parseInt(document.getElementById('humanBatchSize')?.value) || 128;
+        const learningRate = parseFloat(document.getElementById('humanLearningRate')?.value) || 0.001;
+        
+        // Reset chart data
+        this.chartData = { epochs: [], loss: [], accuracy: [] };
+        this.initTrainingChart();
+        
         try {
             const response = await fetch('/api/training/human-data', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    batch_size: 128,
-                    epochs: 50,  // More epochs for better accuracy (40-50%)
-                    learning_rate: 0.001,
-                    model_name: 'policy_net_human',  // Versioned automatically
-                    use_compact: true  // Use compact format
+                    batch_size: batchSize,
+                    epochs: epochs,
+                    learning_rate: learningRate,
+                    model_name: 'policy_net_human',
+                    use_compact: true
                 })
             });
             
@@ -203,29 +218,36 @@ class TrainingController {
             if (progress.status === 'loading') {
                 progressText.textContent = '📂 Загрузка данных...';
             } else if (progress.status === 'training') {
+                const epoch = progress.epoch || 0;
+                const loss = progress.loss || 0;
+                const accuracy = progress.accuracy || 0;
+                
                 progressText.innerHTML = `
-                    <div>Эпоха ${progress.epoch}/${progress.total_epochs} | 
-                    Loss: ${(progress.loss || 0).toFixed(4)} | 
-                    Accuracy: ${(progress.accuracy || 0).toFixed(1)}%</div>
+                    <div>Эпоха ${epoch}/${progress.total_epochs} | 
+                    Loss: ${loss.toFixed(4)} | 
+                    Accuracy: ${accuracy.toFixed(1)}%</div>
                     <div class="training-metrics-grid">
                         <div class="training-metric">
                             <div class="value">${this.formatNumber(progress.samples_trained || 0)}</div>
                             <div class="label">Примеров</div>
                         </div>
                         <div class="training-metric">
-                            <div class="value">${progress.epoch || 0}</div>
+                            <div class="value">${epoch}</div>
                             <div class="label">Эпоха</div>
                         </div>
                         <div class="training-metric">
-                            <div class="value">${(progress.loss || 0).toFixed(4)}</div>
+                            <div class="value">${loss.toFixed(4)}</div>
                             <div class="label">Loss</div>
                         </div>
                         <div class="training-metric">
-                            <div class="value">${(progress.accuracy || 0).toFixed(1)}%</div>
+                            <div class="value">${accuracy.toFixed(1)}%</div>
                             <div class="label">Accuracy</div>
                         </div>
                     </div>
                 `;
+                
+                // Update chart
+                this.updateTrainingChart(epoch, loss, accuracy);
             } else if (progress.status === 'completed') {
                 clearInterval(this.humanPollInterval);
                 this.humanPollInterval = null;
@@ -267,14 +289,106 @@ class TrainingController {
     }
 
     /**
-     * Toggle FAQ accordion
+     * Open FAQ modal
      */
-    toggleFaq() {
-        const btn = document.getElementById('faqToggleBtn');
-        const content = document.getElementById('faqContent');
+    openFaqModal() {
+        document.getElementById('faqModal')?.classList.remove('hidden');
+    }
+
+    /**
+     * Close FAQ modal
+     */
+    closeFaqModal() {
+        document.getElementById('faqModal')?.classList.add('hidden');
+    }
+
+    /**
+     * Initialize training chart
+     */
+    initTrainingChart() {
+        const ctx = document.getElementById('trainingChart')?.getContext('2d');
+        if (!ctx) return;
         
-        btn?.classList.toggle('open');
-        content?.classList.toggle('open');
+        if (this.trainingChart) {
+            this.trainingChart.destroy();
+        }
+        
+        this.trainingChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Loss',
+                        data: [],
+                        borderColor: '#ff0055',
+                        backgroundColor: 'rgba(255, 0, 85, 0.1)',
+                        yAxisID: 'y',
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Accuracy %',
+                        data: [],
+                        borderColor: '#00f2ff',
+                        backgroundColor: 'rgba(0, 242, 255, 0.1)',
+                        yAxisID: 'y1',
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { 
+                        labels: { color: '#94a3b8', font: { size: 11 } }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Эпоха', color: '#64748b' },
+                        ticks: { color: '#64748b' },
+                        grid: { color: 'rgba(100, 116, 139, 0.2)' }
+                    },
+                    y: {
+                        type: 'linear',
+                        position: 'left',
+                        title: { display: true, text: 'Loss', color: '#ff0055' },
+                        ticks: { color: '#ff0055' },
+                        grid: { color: 'rgba(100, 116, 139, 0.2)' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        position: 'right',
+                        title: { display: true, text: 'Accuracy %', color: '#00f2ff' },
+                        ticks: { color: '#00f2ff' },
+                        grid: { drawOnChartArea: false },
+                        min: 0,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Update training chart with new data
+     */
+    updateTrainingChart(epoch, loss, accuracy) {
+        if (!this.trainingChart) return;
+        
+        // Avoid duplicate epochs
+        if (!this.chartData.epochs.includes(epoch)) {
+            this.chartData.epochs.push(epoch);
+            this.chartData.loss.push(loss);
+            this.chartData.accuracy.push(accuracy);
+            
+            this.trainingChart.data.labels = [...this.chartData.epochs];
+            this.trainingChart.data.datasets[0].data = [...this.chartData.loss];
+            this.trainingChart.data.datasets[1].data = [...this.chartData.accuracy];
+            this.trainingChart.update('none');
+        }
     }
 
     /**

@@ -308,12 +308,37 @@
                     </div>
                 </div>
                 
+                <!-- Training Configuration -->
+                <div class="human-training-config">
+                    <h3>⚙️ Параметры дообучения</h3>
+                    <div class="config-grid">
+                        <div class="config-item">
+                            <label for="humanEpochs">Эпохи:</label>
+                            <input type="number" id="humanEpochs" value="50" min="10" max="200" class="input-field">
+                            <small>(рек. 50-100)</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="humanBatchSize">Batch:</label>
+                            <input type="number" id="humanBatchSize" value="128" min="32" max="512" step="32" class="input-field">
+                            <small>(рек. 128)</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="humanLearningRate">LR:</label>
+                            <input type="number" id="humanLearningRate" value="0.001" min="0.0001" max="0.01" step="0.0001" class="input-field">
+                            <small>(рек. 0.001)</small>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="data-actions">
                     <button id="btnParseData" class="btn btn-secondary">
                         🔄 Обновить парсинг
                     </button>
                     <button id="btnTrainOnHuman" class="btn btn-primary btn-large">
                         🎓 Дообучить на человеческих данных
+                    </button>
+                    <button id="btnOpenFaq" class="btn btn-secondary" title="Открыть FAQ">
+                        ❓ FAQ
                     </button>
                 </div>
                 
@@ -322,74 +347,13 @@
                         <div class="progress-bar" id="humanTrainingBar"></div>
                     </div>
                     <p class="progress-text" id="humanTrainingText">Подготовка...</p>
-                </div>
-                
-                <!-- FAQ Section - Collapsible Accordion -->
-                <div class="training-faq-section">
-                    <button class="faq-toggle-btn" id="faqToggleBtn">
-                        ❓ FAQ для новичка <span class="toggle-icon">▼</span>
-                    </button>
-                    <div class="faq-accordion-content" id="faqContent">
-                        <div class="faq-item" onclick="this.classList.toggle('open')">
-                            <div class="faq-q">🔄 Что делает "Обновить парсинг"? <span class="expand-icon">+</span></div>
-                            <div class="faq-a">Собирает игровые данные из 3 источников:<br>
-                            • <b>Дебютная книга</b> (open_tree*.txt) - ~21 игра<br>
-                            • <b>Турниры</b> (games.txt) - ~237 игр чемпионатов<br>
-                            • <b>PlayOK</b> (all_results_combined.txt) - ~2100 онлайн-игр<br>
-                            Сохраняет в папку <code>training_data/</code></div>
-                        </div>
-                        <div class="faq-item" onclick="this.classList.toggle('open')">
-                            <div class="faq-q">🎓 Что делает "Дообучить"? <span class="expand-icon">+</span></div>
-                            <div class="faq-a"><b>Behavioral Cloning</b> - нейросеть учится предсказывать ходы людей.<br>
-                            <b>Ожидаемые значения за 50 эпох:</b><br>
-                            • Loss: 2.2 → 0.8 (должен падать)<br>
-                            • Accuracy: 11% → 40-50% (должен расти)<br>
-                            <b>Время:</b> ~5-15 минут на 246K примерах.</div>
-                        </div>
-                        <div class="faq-item" onclick="this.classList.toggle('open')">
-                            <div class="faq-q">📊 Accuracy 17% это нормально? <span class="expand-icon">+</span></div>
-                            <div class="faq-a"><b>После 10 эпох</b> - да, это нормально!<br>
-                            • Случайный выбор = 11% (9 ходов)<br>
-                            • 17% = модель уже лучше случайной<br>
-                            • <b>Нужно 50+ эпох</b> для 40-50%<br>
-                            • Идеал: 50-60% (люди тоже ошибаются)</div>
-                        </div>
-                        <div class="faq-item" onclick="this.classList.toggle('open')">
-                            <div class="faq-q">🎮 Как играть с обученной моделью? <span class="expand-icon">+</span></div>
-                            <div class="faq-a">1. Перейдите на вкладку <b>🎯 Играть</b><br>
-                            2. Выберите уровень <b>5 (Эксперт)</b><br>
-                            3. Модель автоматически загружена!<br>
-                            <i>Примечание: после перезапуска сервера модель нужно загрузить заново.</i></div>
-                        </div>
-                        <div class="faq-item" onclick="this.classList.toggle('open')">
-                            <div class="faq-q">🔄 Как запустить Self-Play? <span class="expand-icon">+</span></div>
-                            <div class="faq-a">1. На этой же вкладке справа - <b>Self-Play Тренировка</b><br>
-                            2. Установите 100-500 игр<br>
-                            3. Нажмите <b>🚀 Запустить Self-Play</b><br>
-                            Модель играет сама с собой и улучшается!</div>
-                        </div>
-                        <div class="faq-item" onclick="this.classList.toggle('open')">
-                            <div class="faq-q">🤖 Как играть против Gemini? <span class="expand-icon">+</span></div>
-                            <div class="faq-a">1. Перейдите на вкладку <b>🤖 Gemini Battle</b><br>
-                            2. Установите количество игр (10-50)<br>
-                            3. Нажмите <b>⚔️ Начать Батл</b><br>
-                            ELO рейтинг обновится автоматически!</div>
-                        </div>
-                        <div class="faq-item" onclick="this.classList.toggle('open')">
-                            <div class="faq-q">📁 Где сохраняются модели? <span class="expand-icon">+</span></div>
-                            <div class="faq-a">В папке <code>models/</code>:<br>
-                            • <code>policy_net_human_v1.pt</code> - после 1-го обучения<br>
-                            • <code>policy_net_human_v2.pt</code> - после 2-го и т.д.<br>
-                            Версия увеличивается автоматически!</div>
-                        </div>
-                        <div class="faq-item" onclick="this.classList.toggle('open')">
-                            <div class="faq-q">⚠️ "Нет завершённых сессий" - это ок? <span class="expand-icon">+</span></div>
-                            <div class="faq-a"><b>Да!</b> Эта секция для <b>Self-Play</b> тренировок.<br>
-                            Дообучение на человеческих данных - отдельный процесс.<br>
-                            Запустите Self-Play чтобы увидеть сессии здесь.</div>
-                        </div>
+                    
+                    <!-- Training Chart -->
+                    <div class="training-chart-container">
+                        <canvas id="trainingChart" height="150"></canvas>
                     </div>
                 </div>
+                
             </div>
             
             <!-- Training Configuration Panel -->
@@ -755,6 +719,75 @@
         <div id="aiThinking" class="thinking-indicator hidden">
             <div class="thinking-spinner"></div>
             <span>ИИ думает...</span>
+        </div>
+    </div>
+
+    <!-- FAQ Modal Popup -->
+    <div id="faqModal" class="modal hidden">
+        <div class="modal-content faq-modal-content">
+            <div class="modal-header">
+                <h2>❓ FAQ: Тренировка модели</h2>
+                <button id="closeFaqModal" class="modal-close-btn">✕</button>
+            </div>
+            <div class="faq-modal-body">
+                <div class="faq-section">
+                    <h3>📊 Рекомендуемые размеры датасета</h3>
+                    <table class="faq-table">
+                        <tr><th>Тип данных</th><th>Мин.</th><th>Оптим.</th><th>Макс.</th></tr>
+                        <tr><td>Человеческие игры</td><td>500</td><td><b>2000-5000</b></td><td>50000+</td></tr>
+                        <tr><td>Self-Play игры</td><td>1000</td><td><b>10000-50000</b></td><td>∞</td></tr>
+                        <tr><td>Gemini Battle</td><td>50</td><td><b>200-500</b></td><td>1000+</td></tr>
+                        <tr><td>Всего переходов</td><td>50K</td><td><b>200K-1M</b></td><td>10M+</td></tr>
+                    </table>
+                    <p class="faq-note">У вас сейчас: ~2300 игр, ~246K переходов - <b>хороший старт!</b></p>
+                </div>
+                
+                <div class="faq-section">
+                    <h3>⚙️ Рекомендуемые параметры</h3>
+                    <table class="faq-table">
+                        <tr><th>Параметр</th><th>Мин.</th><th>Оптим.</th><th>Макс.</th></tr>
+                        <tr><td>Эпохи</td><td>10</td><td><b>50-100</b></td><td>200</td></tr>
+                        <tr><td>Batch Size</td><td>32</td><td><b>128</b></td><td>512</td></tr>
+                        <tr><td>Learning Rate</td><td>0.0001</td><td><b>0.001</b></td><td>0.01</td></tr>
+                    </table>
+                </div>
+                
+                <div class="faq-section">
+                    <h3>📈 Ожидаемые метрики</h3>
+                    <table class="faq-table">
+                        <tr><th>Эпоха</th><th>Loss</th><th>Accuracy</th></tr>
+                        <tr><td>1</td><td>2.2</td><td>~11%</td></tr>
+                        <tr><td>10</td><td>2.0</td><td>~17%</td></tr>
+                        <tr><td>25</td><td>1.5</td><td>~30%</td></tr>
+                        <tr><td>50</td><td>1.0</td><td>~40%</td></tr>
+                        <tr><td>100</td><td>0.7</td><td>~50%</td></tr>
+                    </table>
+                    <p class="faq-note">Accuracy 50-60% - отличный результат (люди тоже ошибаются!)</p>
+                </div>
+                
+                <div class="faq-section">
+                    <h3>🚀 Порядок действий</h3>
+                    <ol class="faq-steps">
+                        <li><b>Парсинг</b> → собрать данные (2300 игр)</li>
+                        <li><b>Дообучение</b> → 50 эпох, ~10 минут</li>
+                        <li><b>Проверка</b> → сыграть на уровне 5</li>
+                        <li><b>Self-Play</b> → 500+ игр для улучшения</li>
+                        <li><b>Gemini Battle</b> → проверить ELO</li>
+                        <li><b>Повторить</b> → итеративное улучшение</li>
+                    </ol>
+                </div>
+                
+                <div class="faq-section">
+                    <h3>💾 Автозагрузка модели</h3>
+                    <p>После обучения модель <b>автоматически</b> применяется для:</p>
+                    <ul>
+                        <li>✅ Игры на уровне 5 (Эксперт)</li>
+                        <li>✅ Self-Play тренировки</li>
+                        <li>✅ Gemini Battle</li>
+                    </ul>
+                    <p class="faq-note">При перезапуске сервера загружается последняя сохранённая модель автоматически!</p>
+                </div>
+            </div>
         </div>
     </div>
 
