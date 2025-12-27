@@ -50,9 +50,10 @@ dist/
 !models/.gitkeep
 
 # Training data (large files - generate locally with: python scripts/data_parsers.py)
-training_data/human_transitions.jsonl
-training_data/human_games.jsonl
-training_data/transitions_compact.jsonl
+**/training_data/*.jsonl
+togyzkumalak-engine/training_data/human_transitions.jsonl
+togyzkumalak-engine/training_data/human_games.jsonl
+togyzkumalak-engine/training_data/transitions_compact.jsonl
 
 # Environment variables
 .env
