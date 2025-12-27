@@ -87,6 +87,94 @@ class ClassicBoard {
         // Draw rows
         this.drawRow(0, state.black_pits, 'black');
         this.drawRow(1, state.white_pits, 'white');
+
+        // Draw Kazans (Scoring reservoirs)
+        this.drawKazans(state.white_kazan, state.black_kazan);
+    }
+
+    drawKazans(whiteScore, blackScore) {
+        const { ctx, canvas } = this;
+        
+        // Kazan dimensions
+        const kazanWidth = 120;
+        const kazanHeight = 60;
+        const cornerRadius = 15;
+        
+        // Positions - center area between rows
+        const centerX = canvas.width / 2;
+        const centerY = (170 + 280) / 2; // Middle between top and bottom rows
+        
+        // --- BLACK KAZAN (Top side score) ---
+        const bX = centerX - kazanWidth - 20;
+        const bY = centerY - kazanHeight / 2;
+        
+        // Background
+        ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+        ctx.strokeStyle = '#ff0055'; // Pink/Red for Black AI
+        ctx.lineWidth = 2;
+        this.roundRect(ctx, bX, bY, kazanWidth, kazanHeight, cornerRadius, true, true);
+        
+        // Label
+        ctx.fillStyle = '#ff0055';
+        ctx.font = 'bold 12px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('ҚАРА (BLACK)', bX + kazanWidth / 2, bY - 10);
+        
+        // Score
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px Segoe UI';
+        ctx.fillText(blackScore.toString(), bX + kazanWidth / 2, bY + kazanHeight / 2 + 8);
+        
+        // Graphical representation (mini kumalaks)
+        this.drawKazanGraphics(bX + 10, bY + 10, kazanWidth - 20, kazanHeight - 20, blackScore, '#ff0055');
+
+        // --- WHITE KAZAN (Bottom side score) ---
+        const wX = centerX + 20;
+        const wY = centerY - kazanHeight / 2;
+        
+        // Background
+        ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+        ctx.strokeStyle = '#00f2ff'; // Cyan for White Player
+        ctx.lineWidth = 2;
+        this.roundRect(ctx, wX, wY, kazanWidth, kazanHeight, cornerRadius, true, true);
+        
+        // Label
+        ctx.fillStyle = '#00f2ff';
+        ctx.font = 'bold 12px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('АҚ (WHITE)', wX + kazanWidth / 2, wY - 10);
+        
+        // Score
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px Segoe UI';
+        ctx.fillText(whiteScore.toString(), wX + kazanWidth / 2, wY + kazanHeight / 2 + 8);
+        
+        // Graphical representation (mini kumalaks)
+        this.drawKazanGraphics(wX + 10, wY + 10, kazanWidth - 20, kazanHeight - 20, whiteScore, '#00f2ff');
+    }
+
+    drawKazanGraphics(x, y, w, h, score, color) {
+        const { ctx } = this;
+        const dotRadius = 3;
+        const maxDots = 81; // Half of total kumalaks
+        const displayScore = Math.min(score, maxDots);
+        
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = color;
+        
+        const cols = 9;
+        const rows = 9;
+        const dx = w / cols;
+        const dy = h / rows;
+        
+        for (let i = 0; i < displayScore; i++) {
+            const r = Math.floor(i / cols);
+            const c = i % cols;
+            ctx.beginPath();
+            ctx.arc(x + c * dx + dx/2, y + r * dy + dy/2, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
     }
 
     drawRow(rowIndex, pits, player) {
