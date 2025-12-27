@@ -20,6 +20,9 @@ class TrainingController {
         document.getElementById('btnParseData')?.addEventListener('click', () => this.parseData());
         document.getElementById('btnTrainOnHuman')?.addEventListener('click', () => this.trainOnHumanData());
         
+        // FAQ toggle
+        document.getElementById('faqToggleBtn')?.addEventListener('click', () => this.toggleFaq());
+        
         // Load initial data
         this.loadModels();
         this.loadSessions();
@@ -136,11 +139,11 @@ class TrainingController {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    batch_size: 64,
-                    epochs: 10,
+                    batch_size: 128,
+                    epochs: 50,  // More epochs for better accuracy (40-50%)
                     learning_rate: 0.001,
-                    model_name: 'policy_net_human',
-                    use_transitions: true
+                    model_name: 'policy_net_human',  // Versioned automatically
+                    use_compact: true  // Use compact format
                 })
             });
             
@@ -227,11 +230,18 @@ class TrainingController {
                 clearInterval(this.humanPollInterval);
                 this.humanPollInterval = null;
                 
+                const modelName = progress.model_name || 'policy_net_human';
+                const version = progress.version || '?';
+                
                 progressText.innerHTML = `
                     ✅ Обучение завершено!<br>
-                    Accuracy: ${(progress.accuracy || 0).toFixed(1)}% | 
+                    <b>Accuracy: ${(progress.accuracy || 0).toFixed(1)}%</b> | 
                     Final Loss: ${(progress.loss || 0).toFixed(4)}<br>
-                    Модель сохранена.
+                    <span style="color: var(--accent-gold);">📦 Модель: ${modelName}.pt</span><br><br>
+                    <b>Что дальше:</b><br>
+                    • 🎯 Играть → уровень 5 (Эксперт)<br>
+                    • 🔄 Self-Play → ещё улучшить<br>
+                    • 🤖 Gemini Battle → проверить ELO
                 `;
                 
                 const btn = document.getElementById('btnTrainOnHuman');
@@ -254,6 +264,17 @@ class TrainingController {
         } catch (error) {
             console.error('Error updating human training progress:', error);
         }
+    }
+
+    /**
+     * Toggle FAQ accordion
+     */
+    toggleFaq() {
+        const btn = document.getElementById('faqToggleBtn');
+        const content = document.getElementById('faqContent');
+        
+        btn?.classList.toggle('open');
+        content?.classList.toggle('open');
     }
 
     /**

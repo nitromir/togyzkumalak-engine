@@ -324,52 +324,69 @@
                     <p class="progress-text" id="humanTrainingText">Подготовка...</p>
                 </div>
                 
-                <!-- FAQ Section -->
+                <!-- FAQ Section - Collapsible Accordion -->
                 <div class="training-faq-section">
-                    <h3>❓ FAQ для новичка</h3>
-                    <div class="faq-scroll-container">
-                        <div class="faq-item">
-                            <div class="faq-q">🔄 Что делает кнопка "Обновить парсинг"?</div>
+                    <button class="faq-toggle-btn" id="faqToggleBtn">
+                        ❓ FAQ для новичка <span class="toggle-icon">▼</span>
+                    </button>
+                    <div class="faq-accordion-content" id="faqContent">
+                        <div class="faq-item" onclick="this.classList.toggle('open')">
+                            <div class="faq-q">🔄 Что делает "Обновить парсинг"? <span class="expand-icon">+</span></div>
                             <div class="faq-a">Собирает игровые данные из 3 источников:<br>
                             • <b>Дебютная книга</b> (open_tree*.txt) - ~21 игра<br>
                             • <b>Турниры</b> (games.txt) - ~237 игр чемпионатов<br>
                             • <b>PlayOK</b> (all_results_combined.txt) - ~2100 онлайн-игр<br>
                             Сохраняет в папку <code>training_data/</code></div>
                         </div>
-                        <div class="faq-item">
-                            <div class="faq-q">🎓 Что делает "Дообучить на человеческих данных"?</div>
-                            <div class="faq-a">Запускает <b>Behavioral Cloning</b> - нейросеть учится предсказывать ходы людей.<br>
-                            <b>Ожидаемые значения:</b><br>
-                            • Loss: 2.0 → 0.5 (должен падать)<br>
-                            • Accuracy: 15% → 50%+ (должен расти)<br>
-                            Обучение занимает 1-5 минут на 246K примерах.</div>
+                        <div class="faq-item" onclick="this.classList.toggle('open')">
+                            <div class="faq-q">🎓 Что делает "Дообучить"? <span class="expand-icon">+</span></div>
+                            <div class="faq-a"><b>Behavioral Cloning</b> - нейросеть учится предсказывать ходы людей.<br>
+                            <b>Ожидаемые значения за 50 эпох:</b><br>
+                            • Loss: 2.2 → 0.8 (должен падать)<br>
+                            • Accuracy: 11% → 40-50% (должен расти)<br>
+                            <b>Время:</b> ~5-15 минут на 246K примерах.</div>
                         </div>
-                        <div class="faq-item">
-                            <div class="faq-q">📁 Какие файлы создаются?</div>
-                            <div class="faq-a">В папке <code>training_data/</code>:<br>
-                            • <code>human_games.jsonl</code> (22 MB) - полные игры<br>
-                            • <code>transitions_compact.jsonl</code> (40 MB) - для обучения<br>
-                            В папке <code>models/</code>:<br>
-                            • <code>policy_net_human.pt</code> - обученная модель</div>
+                        <div class="faq-item" onclick="this.classList.toggle('open')">
+                            <div class="faq-q">📊 Accuracy 17% это нормально? <span class="expand-icon">+</span></div>
+                            <div class="faq-a"><b>После 10 эпох</b> - да, это нормально!<br>
+                            • Случайный выбор = 11% (9 ходов)<br>
+                            • 17% = модель уже лучше случайной<br>
+                            • <b>Нужно 50+ эпох</b> для 40-50%<br>
+                            • Идеал: 50-60% (люди тоже ошибаются)</div>
                         </div>
-                        <div class="faq-item">
-                            <div class="faq-q">🚀 Что дальше после обучения?</div>
-                            <div class="faq-a">1. Модель автоматически используется для игры на уровнях 4-5<br>
-                            2. Запустите <b>Self-Play</b> для дальнейшего улучшения<br>
-                            3. Протестируйте против <b>Gemini Battle</b><br>
-                            4. Проверьте ELO рейтинг во вкладке <b>📊 Аналитика</b></div>
+                        <div class="faq-item" onclick="this.classList.toggle('open')">
+                            <div class="faq-q">🎮 Как играть с обученной моделью? <span class="expand-icon">+</span></div>
+                            <div class="faq-a">1. Перейдите на вкладку <b>🎯 Играть</b><br>
+                            2. Выберите уровень <b>5 (Эксперт)</b><br>
+                            3. Модель автоматически загружена!<br>
+                            <i>Примечание: после перезапуска сервера модель нужно загрузить заново.</i></div>
                         </div>
-                        <div class="faq-item">
-                            <div class="faq-q">⚠️ Ошибка "Not Found"?</div>
-                            <div class="faq-a">Нужно перезапустить сервер после обновления кода:<br>
-                            <code>taskkill /F /IM python.exe</code><br>
-                            <code>python run.py</code></div>
+                        <div class="faq-item" onclick="this.classList.toggle('open')">
+                            <div class="faq-q">🔄 Как запустить Self-Play? <span class="expand-icon">+</span></div>
+                            <div class="faq-a">1. На этой же вкладке справа - <b>Self-Play Тренировка</b><br>
+                            2. Установите 100-500 игр<br>
+                            3. Нажмите <b>🚀 Запустить Self-Play</b><br>
+                            Модель играет сама с собой и улучшается!</div>
                         </div>
-                        <div class="faq-item">
-                            <div class="faq-q">🎮 Как проверить что модель улучшилась?</div>
-                            <div class="faq-a">1. Сыграйте против неё во вкладке <b>🎯 Играть</b><br>
-                            2. Проверьте <b>Gemini Battle</b> - должен расти winrate<br>
-                            3. Смотрите ELO график в <b>📊 Аналитика</b></div>
+                        <div class="faq-item" onclick="this.classList.toggle('open')">
+                            <div class="faq-q">🤖 Как играть против Gemini? <span class="expand-icon">+</span></div>
+                            <div class="faq-a">1. Перейдите на вкладку <b>🤖 Gemini Battle</b><br>
+                            2. Установите количество игр (10-50)<br>
+                            3. Нажмите <b>⚔️ Начать Батл</b><br>
+                            ELO рейтинг обновится автоматически!</div>
+                        </div>
+                        <div class="faq-item" onclick="this.classList.toggle('open')">
+                            <div class="faq-q">📁 Где сохраняются модели? <span class="expand-icon">+</span></div>
+                            <div class="faq-a">В папке <code>models/</code>:<br>
+                            • <code>policy_net_human_v1.pt</code> - после 1-го обучения<br>
+                            • <code>policy_net_human_v2.pt</code> - после 2-го и т.д.<br>
+                            Версия увеличивается автоматически!</div>
+                        </div>
+                        <div class="faq-item" onclick="this.classList.toggle('open')">
+                            <div class="faq-q">⚠️ "Нет завершённых сессий" - это ок? <span class="expand-icon">+</span></div>
+                            <div class="faq-a"><b>Да!</b> Эта секция для <b>Self-Play</b> тренировок.<br>
+                            Дообучение на человеческих данных - отдельный процесс.<br>
+                            Запустите Self-Play чтобы увидеть сессии здесь.</div>
                         </div>
                     </div>
                 </div>

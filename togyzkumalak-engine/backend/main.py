@@ -1440,25 +1440,40 @@ async def run_human_data_training(
             
             print(f"[Human Training] Epoch {epoch+1}/{epochs}, Loss: {epoch_loss/len(dataloader):.4f}, Acc: {correct/total*100:.2f}%")
         
-        # Save model
+        # Save model with auto-versioning
         engine_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         models_dir = os.path.join(engine_dir, "models")
         os.makedirs(models_dir, exist_ok=True)
         
-        model_path = os.path.join(models_dir, f"{model_name}.pt")
+        # Find next version number
+        version = 1
+        while os.path.exists(os.path.join(models_dir, f"{model_name}_v{version}.pt")):
+            version += 1
+        
+        versioned_name = f"{model_name}_v{version}"
+        model_path = os.path.join(models_dir, f"{versioned_name}.pt")
+        
+        final_accuracy = human_training_sessions[session_id].get("accuracy", 0)
+        final_loss = human_training_sessions[session_id].get("loss", 0)
+        
         torch.save({
             'model_state_dict': model.state_dict(),
             'training_samples': len(states),
             'epochs': epochs,
-            'final_loss': human_training_sessions[session_id]["loss"],
-            'final_accuracy': human_training_sessions[session_id]["accuracy"],
+            'final_loss': final_loss,
+            'final_accuracy': final_accuracy,
+            'version': version,
             'timestamp': datetime.datetime.now().isoformat()
         }, model_path)
+        
+        print(f"[Human Training] Model saved as version {version}")
         
         human_training_sessions[session_id].update({
             "status": "completed",
             "progress": 100,
             "model_path": model_path,
+            "model_name": versioned_name,
+            "version": version,
             "end_time": datetime.datetime.now().isoformat()
         })
         
