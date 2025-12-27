@@ -1371,12 +1371,13 @@ async def run_human_data_training(
         human_training_sessions[session_id]["total_samples"] = len(states)
         human_training_sessions[session_id]["status"] = "training"
         
-        # Prepare tensors - pad to 20 features
+        # Prepare tensors - pad to 128 features to match PolicyNetwork input
         padded_states = []
         for s in states:
-            if len(s) < 20:
-                s = list(s) + [0] * (20 - len(s))
-            padded_states.append(s[:20])
+            s = list(s)
+            if len(s) < 128:
+                s = s + [0.0] * (128 - len(s))
+            padded_states.append(s[:128])
         
         X = torch.FloatTensor(padded_states)
         y = torch.LongTensor(actions)
@@ -1384,9 +1385,18 @@ async def run_human_data_training(
         dataset = TensorDataset(X, y)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         
-        # Create or load model
-        from .ai_engine import ai_engine
-        model = ai_engine.policy_net
+        # Create or load model - use the highest level model from AIEngine
+        from .ai_engine import ai_engine, PolicyNetwork
+        
+        # Get existing model or create new one (input_size=128 to match PolicyNetwork)
+        if 5 in ai_engine.models:
+            model = ai_engine.models[5]
+        else:
+            # Create new model with standard input size
+            model = PolicyNetwork(input_size=128, hidden_size=256, output_size=9)
+            ai_engine.models[5] = model
+        
+        model.train()  # Set to training mode
         
         # Training setup
         criterion = nn.CrossEntropyLoss()
