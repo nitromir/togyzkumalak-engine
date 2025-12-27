@@ -5,6 +5,7 @@ Main server with REST API and WebSocket support for real-time gameplay.
 """
 
 import asyncio
+import datetime
 import json
 import os
 from typing import Dict, List, Optional
