@@ -11,6 +11,7 @@ class TogyzkumalakApp {
         this.playerColor = 'white';
         this.aiLevel = 3;
         this.isMyTurn = false;
+        this.confidenceEnabled = true;
         
         // Board renderer (Classic only)
         this.classicBoard = null;
@@ -54,11 +55,13 @@ class TogyzkumalakApp {
             
             // Board
             classicBoard: document.getElementById('classicBoard'),
+            boardWrapper: document.querySelector('#gamePanel .board-wrapper'),
             
             // Controls
             btnUndo: document.getElementById('btnUndo'),
             btnNewGame: document.getElementById('btnNewGame'),
             btnResign: document.getElementById('btnResign'),
+            btnToggleConfidence: document.getElementById('btnToggleConfidence'),
             
             // Move history
             moveList: document.getElementById('moveList'),
@@ -115,6 +118,7 @@ class TogyzkumalakApp {
         // Game controls
         this.elements.btnNewGame.addEventListener('click', () => this.showSetup());
         this.elements.btnResign.addEventListener('click', () => this.resign());
+        this.elements.btnToggleConfidence?.addEventListener('click', () => this.toggleConfidence());
         
         // Analysis
         this.elements.btnAnalyze.addEventListener('click', () => this.analyzePosition());
@@ -137,6 +141,41 @@ class TogyzkumalakApp {
     initBoard() {
         this.classicBoard = new ClassicBoard('classicBoard');
         this.classicBoard.setMoveCallback((move) => this.makeMove(move));
+    }
+
+    loadConfidenceSetting() {
+        try {
+            const saved = localStorage.getItem('confidenceEnabled');
+            if (saved === '0' || saved === '1') {
+                this.confidenceEnabled = saved === '1';
+            }
+        } catch (e) {
+            // ignore
+        }
+        this.applyConfidenceSetting();
+    }
+
+    applyConfidenceSetting() {
+        this.classicBoard?.setShowProbabilities(this.confidenceEnabled);
+        if (this.elements.btnToggleConfidence) {
+            this.elements.btnToggleConfidence.textContent = this.confidenceEnabled
+                ? '📊 Уверенность: ON'
+                : '📊 Уверенность: OFF';
+            this.elements.btnToggleConfidence.classList.toggle('active', this.confidenceEnabled);
+        }
+        if (!this.confidenceEnabled) {
+            this.classicBoard?.setProbabilities(null);
+        }
+    }
+
+    toggleConfidence() {
+        this.confidenceEnabled = !this.confidenceEnabled;
+        try {
+            localStorage.setItem('confidenceEnabled', this.confidenceEnabled ? '1' : '0');
+        } catch (e) {
+            // ignore
+        }
+        this.applyConfidenceSetting();
     }
 
     /**
@@ -180,6 +219,7 @@ class TogyzkumalakApp {
             
             // Configure board
             this.classicBoard.setHumanColor(this.playerColor);
+            this.loadConfidenceSetting();
             
             // Update UI
             this.elements.setupPanel.classList.add('hidden');
@@ -229,6 +269,7 @@ class TogyzkumalakApp {
             // Update state
             this.gameState = response;
             this.updateBoard(response);
+            this.triggerBoardGlow();
             
             // Add to move history
             await this.updateMoveHistory();
@@ -264,7 +305,7 @@ class TogyzkumalakApp {
     /**
      * Update board display.
      */
-    updateBoard(state) {
+    async updateBoard(state) {
         const board = state.board;
         
         // Update board
@@ -281,6 +322,20 @@ class TogyzkumalakApp {
         // Update last move display
         if (state.last_move) {
             this.elements.lastMove.textContent = `Last move: ${state.last_move}`;
+        }
+
+        // Fetch and show move probabilities if enabled and it's user turn
+        if (this.confidenceEnabled && this.isMyTurn && state.status === 'in_progress') {
+            try {
+                const probResponse = await api.getMoveProbabilities(this.aiLevel);
+                if (probResponse && probResponse.probabilities) {
+                    this.classicBoard.setProbabilities(probResponse.probabilities);
+                }
+            } catch (e) {
+                console.warn('Could not fetch probabilities:', e);
+            }
+        } else {
+            this.classicBoard.setProbabilities(null);
         }
     }
 
@@ -450,8 +505,12 @@ class TogyzkumalakApp {
      */
     formatAnalysis(text) {
         if (!text) return '';
-        
-        return text
+
+        // IMPORTANT: Escape HTML from Gemini output to avoid accidental tag interpretation
+        // (which can visually "truncate" the output if Gemini returns "<...>").
+        const escaped = this.escapeHtml(text);
+
+        return escaped
             .replace(/\n/g, '<br>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/EVALUATION:/g, '<strong>📊 EVALUATION:</strong>')
@@ -465,6 +524,28 @@ class TogyzkumalakApp {
             .replace(/WARNING:/g, '<strong>⚠️ WARNING:</strong>')
             .replace(/УГРОЗЫ:/g, '<strong>⚠️ УГРОЗЫ:</strong>')
             .replace(/АНАЛИЗ ХОДОВ:/g, '<strong>📝 АНАЛИЗ ХОДОВ:</strong>');
+    }
+
+    escapeHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    triggerBoardGlow() {
+        const el = this.elements.boardWrapper;
+        if (!el) return;
+        el.classList.remove('board-glow');
+        // force reflow to restart animation
+        void el.offsetWidth;
+        el.classList.add('board-glow');
+        window.clearTimeout(this._glowTimer);
+        this._glowTimer = window.setTimeout(() => {
+            el.classList.remove('board-glow');
+        }, 900);
     }
 
     /**

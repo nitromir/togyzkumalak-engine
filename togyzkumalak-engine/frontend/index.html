@@ -93,6 +93,11 @@
                             <span class="level-name">Эксперт</span>
                             <span class="level-elo">~2100</span>
                         </button>
+                        <button class="level-btn level-gemini" data-level="6">
+                            <span class="level-num">🤖</span>
+                            <span class="level-name">Gemini AI</span>
+                            <span class="level-elo">~2400</span>
+                        </button>
                     </div>
                 </div>
 
@@ -133,6 +138,9 @@
                 <div class="game-controls">
                     <button id="btnUndo" class="btn btn-secondary" disabled>↩️ Отменить</button>
                     <button id="btnNewGame" class="btn btn-secondary">🔄 Новая Игра</button>
+                    <button id="btnToggleConfidence" class="btn btn-secondary" title="Показать/скрыть индикатор уверенности">
+                        📊 Уверенность: ON
+                    </button>
                     <button id="btnResign" class="btn btn-danger">🏳️ Сдаться</button>
                 </div>
             </div>
@@ -312,6 +320,13 @@
                 <div class="human-training-config">
                     <h3>⚙️ Параметры дообучения</h3>
                     <div class="config-grid">
+                        <div class="config-item config-item-wide">
+                            <label for="humanBaseModel">Базовая модель:</label>
+                            <select id="humanBaseModel" class="input-field">
+                                <option value="">🆕 Новая модель (с нуля)</option>
+                            </select>
+                            <small>продолжить дообучение существующей</small>
+                        </div>
                         <div class="config-item">
                             <label for="humanEpochs">Эпохи:</label>
                             <input type="number" id="humanEpochs" value="50" min="10" max="200" class="input-field">
@@ -359,6 +374,10 @@
             <!-- Training Configuration Panel -->
             <div class="panel training-config-panel">
                 <h2>⚙️ Self-Play Тренировка</h2>
+                
+                <div class="config-section">
+                    <p class="config-info">ℹ️ Используется модель, загруженная в списке "Сохранённые Модели" выше.</p>
+                </div>
                 
                 <div class="config-section">
                     <label for="numGames">Количество игр:</label>
@@ -440,6 +459,69 @@
                     <p class="empty-text">Нет завершённых сессий</p>
                 </div>
             </div>
+
+            <!-- ============================================ -->
+            <!-- ALPHAZERO DASHBOARD -->
+            <!-- ============================================ -->
+            <div class="panel alphazero-panel">
+                <h2>🦾 AlphaZero - Глубокое Обучение</h2>
+                <p class="panel-description">Self-Play обучение с поиском по дереву (MCTS)</p>
+                
+                <div class="alphazero-config-grid">
+                    <div class="config-item">
+                        <label for="azIters">Итерации:</label>
+                        <input type="number" id="azIters" value="10" min="1" max="100" class="input-field">
+                    </div>
+                    <div class="config-item">
+                        <label for="azEps">Игр/итер:</label>
+                        <input type="number" id="azEps" value="10" min="1" max="100" class="input-field">
+                    </div>
+                    <div class="config-item">
+                        <label for="azSims">MCTS Симуляции:</label>
+                        <input type="number" id="azSims" value="25" min="10" max="800" class="input-field">
+                    </div>
+                    <div class="config-item">
+                        <label for="azCpuct">Exploration (cpuct):</label>
+                        <input type="number" id="azCpuct" value="1.0" step="0.1" min="0.1" max="5.0" class="input-field">
+                    </div>
+                </div>
+
+                <div class="alphazero-actions">
+                    <button id="btnStartAlphaZero" class="btn btn-primary btn-large">
+                        ⚔️ Запустить AlphaZero
+                    </button>
+                    <button id="btnStopAlphaZero" class="btn btn-danger hidden">
+                        ⏹️ Остановить
+                    </button>
+                </div>
+
+                <div id="azProgressSection" class="az-progress-section hidden">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="azProgressBar"></div>
+                    </div>
+                    <div class="az-stats-grid">
+                        <div class="az-stat-item">
+                            <span class="label">Итерация:</span>
+                            <span class="value" id="azCurrentIter">0 / 0</span>
+                        </div>
+                        <div class="az-stat-item">
+                            <span class="label">Статус:</span>
+                            <span class="value" id="azStatusText">Обучение...</span>
+                        </div>
+                    </div>
+
+                    <div class="az-charts-container">
+                        <div class="chart-box">
+                            <h3>📉 Loss (Policy & Value)</h3>
+                            <canvas id="azLossChart" height="150"></canvas>
+                        </div>
+                        <div class="chart-box">
+                            <h3>📈 Оценочный ELO</h3>
+                            <canvas id="azEloChart" height="150"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- ============================================ -->
@@ -449,6 +531,16 @@
             <!-- Battle Configuration Panel -->
             <div class="panel battle-config-panel">
                 <h2>⚔️ Настройки Батла vs Gemini</h2>
+                
+                <div class="config-section">
+                    <div id="geminiActiveModelInfo" class="active-model-info">
+                        <label for="battleModelSelect" class="label">Выбрать модель:</label>
+                        <select id="battleModelSelect" class="input-field model-selector">
+                            <option value="default">🌐 Стандартная (Level 5)</option>
+                        </select>
+                    </div>
+                    <small class="config-info-small">Выбранная модель будет играть против Gemini</small>
+                </div>
                 
                 <div class="config-section">
                     <label for="battleNumGames">Количество игр:</label>

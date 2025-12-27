@@ -57,6 +57,52 @@ class GeminiAnalyzer:
             print("[WARNING] google-genai package not installed. Run: pip install google-genai")
         except Exception as e:
             print(f"[ERROR] Failed to initialize Gemini client: {e}")
+
+    def _build_generate_config(self, max_output_tokens: int, temperature: float):
+        """
+        Build a GenerateContentConfig for google-genai.
+        Passing a plain dict may be ignored by some SDK versions, leading to short/truncated outputs.
+        """
+        try:
+            from google.genai import types
+            return types.GenerateContentConfig(
+                max_output_tokens=int(max_output_tokens),
+                temperature=float(temperature),
+            )
+        except Exception:
+            # Fallback to dict for older SDKs
+            return {
+                "max_output_tokens": int(max_output_tokens),
+                "temperature": float(temperature),
+            }
+
+    def _response_to_text(self, response) -> str:
+        """
+        Extract full text from google-genai response across SDK variants.
+        Some versions expose `.text`, others require joining candidate parts.
+        """
+        if response is None:
+            return ""
+
+        text = getattr(response, "text", None)
+        if isinstance(text, str) and text.strip():
+            return text
+
+        # Try candidates/parts structure
+        try:
+            candidates = getattr(response, "candidates", None) or []
+            chunks: List[str] = []
+            for cand in candidates:
+                content = getattr(cand, "content", None)
+                parts = getattr(content, "parts", None) or []
+                for part in parts:
+                    part_text = getattr(part, "text", None)
+                    if isinstance(part_text, str) and part_text:
+                        chunks.append(part_text)
+            joined = "".join(chunks)
+            return joined
+        except Exception:
+            return ""
     
     def _format_position(self, board_state: Dict) -> str:
         """Format board position for LLM consumption."""
@@ -181,6 +227,11 @@ class GeminiAnalyzer:
         prompt = self._build_analysis_prompt(position_text, history_text)
         
         try:
+            gen_cfg = self._build_generate_config(
+                max_output_tokens=gemini_config.max_tokens,
+                temperature=gemini_config.temperature,
+            )
+
             # Use run_in_executor for sync SDK call in async context
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
@@ -188,22 +239,21 @@ class GeminiAnalyzer:
                 lambda: self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
-                    config={
-                        "max_output_tokens": gemini_config.max_tokens,
-                        "temperature": gemini_config.temperature,
-                    }
+                    config=gen_cfg
                 )
             )
+
+            text = self._response_to_text(response)
             
             # #region agent log
             import json, time
             with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json.dumps({"location":"gemini_analyzer.py:202", "message":"Gemini Analysis Raw Output", "data":{"raw_text":response.text}, "timestamp":int(time.time()*1000), "sessionId":"debug-session", "hypothesisId":"G"}) + "\n")
+                f.write(json.dumps({"location":"gemini_analyzer.py:202", "message":"Gemini Analysis Raw Output", "data":{"raw_text":text, "len":len(text)}, "timestamp":int(time.time()*1000), "sessionId":"debug-session", "hypothesisId":"G"}) + "\n")
             # #endregion
 
             return {
                 "available": True,
-                "analysis": response.text,
+                "analysis": text,
                 "position": position_text,
                 "model": self.model
             }
@@ -235,25 +285,26 @@ class GeminiAnalyzer:
         prompt = self._build_suggest_prompt(position_text, legal_moves)
         
         try:
+            gen_cfg = self._build_generate_config(
+                max_output_tokens=1200,
+                temperature=0.3,
+            )
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
                 lambda: self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
-                    config={
-                        "max_output_tokens": 1200,
-                        "temperature": 0.3  # Lower for focused response
-                    }
+                    config=gen_cfg
                 )
             )
             
-            text = response.text
+            text = self._response_to_text(response)
             
             # #region agent log
             import json, time
             with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json.dumps({"location":"gemini_analyzer.py:250", "message":"Gemini Suggestion Raw Output", "data":{"raw_text":text, "legal_moves":legal_moves}, "timestamp":int(time.time()*1000), "sessionId":"debug-session", "hypothesisId":"E"}) + "\n")
+                f.write(json.dumps({"location":"gemini_analyzer.py:250", "message":"Gemini Suggestion Raw Output", "data":{"raw_text":text, "len":len(text), "legal_moves":legal_moves}, "timestamp":int(time.time()*1000), "sessionId":"debug-session", "hypothesisId":"E"}) + "\n")
             # #endregion
 
             suggested_move = None

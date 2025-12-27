@@ -123,6 +123,13 @@ class TogyzkumalakAPI {
     }
 
     /**
+     * Delete a saved model.
+     */
+    async deleteModel(modelName) {
+        return await this.request('DELETE', `/training/models/${modelName}`);
+    }
+
+    /**
      * Connect WebSocket for real-time gameplay.
      */
     connectWebSocket(gameId, onMessage) {

@@ -57,13 +57,74 @@
         // Summary
         lastSummary: document.getElementById('lastGameSummary'),
         
+        // Active Model Selection
+        modelSelect: document.getElementById('battleModelSelect'),
+        
         // Sessions list
         sessionsList: document.getElementById('battleSessionsList')
     };
-    
+
     // =========================================================================
     // API Functions
     // =========================================================================
+    
+    async function loadAvailableModels() {
+        try {
+            const response = await fetch('/api/training/models');
+            if (response.ok) {
+                const data = await response.json();
+                if (elements.modelSelect) {
+                    const currentVal = elements.modelSelect.value;
+                    
+                    // Clear and add default
+                    elements.modelSelect.innerHTML = '<option value="default">🌐 Стандартная (Level 5)</option>';
+                    
+                    // Add saved models
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.name;
+                        option.textContent = `📦 ${model.name}`;
+                        elements.modelSelect.appendChild(option);
+                    });
+                    
+                    // Re-select if still exists
+                    if (currentVal && Array.from(elements.modelSelect.options).some(o => o.value === currentVal)) {
+                        elements.modelSelect.value = currentVal;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error loading models for Gemini Battle:', e);
+        }
+    }
+
+    async function handleModelChange() {
+        const modelName = elements.modelSelect.value;
+        if (!modelName || modelName === 'default') {
+            console.log('Using default model level 5');
+            return;
+        }
+
+        try {
+            elements.modelSelect.disabled = true;
+            const response = await fetch(`/api/training/models/${modelName}/load`, {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                console.log(`[Gemini Battle] Successfully loaded model: ${modelName}`);
+                // Notify other modules if needed
+            } else {
+                throw new Error('Failed to load model');
+            }
+        } catch (e) {
+            console.error('Error changing model for Gemini Battle:', e);
+            alert('Ошибка при смене модели: ' + e.message);
+            elements.modelSelect.value = 'default';
+        } finally {
+            elements.modelSelect.disabled = false;
+        }
+    }
     
     async function startBattle(config) {
         const response = await fetch('/api/gemini-battle/start', {
@@ -95,6 +156,35 @@
         const response = await fetch('/api/gemini-battle/sessions');
         return response.json();
     }
+    
+    async function updateActiveModelInfo() {
+        try {
+            const response = await fetch('/api/training/models/active');
+            if (response.ok) {
+                const data = await response.json();
+                if (elements.modelSelect && data.model) {
+                    // Check if the model exists in options, if not, reload list
+                    const exists = Array.from(elements.modelSelect.options).some(o => o.value === data.model);
+                    if (!exists && data.model !== 'default' && data.model !== 'policy_level_5') {
+                        await loadAvailableModels();
+                    }
+                    
+                    if (data.model === 'policy_level_5' || data.model === 'default') {
+                        elements.modelSelect.value = 'default';
+                    } else {
+                        elements.modelSelect.value = data.model;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching active model:', e);
+        }
+    }
+    
+    // Expose for external use
+    window.updateGeminiActiveModel = () => {
+        loadAvailableModels().then(() => updateActiveModelInfo());
+    };
     
     // =========================================================================
     // ELO Chart Drawing
@@ -553,12 +643,14 @@
         elements.btnStart.addEventListener('click', handleStartBattle);
         elements.btnStop.addEventListener('click', handleStopBattle);
         elements.btnExport?.addEventListener('click', handleExportData);
+        elements.modelSelect?.addEventListener('change', handleModelChange);
         
         // Load existing sessions when tab is shown
         const geminiBattleTab = document.querySelector('[data-mode="gemini-battle"]');
         if (geminiBattleTab) {
             geminiBattleTab.addEventListener('click', () => {
                 loadSessionsList();
+                loadAvailableModels().then(() => updateActiveModelInfo());
                 
                 // Draw empty chart initially
                 drawEloChart(null);
@@ -568,6 +660,7 @@
         // Initial chart draw
         setTimeout(() => {
             drawEloChart(null);
+            loadAvailableModels().then(() => updateActiveModelInfo());
         }, 500);
         
         console.log('[OK] Gemini Battle module initialized');

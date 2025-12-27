@@ -35,6 +35,9 @@ class TrainingController {
         this.loadDataStats();
         this.loadTrainingFiles();
         
+        // AlphaZero Initialization
+        this.initAlphaZero();
+        
         // Set up periodic refresh when training mode is active
         setInterval(() => {
             if (!document.getElementById('trainingMode').classList.contains('hidden')) {
@@ -144,6 +147,7 @@ class TrainingController {
         const epochs = parseInt(document.getElementById('humanEpochs')?.value) || 50;
         const batchSize = parseInt(document.getElementById('humanBatchSize')?.value) || 128;
         const learningRate = parseFloat(document.getElementById('humanLearningRate')?.value) || 0.001;
+        const baseModel = document.getElementById('humanBaseModel')?.value || '';
         
         // Reset chart data
         this.chartData = { epochs: [], loss: [], accuracy: [] };
@@ -158,7 +162,8 @@ class TrainingController {
                     epochs: epochs,
                     learning_rate: learningRate,
                     model_name: 'policy_net_human',
-                    use_compact: true
+                    use_compact: true,
+                    base_model: baseModel  // Use existing model as starting point
                 })
             });
             
@@ -221,8 +226,10 @@ class TrainingController {
                 const epoch = progress.epoch || 0;
                 const loss = progress.loss || 0;
                 const accuracy = progress.accuracy || 0;
+                const modelInfo = progress.model_info ? `<div class="training-info-badge ${progress.model_info.includes('новая') ? 'new' : ''}">${progress.model_info}</div>` : '';
                 
                 progressText.innerHTML = `
+                    ${modelInfo}
                     <div>Эпоха ${epoch}/${progress.total_epochs} | 
                     Loss: ${loss.toFixed(4)} | 
                     Accuracy: ${accuracy.toFixed(1)}%</div>
@@ -392,6 +399,131 @@ class TrainingController {
     }
 
     /**
+     * AlphaZero Methods
+     */
+    initAlphaZero() {
+        this.azTaskId = null;
+        this.azPollInterval = null;
+        this.azLossChart = null;
+        this.azEloChart = null;
+        
+        const btnStart = document.getElementById('btnStartAlphaZero');
+        const btnStop = document.getElementById('btnStopAlphaZero');
+        
+        btnStart?.addEventListener('click', () => this.startAlphaZero());
+        btnStop?.addEventListener('click', () => this.stopAlphaZero());
+        
+        this.initAlphaZeroCharts();
+    }
+
+    async startAlphaZero() {
+        const config = {
+            numIters: parseInt(document.getElementById('azIters').value),
+            numEps: parseInt(document.getElementById('azEps').value),
+            numMCTSSims: parseInt(document.getElementById('azSims').value),
+            cpuct: parseFloat(document.getElementById('azCpuct').value)
+        };
+
+        try {
+            document.getElementById('btnStartAlphaZero').disabled = true;
+            
+            const response = await fetch('/api/training/alphazero/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            if (!response.ok) throw new Error('Failed to start AlphaZero');
+
+            const data = await response.json();
+            this.azTaskId = data.task_id;
+
+            document.getElementById('azProgressSection').classList.remove('hidden');
+            document.getElementById('btnStopAlphaZero').classList.remove('hidden');
+            
+            this.startAlphaZeroPolling();
+        } catch (error) {
+            console.error('Error starting AlphaZero:', error);
+            alert('Ошибка запуска AlphaZero: ' + error.message);
+            document.getElementById('btnStartAlphaZero').disabled = false;
+        }
+    }
+
+    startAlphaZeroPolling() {
+        if (this.azPollInterval) clearInterval(this.azPollInterval);
+        this.azPollInterval = setInterval(() => this.updateAlphaZeroProgress(), 2000);
+    }
+
+    async updateAlphaZeroProgress() {
+        if (!this.azTaskId) return;
+
+        try {
+            const response = await fetch(`/api/training/alphazero/sessions/${this.azTaskId}`);
+            if (!response.ok) return;
+
+            const task = await response.json();
+            
+            document.getElementById('azProgressBar').style.width = `${task.progress}%`;
+            document.getElementById('azCurrentIter').textContent = `${task.current_iteration} / ${task.total_iterations}`;
+            document.getElementById('azStatusText').textContent = task.status;
+
+            // Update charts
+            if (task.metrics.loss.length > 0) {
+                this.azLossChart.data.labels = task.metrics.loss.map(m => m.iter);
+                this.azLossChart.data.datasets[0].data = task.metrics.loss.map(m => m.value);
+                this.azLossChart.update('none');
+            }
+
+            if (task.metrics.accuracy && task.metrics.accuracy.length > 0) {
+                this.azEloChart.data.labels = task.metrics.accuracy.map(m => m.iter);
+                this.azEloChart.data.datasets[0].data = task.metrics.accuracy.map(m => m.value);
+                this.azEloChart.update('none');
+            }
+
+            if (task.status === 'completed' || task.status === 'error' || task.status === 'stopped') {
+                clearInterval(this.azPollInterval);
+                document.getElementById('btnStartAlphaZero').disabled = false;
+                document.getElementById('btnStopAlphaZero').classList.add('hidden');
+                
+                if (task.status === 'completed') {
+                    this.showNotification('🦾 AlphaZero: Обучение завершено! Новая модель готова.');
+                }
+            }
+        } catch (error) {
+            console.error('Error polling AlphaZero:', error);
+        }
+    }
+
+    async stopAlphaZero() {
+        if (!this.azTaskId) return;
+        await fetch(`/api/training/alphazero/sessions/${this.azTaskId}/stop`, { method: 'POST' });
+    }
+
+    initAlphaZeroCharts() {
+        const ctxLoss = document.getElementById('azLossChart')?.getContext('2d');
+        const ctxElo = document.getElementById('azEloChart')?.getContext('2d');
+        
+        if (!ctxLoss || !ctxElo) return;
+
+        this.azLossChart = new Chart(ctxLoss, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Loss', data: [], borderColor: '#ff0055', tension: 0.3 }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        this.azEloChart = new Chart(ctxElo, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Accuracy %', data: [], borderColor: '#00f2ff', tension: 0.3 }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    showNotification(message) {
+        // Simple alert for now, can be upgraded to Toast
+        alert(message);
+    }
+
+    /**
      * Format large numbers
      */
     formatNumber(num) {
@@ -487,9 +619,13 @@ class TrainingController {
 
             // Update progress bar
             const percentage = (progress.games_completed / progress.total_games) * 100;
+            const modelInfo = progress.model_info ? `<div class="training-info-badge ${progress.model_info.includes('новая') ? 'new' : ''}" style="margin-top: 8px;">${progress.model_info}</div>` : '';
+            
             document.getElementById('trainingProgressBar').style.width = `${percentage}%`;
-            document.getElementById('trainingProgressText').textContent = 
-                `${progress.games_completed} / ${progress.total_games} игр`;
+            document.getElementById('trainingProgressText').innerHTML = `
+                ${progress.games_completed} / ${progress.total_games} игр
+                ${modelInfo}
+            `;
 
             // Update stats
             document.getElementById('whiteWins').textContent = progress.white_wins;
@@ -500,8 +636,10 @@ class TrainingController {
             // Check if completed
             if (progress.status === 'completed') {
                 this.stopProgressPolling();
+                const modelInfo = progress.model_info ? `<div class="training-info-badge ${progress.model_info.includes('новая') ? 'new' : ''}">${progress.model_info}</div>` : '';
                 document.getElementById('trainingStatus').innerHTML = `
                     <p class="status-text status-completed">✅ Тренировка завершена</p>
+                    ${modelInfo}
                     <p class="session-id">Session ID: ${this.currentSessionId}</p>
                 `;
                 document.getElementById('btnStartTraining').disabled = false;
@@ -535,9 +673,14 @@ class TrainingController {
 
             const data = await response.json();
             const modelsList = document.getElementById('modelsList');
+            const baseModelSelect = document.getElementById('humanBaseModel');
 
             if (data.models.length === 0) {
                 modelsList.innerHTML = '<p class="empty-text">Нет сохранённых моделей</p>';
+                // Reset base model selector
+                if (baseModelSelect) {
+                    baseModelSelect.innerHTML = '<option value="">🆕 Новая модель (с нуля)</option>';
+                }
                 return;
             }
 
@@ -550,11 +693,27 @@ class TrainingController {
                     <div class="model-info">
                         <span class="model-date">${new Date(model.created).toLocaleString('ru-RU')}</span>
                     </div>
-                    <button class="btn btn-secondary btn-small" onclick="trainingController.loadModel('${model.name}')">
-                        Загрузить
-                    </button>
+                    <div class="model-actions">
+                        <button class="btn btn-secondary btn-small" onclick="trainingController.loadModel('${model.name}')">
+                            Загрузить
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="trainingController.deleteModel('${model.name}')">
+                            Удалить
+                        </button>
+                    </div>
                 </div>
             `).join('');
+
+            // Also populate base model selector for training
+            if (baseModelSelect) {
+                const currentValue = baseModelSelect.value;
+                baseModelSelect.innerHTML = '<option value="">🆕 Новая модель (с нуля)</option>' +
+                    data.models.map(model => `<option value="${model.name}">📦 ${model.name}</option>`).join('');
+                // Restore previous selection if it still exists
+                if (currentValue && data.models.find(m => m.name === currentValue)) {
+                    baseModelSelect.value = currentValue;
+                }
+            }
 
         } catch (error) {
             console.error('Error loading models:', error);
@@ -571,11 +730,50 @@ class TrainingController {
                 throw new Error('Failed to load model');
             }
 
+            const result = await response.json();
+            
+            // Update hidden size input if returned from server
+            if (result.hidden_size) {
+                const hiddenSizeInput = document.getElementById('hiddenSize');
+                if (hiddenSizeInput) {
+                    hiddenSizeInput.value = result.hidden_size;
+                    console.log(`[Training] Updated hiddenSize input to ${result.hidden_size}`);
+                }
+            }
+
             alert(`Модель "${modelName}" успешно загружена!\n\nТеперь она будет использоваться для игры на уровнях 4-5.`);
+            
+            // Update active model info in Gemini Battle if available
+            if (window.updateGeminiActiveModel) {
+                window.updateGeminiActiveModel();
+            }
 
         } catch (error) {
             console.error('Error loading model:', error);
             alert('Ошибка загрузки модели: ' + error.message);
+        }
+    }
+
+    async deleteModel(modelName) {
+        if (!confirm(`Вы уверены, что хотите безвозвратно удалить модель "${modelName}"?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/training/models/${modelName}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete model');
+            }
+
+            alert(`Модель "${modelName}" успешно удалена.`);
+            this.loadModels();
+
+        } catch (error) {
+            console.error('Error deleting model:', error);
+            alert('Ошибка удаления модели: ' + error.message);
         }
     }
 

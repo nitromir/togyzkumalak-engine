@@ -643,6 +643,7 @@ class GeminiBattleManager:
             "game_id": game_num,
             "session_id": session.session_id,
             "timestamp": datetime.now().isoformat(),
+            "model_name": ai_engine.current_model_name,
             "model_color": model_color,
             "gemini_color": gemini_color,
             "winner": winner,

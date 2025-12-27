@@ -38,4 +38,3 @@ echo ========================================
 echo Parse complete! Check training_data folder
 echo ========================================
 pause
-

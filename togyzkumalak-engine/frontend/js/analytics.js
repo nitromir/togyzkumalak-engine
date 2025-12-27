@@ -487,4 +487,3 @@ document.addEventListener('DOMContentLoaded', () => {
     window.analyticsController = analyticsController;
     window.abTestController = abTestController;
 });
-

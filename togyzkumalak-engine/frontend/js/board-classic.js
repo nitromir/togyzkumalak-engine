@@ -8,10 +8,12 @@ class ClassicBoard {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
         
-        this.padding = 40;
+        // Layout: increased gap between pits for better readability of confidence indicator
+        // Keep total width within 900px canvas by reducing padding.
+        this.padding = 25;
         this.pitWidth = 70;
         this.pitHeight = 120;
-        this.gap = 15;
+        this.gap = 30;
         this.rowGap = 80; // Increased gap between rows for labels
         
         this.colors = {
@@ -33,8 +35,24 @@ class ClassicBoard {
         this.humanColor = 'white';
         this.onMoveClick = null;
         this.lastMove = null;
+        this.probabilities = null; // Map of pitIndex -> float (0-1)
+        this.showProbabilities = true;
         
         this.init();
+    }
+
+    setShowProbabilities(enabled) {
+        this.showProbabilities = !!enabled;
+        if (this.gameState) {
+            this.render(this.gameState);
+        }
+    }
+
+    setProbabilities(probs) {
+        this.probabilities = probs;
+        if (this.gameState) {
+            this.render(this.gameState);
+        }
     }
 
     highlightLastMove(index, player) {
@@ -130,6 +148,32 @@ class ClassicBoard {
                 ctx.strokeStyle = this.colors.lastMove;
                 ctx.lineWidth = 4;
                 ctx.strokeRect(x - 4, y - 4, this.pitWidth + 8, this.pitHeight + 8);
+            }
+
+            // Draw Confidence Bar (Probabilities)
+            if (this.showProbabilities && this.probabilities && this.probabilities[pitIndex] !== undefined && player === this.humanColor) {
+                const prob = this.probabilities[pitIndex];
+                if (prob > 0.01) {
+                    const barHeight = Math.max(2, this.pitHeight * prob);
+                    const barY = y + this.pitHeight - barHeight;
+                    
+                    ctx.fillStyle = prob > 0.5 ? '#10b981' : (prob > 0.2 ? '#f59e0b' : '#6366f1');
+                    ctx.globalAlpha = 0.6;
+                    // Place bar into the gap area between pits (or inside the last pit to avoid clipping)
+                    const isLastCol = i === 8;
+                    const barX = isLastCol
+                        ? (x + this.pitWidth - 8)
+                        : (x + this.pitWidth + (this.gap / 2) - 3);
+                    ctx.fillRect(barX, barY, 6, barHeight);
+                    ctx.globalAlpha = 1.0;
+                    
+                    // Percentage text
+                    ctx.fillStyle = this.colors.textLight;
+                    ctx.font = '9px Segoe UI';
+                    ctx.textAlign = 'left';
+                    const textX = isLastCol ? (x + this.pitWidth - 32) : (barX + 10);
+                    ctx.fillText(`${Math.round(prob * 100)}%`, textX, barY + barHeight/2 + 4);
+                }
             }
         }
     }

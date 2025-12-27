@@ -599,4 +599,3 @@ class RealMetricsCollector:
 
 # Global collector instance
 metrics_collector = RealMetricsCollector()
-

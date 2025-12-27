@@ -41,6 +41,7 @@ class TrainingProgress:
     avg_steps: float
     current_game_step: int = 0
     error_message: Optional[str] = None
+    model_info: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
 
@@ -237,7 +238,30 @@ class GymTrainingManager:
             
             # Initialize environment and network
             self._init_environment()
-            self._init_network(config.hidden_size)
+            
+            # Check if we should use existing network or create new one
+            # If current network exists and its hidden_size matches config, keep it
+            should_init_new = True
+            if self.policy_net is not None:
+                # Get current hidden_size from the first layer
+                try:
+                    current_hidden = next(self.policy_net.parameters()).shape[0]
+                    if current_hidden == config.hidden_size:
+                        msg = f"Используется существующая сеть (hidden_size={current_hidden})"
+                        print(f"[Training] {msg}")
+                        progress.model_info = msg
+                        should_init_new = False
+                    else:
+                        msg = f"Размер не совпал (текущий {current_hidden} != {config.hidden_size}), создана новая сеть"
+                        print(f"[Training] {msg}")
+                        progress.model_info = msg
+                except Exception as e:
+                    print(f"[Training] Could not determine current hidden size: {e}")
+            
+            if should_init_new:
+                if progress.model_info is None:
+                    progress.model_info = f"Создана новая сеть (hidden_size={config.hidden_size})"
+                self._init_network(config.hidden_size)
             
             results = []
             recorded_games = []
@@ -288,15 +312,24 @@ class GymTrainingManager:
             raise
     
     def load_model(self, model_path: str) -> bool:
-        """Load a saved model."""
+        """Load a saved model - auto-detects architecture from state dict."""
+        # #region agent log
+        import json as _json; _log_path = r"c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log"
+        def _dbg(hyp, msg, data): open(_log_path, 'a').write(_json.dumps({"hypothesisId": hyp, "location": "gym_training.py:load_model", "message": msg, "data": data, "timestamp": __import__('time').time()}) + '\n')
+        # #endregion
         try:
-            if self.policy_net is None:
-                self._init_network()
+            # #region agent log
+            _dbg("H1", "Entry: model_path", {"path": model_path, "exists": __import__('os').path.exists(model_path)})
+            # #endregion
             
             # Determine device
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             
             checkpoint = torch.load(model_path, map_location=device)
+            
+            # #region agent log
+            _dbg("H2", "Checkpoint loaded", {"type": str(type(checkpoint)), "keys": list(checkpoint.keys()) if isinstance(checkpoint, dict) else "not_dict"})
+            # #endregion
             
             # Handle both formats: direct state_dict or {'model_state_dict': ...}
             if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
@@ -306,16 +339,61 @@ class GymTrainingManager:
             else:
                 state_dict = checkpoint
             
-            self.policy_net.load_state_dict(state_dict)
+            # Detect architecture from state dict
+            layer_keys = [k for k in state_dict.keys() if 'weight' in k]
+            num_layers = len(layer_keys)
             
-            # Also apply to ai_engine for gameplay
+            # Get dimensions from the first layer
+            first_layer_key = layer_keys[0]
+            hidden_size = state_dict[first_layer_key].shape[0]
+            input_size = state_dict[first_layer_key].shape[1]
+            
+            # #region agent log
+            _dbg("ARCH_DETECT", "Detected architecture", {"hidden_size": hidden_size, "input_size": input_size, "num_layers": num_layers, "layer_keys": layer_keys})
+            # #endregion
+            
             from .ai_engine import ai_engine
-            if 5 in ai_engine.models:
-                ai_engine.models[5].load_state_dict(state_dict)
-                print(f"[OK] Model also loaded to ai_engine level 5")
+            
+            # Dynamically create matching network if needed
+            if num_layers == 4:
+                # 4-layer architecture (usually from ai_engine.PolicyNetwork)
+                from .ai_engine import PolicyNetwork as AIPolicy
+                target_model = AIPolicy(input_size=input_size, hidden_size=hidden_size, output_size=9)
+            elif num_layers == 3:
+                # 3-layer architecture (usually from gym_training.PolicyNetwork)
+                target_model = PolicyNetwork(input_size=input_size, hidden_size=hidden_size, output_size=9)
+            else:
+                # Fallback for any other number of layers
+                # #region agent log
+                _dbg("ARCH_GENERIC", "Generic architecture creation", {"layers": num_layers, "hidden": hidden_size})
+                # #endregion
+                # For now, use gym_training.PolicyNetwork as template
+                target_model = PolicyNetwork(input_size=input_size, hidden_size=hidden_size, output_size=9)
+            
+            # Apply to ai_engine level 5 (Expert/Self-Play/Training level)
+            ai_engine.models[5] = target_model
+            ai_engine.current_model_name = Path(model_path).stem
+            
+            # #region agent log
+            _dbg("H4_FIX", "State dict keys comparison", {"state_keys": list(state_dict.keys())[:10], "target_keys": list(target_model.state_dict().keys())[:10]})
+            # #endregion
+            
+            target_model.load_state_dict(state_dict)
+            
+            # Also update self.policy_net reference
+            self.policy_net = target_model
+            
+            print(f"[OK] Model loaded (hidden_size={hidden_size}, layers={num_layers})")
+            
+            # #region agent log
+            _dbg("SUCCESS", "Model loaded successfully", {"path": model_path, "hidden_size": hidden_size})
+            # #endregion
             
             return True
         except Exception as e:
+            # #region agent log
+            _dbg("ERROR", "Exception occurred", {"error": str(e), "error_type": str(type(e).__name__)})
+            # #endregion
             print(f"Error loading model: {e}")
             import traceback
             traceback.print_exc()

@@ -2,8 +2,10 @@
 AI Engine for Togyzkumalak.
 
 Provides multiple AI levels from random to neural network-based.
+Level 6 uses Google Gemini LLM for gameplay.
 """
 
+import asyncio
 import os
 import random
 import time
@@ -50,11 +52,14 @@ class AIEngine:
     3. Basic NN - Simple neural network
     4. Advanced NN - Deeper network with better training
     5. Expert NN - Best available model
+    6. Gemini AI - Google Gemini LLM opponent
     """
     
     def __init__(self):
         self.models: Dict[int, PolicyNetwork] = {}
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.current_model_name: str = "default"
+        self.gemini_player = None  # Lazy-loaded Gemini player
         self._load_models()
     
     def _load_models(self):
@@ -77,6 +82,8 @@ class AIEngine:
             if os.path.exists(model_path):
                 try:
                     model.load_state_dict(torch.load(model_path, map_location=self.device))
+                    if level == 5:
+                        self.current_model_name = f"policy_level_5"
                 except Exception as e:
                     print(f"Failed to load model for level {level}: {e}")
             
@@ -119,6 +126,8 @@ class AIEngine:
             else:
                 self.models[5].load_state_dict(checkpoint)
                 print(f"[OK] Auto-loaded human model v{latest_version}")
+            
+            self.current_model_name = latest_file.replace('.pt', '')
                 
         except Exception as e:
             print(f"[WARNING] Could not auto-load human model: {e}")
@@ -150,6 +159,8 @@ class AIEngine:
             move = self._random_move(legal_moves)
         elif level == 2:
             move = self._heuristic_move(board, legal_moves)
+        elif level == 6:
+            move = self._gemini_move(board, legal_moves)
         else:
             move = self._neural_move(board, legal_moves, level)
         
@@ -264,6 +275,55 @@ class AIEngine:
             return int(np.random.choice(9, p=masked_probs))
         else:
             return int(np.argmax(masked_probs))
+    
+    def _gemini_move(
+        self,
+        board: TogyzkumalakBoard,
+        legal_moves: List[int]
+    ) -> int:
+        """Level 6: Gemini LLM-based move selection."""
+        try:
+            # Lazy-load Gemini player
+            if self.gemini_player is None:
+                from .gemini_battle import GeminiPlayer
+                self.gemini_player = GeminiPlayer()
+            
+            if not self.gemini_player.is_available():
+                print("[WARNING] Gemini not available, falling back to heuristic")
+                return self._heuristic_move(board, legal_moves)
+            
+            # Determine current player color
+            current_player = board.current_player
+            
+            # Get move from Gemini (async call in sync context)
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            if loop.is_running():
+                # We're already in an async context, use nest_asyncio pattern
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(
+                        lambda: asyncio.run(
+                            self.gemini_player.get_move(board, current_player, timeout=30)
+                        )
+                    )
+                    move, explanation = future.result(timeout=35)
+            else:
+                # Simple case - run async in new loop
+                move, explanation = loop.run_until_complete(
+                    self.gemini_player.get_move(board, current_player, timeout=30)
+                )
+            
+            print(f"[Gemini] Move: {move}, Explanation: {explanation}")
+            return move - 1  # Convert to 0-indexed
+            
+        except Exception as e:
+            print(f"[ERROR] Gemini move failed: {e}, falling back to heuristic")
+            return self._heuristic_move(board, legal_moves)
     
     def get_move_probabilities(
         self,

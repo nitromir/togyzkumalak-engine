@@ -26,6 +26,7 @@ from .gemini_battle import gemini_battle_manager, BattleConfig
 from .metrics_collector import metrics_collector
 from .schema_ab_testing import ab_test_manager
 from .wandb_integration import wandb_tracker
+from .task_manager import az_task_manager
 
 
 # FastAPI app
@@ -137,8 +138,8 @@ async def create_game(request: NewGameRequest):
     if request.player_color not in ["white", "black"]:
         raise HTTPException(status_code=400, detail="Invalid player color")
     
-    if request.ai_level not in range(1, 6):
-        raise HTTPException(status_code=400, detail="AI level must be 1-5")
+    if request.ai_level not in range(1, 7):
+        raise HTTPException(status_code=400, detail="AI level must be 1-6")
     
     game = game_manager.create_game(
         human_color=request.player_color,
@@ -300,7 +301,8 @@ async def get_ai_levels():
             {"level": 2, "name": "Beginner", "elo": 1200, "description": "Simple heuristic-based play"},
             {"level": 3, "name": "Intermediate", "elo": 1500, "description": "Neural network (basic)"},
             {"level": 4, "name": "Advanced", "elo": 1800, "description": "Neural network (deep)"},
-            {"level": 5, "name": "Expert", "elo": 2100, "description": "Best available model"}
+            {"level": 5, "name": "Expert", "elo": 2100, "description": "Best available model"},
+            {"level": 6, "name": "Gemini AI", "elo": 2400, "description": "Google Gemini LLM opponent"}
         ]
     }
 
@@ -509,6 +511,47 @@ class GeminiBattleRequest(BaseModel):
     generate_summaries: bool = True
 
 
+class AlphaZeroTrainingRequest(BaseModel):
+    numIters: int = 10
+    numEps: int = 10
+    numMCTSSims: int = 25
+    cpuct: float = 1.0
+
+
+@app.post("/api/training/alphazero/start")
+async def start_alphazero_training(request: AlphaZeroTrainingRequest):
+    """Start AlphaZero self-play training."""
+    try:
+        task_id = az_task_manager.start_training(request.dict())
+        return {"task_id": task_id, "status": "started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/alphazero/sessions")
+async def list_alphazero_sessions():
+    """List all AlphaZero sessions."""
+    return {"sessions": az_task_manager.tasks}
+
+
+@app.get("/api/training/alphazero/sessions/{task_id}")
+async def get_alphazero_status(task_id: str):
+    """Get status of an AlphaZero session."""
+    status = az_task_manager.get_status(task_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return status
+
+
+@app.post("/api/training/alphazero/sessions/{task_id}/stop")
+async def stop_alphazero_training(task_id: str):
+    """Stop an AlphaZero session."""
+    success = az_task_manager.stop_task(task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"status": "stopping"}
+
+
 @app.post("/api/training/start")
 async def start_training(config: TrainingConfigRequest):
     """Start a new gym training session."""
@@ -590,11 +633,58 @@ async def load_model(model_name: str):
         success = training_manager.load_model(model_path)
         
         if success:
-            return {"status": "loaded", "model": model_name}
+            # Get hidden_size from the loaded model
+            hidden_size = 64
+            if training_manager.policy_net is not None:
+                try:
+                    hidden_size = next(training_manager.policy_net.parameters()).shape[0]
+                except:
+                    pass
+                    
+            return {
+                "status": "loaded", 
+                "model": model_name,
+                "hidden_size": hidden_size
+            }
         else:
             raise HTTPException(status_code=500, detail="Failed to load model")
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/training/models/{model_name}")
+async def delete_model(model_name: str):
+    """Delete a saved model from disk."""
+    try:
+        models = training_manager.list_models()
+        model_path = None
+        
+        for model in models:
+            if model["name"] == model_name:
+                model_path = model["path"]
+                break
+        
+        if not model_path:
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        # Delete file
+        if os.path.exists(model_path):
+            os.remove(model_path)
+            return {"status": "deleted", "model": model_name}
+        else:
+            raise HTTPException(status_code=404, detail="Model file not found on disk")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/models/active")
+async def get_active_model():
+    """Get the name of the currently active model."""
+    try:
+        from .ai_engine import ai_engine
+        return {"model": ai_engine.current_model_name}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -704,8 +794,17 @@ async def export_gemini_training_data():
     Export Gemini battle games to training data format.
     Converts all saved game logs to transitions for training.
     """
+    # #region agent log
+    import json as _json; _log_path = r"c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log"
+    def _dbg(hyp, msg, data): open(_log_path, 'a').write(_json.dumps({"hypothesisId": hyp, "location": "main.py:export_gemini", "message": msg, "data": data, "timestamp": __import__('time').time()}) + '\n')
+    # #endregion
     try:
-        games_dir = os.path.join(gemini_battle_manager.logs_dir, "games")
+        # Fix: games are in gemini_battles/games subdirectory
+        games_dir = os.path.join(gemini_battle_manager.logs_dir, "gemini_battles", "games")
+        
+        # #region agent log
+        _dbg("H8", "Games dir check", {"dir": games_dir, "exists": os.path.exists(games_dir), "logs_dir": gemini_battle_manager.logs_dir})
+        # #endregion
         
         if not os.path.exists(games_dir):
             return {"status": "no_data", "message": "No Gemini battle games found", "games_exported": 0}
@@ -1315,6 +1414,7 @@ class HumanTrainingRequest(BaseModel):
     learning_rate: float = 0.001
     model_name: str = "policy_net_human"
     use_compact: bool = True  # Use compact format (smaller, faster)
+    base_model: str = ""  # If provided, load this model as starting point
 
 
 @app.post("/api/training/human-data")
@@ -1355,7 +1455,8 @@ async def train_on_human_data(request: HumanTrainingRequest, background_tasks: B
             epochs=request.epochs,
             learning_rate=request.learning_rate,
             model_name=request.model_name,
-            use_compact=request.use_compact
+            use_compact=request.use_compact,
+            base_model=request.base_model
         )
         
         return {
@@ -1386,7 +1487,8 @@ async def run_human_data_training(
     epochs: int,
     learning_rate: float,
     model_name: str,
-    use_compact: bool
+    use_compact: bool,
+    base_model: str = ""
 ):
     """Background task for human data training."""
     import torch
@@ -1403,7 +1505,8 @@ async def run_human_data_training(
             "loss": 0,
             "samples_trained": 0,
             "total_samples": 0,
-            "start_time": datetime.datetime.now().isoformat()
+            "start_time": datetime.datetime.now().isoformat(),
+            "base_model": base_model
         }
         
         # Load training data
@@ -1479,14 +1582,51 @@ async def run_human_data_training(
         # Create or load model - use the highest level model from AIEngine
         from .ai_engine import ai_engine, PolicyNetwork
         
-        # Get existing model or create new one (input_size=128 to match PolicyNetwork)
-        if 5 in ai_engine.models:
+        model_info = ""
+        
+        # Load base model if specified, otherwise create new
+        if base_model:
+            print(f"[Human Training] Loading base model: {base_model}")
+            # Find the base model file
+            engine_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            models_dir = os.path.join(engine_dir, "models")
+            base_path = os.path.join(models_dir, f"{base_model}.pt")
+            
+            if os.path.exists(base_path):
+                checkpoint = torch.load(base_path, map_location="cpu")
+                state_dict = checkpoint.get('model_state_dict', checkpoint)
+                
+                # Detect architecture from state dict
+                first_layer = state_dict.get('network.0.weight')
+                if first_layer is not None:
+                    hidden_size = first_layer.shape[0]
+                else:
+                    hidden_size = 256
+                
+                model = PolicyNetwork(input_size=128, hidden_size=hidden_size, output_size=9)
+                model.load_state_dict(state_dict)
+                ai_engine.models[5] = model
+                model_info = f"Дообучение на базе {base_model} (hidden={hidden_size})"
+                print(f"[Human Training] Loaded base model with hidden_size={hidden_size}")
+            else:
+                model_info = f"Базовая модель {base_model} не найдена, создана новая (hidden=256)"
+                print(f"[Human Training] Base model not found: {base_path}, creating new")
+                model = PolicyNetwork(input_size=128, hidden_size=256, output_size=9)
+                ai_engine.models[5] = model
+        elif 5 in ai_engine.models:
             model = ai_engine.models[5]
+            try:
+                current_hidden = next(model.parameters()).shape[0]
+                model_info = f"Продолжение обучения текущей модели (hidden={current_hidden})"
+            except:
+                model_info = "Продолжение обучения текущей модели"
         else:
             # Create new model with standard input size
+            model_info = "Создана новая модель (hidden=256)"
             model = PolicyNetwork(input_size=128, hidden_size=256, output_size=9)
             ai_engine.models[5] = model
         
+        human_training_sessions[session_id]["model_info"] = model_info
         model.train()  # Set to training mode
         
         # Training setup
