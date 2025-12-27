@@ -420,6 +420,90 @@ Provide brief commentary (2-3 sentences):
                 "error": str(e)
             }
     
+    async def get_move_probabilities(
+        self,
+        board_state: Dict
+    ) -> Dict[int, float]:
+        """
+        Get move probabilities (confidence levels) for all legal moves using Gemini.
+        Returns a dictionary mapping move (0-8) to probability (0.0-1.0).
+        """
+        if not self.client:
+            return {i: 0.0 for i in range(9)}
+
+        position_text = self._format_position(board_state)
+        legal_moves = [m + 1 for m in board_state.get("legal_moves", list(range(9)))]
+        
+        prompt = f"""{position_text}
+
+Вы — гроссмейстер Тогыз Кумалак. Оцените вероятность того, что каждый из доступных ходов является наилучшим в данной позиции.
+ДОСТУПНЫЕ ХОДЫ: {legal_moves}
+
+ОТВЕТЬТЕ СТРОГО В ФОРМАТЕ JSON, где ключи — номера лунок (1-9), а значения — вероятность (от 0 до 1). 
+Сумма всех вероятностей должна быть равна 1.0.
+
+Пример ответа:
+{{
+  "1": 0.1,
+  "2": 0.8,
+  "5": 0.1
+}}"""
+
+        try:
+            from google.genai import types
+            gen_cfg = types.GenerateContentConfig(
+                max_output_tokens=300,
+                temperature=0.1,
+                response_mime_type="application/json"
+            )
+            
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=gen_cfg
+                )
+            )
+            
+            text = self._response_to_text(response)
+            import json
+            probs_data = json.loads(text)
+            
+            # Map back to 0-8 indexing and ensure all 9 pits are covered
+            result = {i: 0.0 for i in range(9)}
+            for move_str, prob in probs_data.items():
+                try:
+                    move_idx = int(move_str) - 1
+                    if 0 <= move_idx < 9:
+                        result[move_idx] = float(prob)
+                except (ValueError, TypeError):
+                    continue
+            
+            # Re-normalize if necessary
+            total = sum(result.values())
+            if total > 0:
+                result = {k: v / total for k, v in result.items()}
+            else:
+                # Fallback to uniform if something went wrong
+                if legal_moves:
+                    val = 1.0 / len(legal_moves)
+                    for m in legal_moves:
+                        result[m-1] = val
+                        
+            return result
+            
+        except Exception as e:
+            print(f"[ERROR] Gemini probabilities failed: {e}")
+            # Fallback to uniform
+            result = {i: 0.0 for i in range(9)}
+            if legal_moves:
+                val = 1.0 / len(legal_moves)
+                for m in legal_moves:
+                    result[m-1] = val
+            return result
+
     def is_available(self) -> bool:
         """Check if Gemini is available."""
         return self.client is not None

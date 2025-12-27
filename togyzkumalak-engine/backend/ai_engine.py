@@ -330,25 +330,47 @@ class AIEngine:
         board: TogyzkumalakBoard,
         level: int = 3
     ) -> Dict[int, float]:
-        """Get move probabilities for visualization.
-        
-        For Gemini level (6), we use the best available neural network model
-        to calculate probabilities for the human player's moves.
-        """
-        # For Gemini level, use the best available model (level 5)
-        effective_level = 5 if level == 6 else level
-        model = self.models.get(effective_level)
-        
-        # Fallback: try to find any available model
-        if not model:
-            for fallback_level in [5, 4, 3, 2, 1]:
-                model = self.models.get(fallback_level)
-                if model:
-                    break
-        
+        """Get move probabilities for visualization."""
+        if level == 6:
+            # Handle Gemini async probabilities in sync context
+            try:
+                from .gemini_analyzer import gemini_analyzer
+                if not gemini_analyzer.is_available():
+                    legal_moves = board.get_legal_moves()
+                    return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
+                
+                # Use current event loop if available, else create new one
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                board_state = board.get_state_dict()
+                board_state["legal_moves"] = board.get_legal_moves()
+                
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        future = pool.submit(
+                            lambda: asyncio.run(
+                                gemini_analyzer.get_move_probabilities(board_state)
+                            )
+                        )
+                        return future.result(timeout=30)
+                else:
+                    return loop.run_until_complete(
+                        gemini_analyzer.get_move_probabilities(board_state)
+                    )
+            except Exception as e:
+                print(f"[ERROR] Gemini probabilities failed: {e}")
+                legal_moves = board.get_legal_moves()
+                return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
+
+        model = self.models.get(level)
         if not model:
             legal_moves = board.get_legal_moves()
-            return {m: 1.0 / len(legal_moves) for m in legal_moves}
+            return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
         
         obs = board.to_observation()
         obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
@@ -426,11 +448,17 @@ class AIEngine:
         Get raw policy output for training data collection.
         
         Returns:
-            Tuple of (raw_logits, action_probs, value_estimate)
-            - raw_logits: Raw network output before softmax (for KL regularization)
-            - action_probs: Probabilities after softmax
-            - value_estimate: Position evaluation [-1, 1]
+        ...
         """
+        if level == 6:
+            probs_dict = self.get_move_probabilities(board, level=6)
+            action_probs = [probs_dict.get(i, 0.0) for i in range(9)]
+            # For Gemini, we don't have raw logits, so we use log of probs (proxy)
+            import numpy as np
+            raw_logits = np.log(np.array(action_probs) + 1e-10).tolist()
+            value = self.evaluate_position(board)
+            return raw_logits, action_probs, value
+
         model = self.models.get(level)
         
         if not model:
