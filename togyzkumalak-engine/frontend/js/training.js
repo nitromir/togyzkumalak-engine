@@ -745,17 +745,26 @@ class TrainingController {
     async startAlphaZero() {
         const useBootstrap = document.getElementById('azUseBootstrap')?.checked ?? true;
         
+        // Получаем значения отдельно
         const numIters = parseInt(document.getElementById('azIters').value) || 100;
+        const numEps = parseInt(document.getElementById('azEps').value) || 100;
+        const numMCTSSims = parseInt(document.getElementById('azSims').value) || 100;
+        const cpuct = parseFloat(document.getElementById('azCpuct').value) || 1.0;
+        const batch_size = parseInt(document.getElementById('azBatchSize')?.value) || 256;
+        const hidden_size = parseInt(document.getElementById('azHiddenSize')?.value) || 256;
+        const epochs = parseInt(document.getElementById('azEpochs')?.value) || 10;
+        const use_multiprocessing = document.getElementById('azParallel')?.checked ?? true;
+        
         const config = {
             numIters: numIters,
-            numEps: parseInt(document.getElementById('azEps').value) || 100,
-            numMCTSSims: parseInt(document.getElementById('azSims').value) || 100,
-            cpuct: parseFloat(document.getElementById('azCpuct').value) || 1.0,
-            batch_size: parseInt(document.getElementById('azBatchSize')?.value) || 256,
-            hidden_size: parseInt(document.getElementById('azHiddenSize')?.value) || 256,
-            epochs: parseInt(document.getElementById('azEpochs')?.value) || 10,
+            numEps: numEps,
+            numMCTSSims: numMCTSSims,
+            cpuct: cpuct,
+            batch_size: batch_size,
+            hidden_size: hidden_size,
+            epochs: epochs,
             use_bootstrap: useBootstrap,
-            use_multiprocessing: document.getElementById('azParallel')?.checked ?? true,
+            use_multiprocessing: use_multiprocessing,
             save_every_n_iters: Math.max(1, Math.floor(numIters / 20) || 5)
         };
 
