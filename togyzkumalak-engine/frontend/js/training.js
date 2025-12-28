@@ -409,12 +409,91 @@ class TrainingController {
         
         const btnStart = document.getElementById('btnStartAlphaZero');
         const btnStop = document.getElementById('btnStopAlphaZero');
+        const btnOptimal = document.getElementById('btnLoadOptimalConfig');
         
         btnStart?.addEventListener('click', () => this.startAlphaZero());
         btnStop?.addEventListener('click', () => this.stopAlphaZero());
+        btnOptimal?.addEventListener('click', () => this.loadOptimalConfig());
         
         this.initAlphaZeroCharts();
         this.loadAlphaZeroMetrics();  // Load last training metrics
+        this.loadGpuInfo();  // Load GPU information
+    }
+    
+    /**
+     * Load GPU information from server
+     */
+    async loadGpuInfo() {
+        try {
+            const response = await fetch('/api/training/alphazero/gpu-info');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const gpuInfoEl = document.getElementById('gpuInfo');
+            
+            if (gpuInfoEl) {
+                if (data.cuda_available && data.gpu_count > 0) {
+                    const gpuNames = data.gpus.map(g => `${g.name} (${g.memory_total_gb}GB)`).join(', ');
+                    gpuInfoEl.innerHTML = `
+                        <span class="gpu-status good">🎮 ${data.gpu_count}x GPU: ${gpuNames}</span>
+                    `;
+                } else {
+                    gpuInfoEl.innerHTML = `<span class="gpu-status warning">⚠️ CPU режим (CUDA недоступен)</span>`;
+                }
+            }
+            
+            // Update optimal config button
+            if (data.gpu_count > 0) {
+                const btnOptimal = document.getElementById('btnLoadOptimalConfig');
+                if (btnOptimal) {
+                    btnOptimal.textContent = `⚡ Авто-конфиг для ${data.gpu_count} GPU`;
+                }
+            }
+            
+        } catch (e) {
+            console.error('Error loading GPU info:', e);
+        }
+    }
+    
+    /**
+     * Load optimal training configuration based on available GPUs
+     */
+    async loadOptimalConfig() {
+        try {
+            const hours = parseFloat(prompt('Сколько часов доступно для обучения?', '1')) || 1;
+            
+            const response = await fetch(`/api/training/alphazero/optimal-config?hours=${hours}`);
+            if (!response.ok) throw new Error('Failed to load optimal config');
+            
+            const data = await response.json();
+            const config = data.recommended_config;
+            
+            // Apply config to form
+            document.getElementById('azIters').value = config.numIters || 100;
+            document.getElementById('azEps').value = config.numEps || 100;
+            document.getElementById('azSims').value = config.numMCTSSims || 100;
+            document.getElementById('azCpuct').value = config.cpuct || 1.0;
+            
+            if (document.getElementById('azBatchSize')) {
+                document.getElementById('azBatchSize').value = config.batch_size || 256;
+            }
+            if (document.getElementById('azHiddenSize')) {
+                document.getElementById('azHiddenSize').value = config.hidden_size || 256;
+            }
+            if (document.getElementById('azUseBootstrap')) {
+                document.getElementById('azUseBootstrap').checked = config.use_bootstrap !== false;
+            }
+            
+            // Show tips
+            const tips = data.tips || [];
+            if (tips.length > 0) {
+                alert(`🚀 Оптимальная конфигурация установлена!\n\n${tips.join('\n')}\n\nОжидаемое время: ~${Math.round(data.estimated_time_minutes)} мин`);
+            }
+            
+        } catch (e) {
+            console.error('Error loading optimal config:', e);
+            alert('Ошибка загрузки оптимальной конфигурации: ' + e.message);
+        }
     }
     
     /**
@@ -487,22 +566,70 @@ class TrainingController {
     }
     
     /**
-     * Render list of best checkpoints
+     * Render list of best checkpoints with download buttons
      */
     renderCheckpointsList(checkpoints) {
         const container = document.getElementById('azCheckpointsList');
         if (!container || !checkpoints.length) return;
         
-        container.innerHTML = checkpoints.slice(0, 5).map((cp, i) => `
-            <div class="checkpoint-item ${i === 0 ? 'best' : ''}">
+        container.innerHTML = checkpoints.slice(0, 10).map((cp, i) => `
+            <div class="checkpoint-item ${i === 0 ? 'best' : ''} ${cp.accepted ? 'accepted' : 'rejected'}">
                 <span class="cp-rank">#${i + 1}</span>
                 <span class="cp-iter">iter ${cp.iteration}</span>
-                <span class="cp-loss">${cp.policy_loss.toFixed(3)}</span>
-                <button class="btn btn-tiny" onclick="trainingController.loadAlphaZeroCheckpoint('${cp.filename}')">
-                    ⬇️
-                </button>
+                <div class="cp-metrics">
+                    <span class="cp-loss" title="Policy Loss">📉 ${cp.policy_loss?.toFixed(3) || '?'}</span>
+                    <span class="cp-value" title="Value Loss">📊 ${cp.value_loss?.toFixed(3) || '?'}</span>
+                    <span class="cp-winrate" title="Win Rate">${cp.win_rate ? (cp.win_rate * 100).toFixed(0) + '%' : '-'}</span>
+                </div>
+                <div class="cp-actions">
+                    <button class="btn btn-tiny btn-primary" onclick="trainingController.loadAlphaZeroCheckpoint('${cp.filename}')" title="Загрузить для игры">
+                        📦
+                    </button>
+                    <button class="btn btn-tiny btn-secondary" onclick="trainingController.downloadCheckpoint('${cp.filename}')" title="Скачать файл">
+                        💾
+                    </button>
+                </div>
             </div>
         `).join('');
+    }
+    
+    /**
+     * Download a checkpoint file to local machine
+     */
+    async downloadCheckpoint(filename) {
+        try {
+            const modelName = filename.replace('.pth.tar', '');
+            const url = `/api/training/alphazero/checkpoints/${modelName}/download`;
+            
+            // Create temporary link and click it
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            this.showNotification(`⬇️ Скачивание: ${filename}`);
+        } catch (e) {
+            console.error('Error downloading checkpoint:', e);
+            alert('Ошибка скачивания: ' + e.message);
+        }
+    }
+    
+    /**
+     * Load all checkpoints with detailed metrics for visualization
+     */
+    async loadAllCheckpointsMetrics() {
+        try {
+            const response = await fetch('/api/training/alphazero/checkpoints');
+            if (!response.ok) return [];
+            
+            const data = await response.json();
+            return data.checkpoints || [];
+        } catch (e) {
+            console.error('Error loading checkpoints:', e);
+            return [];
+        }
     }
     
     /**
@@ -551,11 +678,16 @@ class TrainingController {
         const useBootstrap = document.getElementById('azUseBootstrap')?.checked ?? true;
         
         const config = {
-            numIters: parseInt(document.getElementById('azIters').value),
-            numEps: parseInt(document.getElementById('azEps').value),
-            numMCTSSims: parseInt(document.getElementById('azSims').value),
-            cpuct: parseFloat(document.getElementById('azCpuct').value),
-            useBootstrap: useBootstrap
+            numIters: parseInt(document.getElementById('azIters').value) || 100,
+            numEps: parseInt(document.getElementById('azEps').value) || 100,
+            numMCTSSims: parseInt(document.getElementById('azSims').value) || 100,
+            cpuct: parseFloat(document.getElementById('azCpuct').value) || 1.0,
+            batch_size: parseInt(document.getElementById('azBatchSize')?.value) || 256,
+            hidden_size: parseInt(document.getElementById('azHiddenSize')?.value) || 256,
+            epochs: parseInt(document.getElementById('azEpochs')?.value) || 10,
+            use_bootstrap: useBootstrap,
+            use_multiprocessing: document.getElementById('azParallel')?.checked ?? true,
+            save_every_n_iters: Math.max(1, Math.floor(config?.numIters / 20) || 5)
         };
 
         try {
@@ -574,6 +706,10 @@ class TrainingController {
 
             document.getElementById('azProgressSection').classList.remove('hidden');
             document.getElementById('btnStopAlphaZero').classList.remove('hidden');
+            
+            // Show live checkpoints section
+            const liveCheckpointsEl = document.getElementById('azLiveCheckpoints');
+            if (liveCheckpointsEl) liveCheckpointsEl.classList.remove('hidden');
             
             this.startAlphaZeroPolling();
         } catch (error) {
@@ -597,21 +733,54 @@ class TrainingController {
 
             const task = await response.json();
             
+            // Update progress bar
             document.getElementById('azProgressBar').style.width = `${task.progress}%`;
             document.getElementById('azCurrentIter').textContent = `${task.current_iteration} / ${task.total_iterations}`;
             document.getElementById('azStatusText').textContent = task.status;
-
-            // Update charts
-            if (task.metrics.loss.length > 0) {
-                this.azLossChart.data.labels = task.metrics.loss.map(m => m.iter);
-                this.azLossChart.data.datasets[0].data = task.metrics.loss.map(m => m.value);
-                this.azLossChart.update('none');
+            
+            // Update elapsed time
+            const elapsedEl = document.getElementById('azElapsedTime');
+            if (elapsedEl && task.elapsed_time) {
+                const mins = Math.floor(task.elapsed_time / 60);
+                const secs = Math.floor(task.elapsed_time % 60);
+                elapsedEl.textContent = `${mins}м ${secs}с`;
+            }
+            
+            // Update GPU info
+            const gpuEl = document.getElementById('azGpuUsed');
+            if (gpuEl && task.gpus !== undefined) {
+                gpuEl.textContent = task.gpus > 0 ? `${task.gpus}x GPU` : 'CPU';
             }
 
-            if (task.metrics.accuracy && task.metrics.accuracy.length > 0) {
-                this.azEloChart.data.labels = task.metrics.accuracy.map(m => m.iter);
-                this.azEloChart.data.datasets[0].data = task.metrics.accuracy.map(m => m.value);
+            // Update charts with detailed metrics
+            if (task.metrics && task.metrics.length > 0) {
+                // Loss chart
+                this.azLossChart.data.labels = task.metrics.map(m => m.iteration);
+                this.azLossChart.data.datasets[0].data = task.metrics.map(m => m.policy_loss);
+                if (this.azLossChart.data.datasets[1]) {
+                    this.azLossChart.data.datasets[1].data = task.metrics.map(m => m.value_loss);
+                }
+                this.azLossChart.update('none');
+                
+                // Win rate chart
+                this.azEloChart.data.labels = task.metrics.map(m => m.iteration);
+                this.azEloChart.data.datasets[0].data = task.metrics.map(m => (m.win_rate || 0) * 100);
                 this.azEloChart.update('none');
+                
+                // Update live metrics display
+                const lastMetrics = task.metrics[task.metrics.length - 1];
+                if (lastMetrics) {
+                    const policyEl = document.getElementById('lastPolicyLoss');
+                    const valueEl = document.getElementById('lastValueLoss');
+                    const winEl = document.getElementById('lastWinRate');
+                    
+                    if (policyEl) policyEl.textContent = lastMetrics.policy_loss?.toFixed(3) || '-';
+                    if (valueEl) valueEl.textContent = lastMetrics.value_loss?.toFixed(3) || '-';
+                    if (winEl) winEl.textContent = ((lastMetrics.win_rate || 0) * 100).toFixed(0) + '%';
+                }
+                
+                // Refresh checkpoints list to show new ones
+                this.loadAlphaZeroMetrics();
             }
 
             if (task.status === 'completed' || task.status === 'error' || task.status === 'stopped') {
@@ -619,8 +788,13 @@ class TrainingController {
                 document.getElementById('btnStartAlphaZero').disabled = false;
                 document.getElementById('btnStopAlphaZero').classList.add('hidden');
                 
+                // Final refresh of checkpoints
+                this.loadAlphaZeroMetrics();
+                
                 if (task.status === 'completed') {
-                    this.showNotification('🦾 AlphaZero: Обучение завершено! Новая модель готова.');
+                    this.showNotification('🦾 AlphaZero: Обучение завершено! Чекпоинты готовы к скачиванию.');
+                } else if (task.status === 'error') {
+                    this.showNotification('❌ AlphaZero: Ошибка обучения. Проверьте логи.');
                 }
             }
         } catch (error) {

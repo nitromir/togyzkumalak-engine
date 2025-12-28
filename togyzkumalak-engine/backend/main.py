@@ -521,10 +521,17 @@ class GeminiBattleRequest(BaseModel):
 
 
 class AlphaZeroTrainingRequest(BaseModel):
-    numIters: int = 10
-    numEps: int = 10
-    numMCTSSims: int = 25
+    numIters: int = 100
+    numEps: int = 100
+    numMCTSSims: int = 100
     cpuct: float = 1.0
+    batch_size: int = 256
+    hidden_size: int = 256
+    epochs: int = 10
+    use_bootstrap: bool = True
+    use_multiprocessing: bool = True
+    num_parallel_games: int = 0  # 0 = auto
+    save_every_n_iters: int = 5
 
 
 @app.post("/api/training/alphazero/start")
@@ -632,6 +639,136 @@ async def load_alphazero_checkpoint(checkpoint_name: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/alphazero/checkpoints")
+async def list_alphazero_checkpoints():
+    """List all AlphaZero checkpoints with their metrics."""
+    try:
+        checkpoints = az_task_manager.get_checkpoints()
+        
+        # Also load metrics file for detailed info
+        metrics_file = os.path.join(engine_dir, "models", "alphazero", "training_metrics.json")
+        best_iteration = None
+        
+        if os.path.exists(metrics_file):
+            with open(metrics_file, 'r') as f:
+                data = json.load(f)
+                best_iteration = data.get("best_iteration", {})
+        
+        return {
+            "checkpoints": checkpoints,
+            "total": len(checkpoints),
+            "best_iteration": best_iteration
+        }
+    except Exception as e:
+        return {"checkpoints": [], "total": 0, "error": str(e)}
+
+
+@app.get("/api/training/alphazero/checkpoints/{checkpoint_name}/download")
+async def download_alphazero_checkpoint(checkpoint_name: str):
+    """Download a specific AlphaZero checkpoint file."""
+    try:
+        checkpoint_file = checkpoint_name if checkpoint_name.endswith('.pth.tar') else f"{checkpoint_name}.pth.tar"
+        checkpoint_path = os.path.join(engine_dir, "models", "alphazero", checkpoint_file)
+        
+        if not os.path.exists(checkpoint_path):
+            raise HTTPException(status_code=404, detail=f"Checkpoint not found: {checkpoint_file}")
+        
+        return FileResponse(
+            path=checkpoint_path,
+            filename=checkpoint_file,
+            media_type="application/octet-stream"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/alphazero/optimal-config")
+async def get_optimal_alphazero_config(gpus: int = 1, hours: float = 1.0):
+    """
+    Get optimal AlphaZero training configuration based on available GPUs and time.
+    
+    Args:
+        gpus: Number of available GPUs (default: 1)
+        hours: Available training time in hours (default: 1.0)
+    
+    Returns:
+        Recommended configuration with estimated training time
+    """
+    try:
+        from .alphazero_trainer import get_optimal_config, NUM_GPUS, device
+        
+        # Use actual detected GPUs if not specified or if requesting auto-detect
+        actual_gpus = gpus if gpus > 0 else max(1, NUM_GPUS)
+        
+        config = get_optimal_config(actual_gpus, hours)
+        
+        return {
+            "recommended_config": config,
+            "detected_gpus": NUM_GPUS,
+            "device": str(device),
+            "estimated_iterations": config.get("numIters", 100),
+            "estimated_time_minutes": config.get("estimated_time_min", 60),
+            "tips": [
+                f"With {actual_gpus} GPU(s), you can run ~{config.get('numIters', 100)} iterations in {hours} hour(s)",
+                f"Batch size scaled to {config.get('batch_size', 256)} for optimal GPU utilization",
+                f"Using {config.get('num_parallel_games', 8)} parallel self-play games",
+                "Enable 'use_bootstrap' for faster convergence with human game data",
+                "Checkpoints are saved every few iterations - download them during training!"
+            ]
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "recommended_config": {
+                "numIters": 100,
+                "numEps": 100,
+                "numMCTSSims": 100,
+                "batch_size": 256,
+                "use_bootstrap": True
+            }
+        }
+
+
+@app.get("/api/training/alphazero/gpu-info")
+async def get_gpu_info():
+    """Get information about available GPUs."""
+    try:
+        import torch
+        
+        if not torch.cuda.is_available():
+            return {
+                "cuda_available": False,
+                "device": "cpu",
+                "gpus": [],
+                "message": "CUDA not available, training will use CPU"
+            }
+        
+        gpus = []
+        for i in range(torch.cuda.device_count()):
+            props = torch.cuda.get_device_properties(i)
+            gpus.append({
+                "index": i,
+                "name": torch.cuda.get_device_name(i),
+                "memory_total_gb": round(props.total_memory / (1024**3), 2),
+                "compute_capability": f"{props.major}.{props.minor}"
+            })
+        
+        return {
+            "cuda_available": True,
+            "cuda_version": torch.version.cuda,
+            "device": "cuda",
+            "gpu_count": len(gpus),
+            "gpus": gpus
+        }
+    except Exception as e:
+        return {
+            "cuda_available": False,
+            "error": str(e)
+        }
 
 
 @app.get("/api/ai/model-info")

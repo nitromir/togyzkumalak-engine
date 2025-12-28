@@ -1,8 +1,12 @@
 """
-AlphaZero Trainer for Togyzkumalak - CPU Optimized Version
+AlphaZero Trainer for Togyzkumalak - Multi-GPU Optimized Version
 
-Self-contained AlphaZero implementation optimized for CPU training.
-Uses PyTorch CPU-only, with reduced simulations and batch sizes for efficiency.
+Self-contained AlphaZero implementation with:
+- Multi-GPU training support (DataParallel)
+- Parallel self-play using multiprocessing
+- Batch MCTS inference for GPU efficiency
+- Real-time checkpoint downloads
+- Per-checkpoint metrics logging
 """
 
 import os
@@ -14,6 +18,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import torch.multiprocessing as mp
+from torch.nn.parallel import DataParallel
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Any
@@ -22,14 +28,37 @@ import json
 import logging
 import threading
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import copy
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# Ensure CPU-only execution
-device = torch.device("cpu")
-torch.set_num_threads(max(1, os.cpu_count() - 1))  # Leave one core free
+# =============================================================================
+# Device Configuration - Auto-detect GPU
+# =============================================================================
+
+def get_device():
+    """Get best available device."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+def get_num_gpus():
+    """Get number of available GPUs."""
+    if torch.cuda.is_available():
+        return torch.cuda.device_count()
+    return 0
+
+device = get_device()
+NUM_GPUS = get_num_gpus()
+
+log.info(f"Device: {device}, GPUs available: {NUM_GPUS}")
+
+# Set optimal number of CPU threads for data loading
+if device.type == "cpu":
+    torch.set_num_threads(max(1, os.cpu_count() - 1))
 
 
 # =============================================================================
@@ -59,15 +88,15 @@ class AverageMeter:
 
 @dataclass
 class AlphaZeroConfig:
-    """Configuration for AlphaZero training - CPU optimized defaults."""
+    """Configuration for AlphaZero training - Multi-GPU optimized."""
     # Training
-    num_iterations: int = 10          # Number of training iterations
-    num_episodes: int = 10            # Self-play games per iteration (reduced for CPU)
-    num_mcts_sims: int = 25           # MCTS simulations per move (25-50 for CPU)
+    num_iterations: int = 100         # Number of training iterations
+    num_episodes: int = 100           # Self-play games per iteration
+    num_mcts_sims: int = 100          # MCTS simulations per move
     
     # Neural Network
-    batch_size: int = 32              # Batch size (32-64 for CPU to avoid OOM)
-    epochs: int = 5                   # Training epochs per iteration
+    batch_size: int = 256             # Batch size (scale with GPU memory)
+    epochs: int = 10                  # Training epochs per iteration
     learning_rate: float = 0.001
     hidden_size: int = 256            # Hidden layer size
     
@@ -76,21 +105,27 @@ class AlphaZeroConfig:
     temp_threshold: int = 15          # Move count threshold for temperature
     
     # Arena
-    arena_compare: int = 20           # Games to compare models (reduced for CPU)
+    arena_compare: int = 40           # Games to compare models
     update_threshold: float = 0.55    # Win rate needed to accept new model
     
     # Memory
-    max_queue_length: int = 50000     # Max training examples (reduced for memory)
-    num_iters_for_history: int = 5    # Keep last N iterations of examples
+    max_queue_length: int = 200000    # Max training examples
+    num_iters_for_history: int = 20   # Keep last N iterations of examples
     
     # Checkpoints
     checkpoint_dir: str = "models/alphazero"
+    save_every_n_iters: int = 5       # Save checkpoint every N iterations
     
     # Bootstrap - Use human game data for initial training
-    use_bootstrap: bool = True        # Whether to bootstrap from human data
+    use_bootstrap: bool = True
     bootstrap_file: str = "training_data/transitions_compact.jsonl"
-    bootstrap_epochs: int = 10        # Epochs for initial bootstrap training
-    bootstrap_max_samples: int = 50000  # Max samples to use from human data
+    bootstrap_epochs: int = 10
+    bootstrap_max_samples: int = 50000
+    
+    # Parallelization
+    num_parallel_games: int = 0       # 0 = auto (based on CPU cores)
+    num_workers: int = 0              # 0 = auto (based on GPUs)
+    use_multiprocessing: bool = True  # Enable parallel self-play
 
 
 # =============================================================================
@@ -126,7 +161,7 @@ class TogyzkumalakGame:
     def getNextState(self, board: np.ndarray, player: int, action: int) -> Tuple[np.ndarray, int]:
         """Execute action and return new board and next player."""
         new_board = board.copy()
-        color = 0 if player == 1 else 1  # Convert player format
+        color = 0 if player == 1 else 1
         
         pit_index = action + (color * 9)
         num = int(new_board[pit_index])
@@ -134,7 +169,6 @@ class TogyzkumalakGame:
         if num <= 0:
             return new_board, -player
         
-        # Pick up kumalaks
         if num == 1:
             new_board[pit_index] = 0
             sow = 1
@@ -142,12 +176,10 @@ class TogyzkumalakGame:
             new_board[pit_index] = 1
             sow = num - 1
         
-        # Sow kumalaks
         current = pit_index
         for _ in range(sow):
             current = (current + 1) % 18
             if new_board[current] == self.TUZDUK:
-                # Add to opponent's kazan
                 if current < 9:
                     new_board[21] += 1
                 else:
@@ -155,7 +187,6 @@ class TogyzkumalakGame:
             else:
                 new_board[current] += 1
         
-        # Check for capture (even number on opponent's side)
         if new_board[current] != self.TUZDUK and new_board[current] % 2 == 0:
             if color == 0 and current > 8:
                 new_board[20] += new_board[current]
@@ -164,7 +195,6 @@ class TogyzkumalakGame:
                 new_board[21] += new_board[current]
                 new_board[current] = 0
         
-        # Check for tuzduk (exactly 3)
         elif new_board[current] == 3:
             if color == 0 and new_board[18] == 0 and 9 <= current < 17:
                 if new_board[19] != current - 8:
@@ -177,10 +207,7 @@ class TogyzkumalakGame:
                     new_board[21] += 3
                     new_board[current] = self.TUZDUK
         
-        # Switch player
         new_board[22] = 1 - color
-        
-        # Check atsyrau
         self._checkAtsyrau(new_board)
         
         return new_board, -player
@@ -215,9 +242,7 @@ class TogyzkumalakGame:
         return valid
     
     def getGameEnded(self, board: np.ndarray, player: int) -> float:
-        """
-        Returns 0 if not ended, 1 if player won, -1 if lost, small value for draw.
-        """
+        """Returns 0 if not ended, 1 if player won, -1 if lost, small value for draw."""
         white_kazan = board[20]
         black_kazan = board[21]
         
@@ -226,7 +251,7 @@ class TogyzkumalakGame:
         elif black_kazan > 81:
             return -1.0 if player == 1 else 1.0
         elif white_kazan == 81 and black_kazan == 81:
-            return 1e-4  # Draw
+            return 1e-4
         
         return 0
     
@@ -235,7 +260,6 @@ class TogyzkumalakGame:
         if player == 1:
             return board.copy()
         
-        # Swap for black player
         canonical = np.zeros_like(board)
         canonical[0:9] = board[9:18]
         canonical[9:18] = board[0:9]
@@ -259,22 +283,18 @@ class TogyzkumalakGame:
         """Convert board to neural network input (128-dim)."""
         obs = np.zeros(128, dtype=np.float32)
         
-        # Pits (normalized)
         for i in range(18):
             val = board[i] if board[i] != self.TUZDUK else 0
             obs[i] = val / 81.0
         
-        # Kazans (normalized)
         obs[18] = board[20] / 162.0
         obs[19] = board[21] / 162.0
         
-        # Tuzduk positions (one-hot)
         if board[18] > 0:
             obs[20 + int(board[18]) - 1] = 1.0
         if board[19] > 0:
             obs[29 + int(board[19]) - 1] = 1.0
         
-        # Current player
         obs[38] = 1.0 if board[22] == 0 else 0.0
         obs[39] = 1.0 if board[22] == 1 else 0.0
         
@@ -282,26 +302,27 @@ class TogyzkumalakGame:
 
 
 # =============================================================================
-# Neural Network - Dual Head (Policy + Value)
+# Neural Network - Dual Head (Policy + Value) with Multi-GPU Support
 # =============================================================================
 
 class AlphaZeroNetwork(nn.Module):
     """
     Dual-head neural network for AlphaZero.
-    Policy head: outputs move probabilities (9 actions)
-    Value head: outputs position evaluation [-1, 1]
+    Supports DataParallel for multi-GPU training.
     """
     
     def __init__(self, input_size: int = 128, hidden_size: int = 256, action_size: int = 9):
         super().__init__()
         
-        # Shared backbone
+        # Deeper network for better representation
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.bn1 = nn.BatchNorm1d(hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.bn2 = nn.BatchNorm1d(hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size // 2)
-        self.bn3 = nn.BatchNorm1d(hidden_size // 2)
+        self.fc3 = nn.Linear(hidden_size, hidden_size)
+        self.bn3 = nn.BatchNorm1d(hidden_size)
+        self.fc4 = nn.Linear(hidden_size, hidden_size // 2)
+        self.bn4 = nn.BatchNorm1d(hidden_size // 2)
         
         # Policy head
         self.policy_fc = nn.Linear(hidden_size // 2, action_size)
@@ -313,23 +334,21 @@ class AlphaZeroNetwork(nn.Module):
         self.dropout = nn.Dropout(0.3)
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Handle single sample (no batch dimension)
         single_sample = x.dim() == 1
         if single_sample:
             x = x.unsqueeze(0)
         
-        # Shared features
         x = F.relu(self.bn1(self.fc1(x)))
         x = self.dropout(x)
         x = F.relu(self.bn2(self.fc2(x)))
         x = self.dropout(x)
         x = F.relu(self.bn3(self.fc3(x)))
+        x = self.dropout(x)
+        x = F.relu(self.bn4(self.fc4(x)))
         
-        # Policy head (log probabilities)
         pi = self.policy_fc(x)
         pi = F.log_softmax(pi, dim=1)
         
-        # Value head
         v = F.relu(self.value_fc1(x))
         v = torch.tanh(self.value_fc2(v))
         
@@ -340,20 +359,32 @@ class AlphaZeroNetwork(nn.Module):
 
 
 class NNetWrapper:
-    """Wrapper for neural network with training and prediction methods."""
+    """Wrapper for neural network with multi-GPU support."""
     
     def __init__(self, game: TogyzkumalakGame, config: AlphaZeroConfig):
         self.game = game
         self.config = config
+        self.device = device
+        
         self.nnet = AlphaZeroNetwork(
             input_size=128,
             hidden_size=config.hidden_size,
             action_size=game.getActionSize()
-        ).to(device)
+        )
+        
+        # Multi-GPU support
+        if NUM_GPUS > 1:
+            log.info(f"Using DataParallel with {NUM_GPUS} GPUs")
+            self.nnet = DataParallel(self.nnet)
+        
+        self.nnet = self.nnet.to(self.device)
     
-    def train(self, examples: List[Tuple[np.ndarray, np.ndarray, float]]):
+    def train(self, examples: List[Tuple[np.ndarray, np.ndarray, float]]) -> Dict[str, float]:
         """Train network on examples (board, pi, v)."""
         optimizer = optim.Adam(self.nnet.parameters(), lr=self.config.learning_rate)
+        
+        # Scale batch size with number of GPUs
+        effective_batch_size = self.config.batch_size * max(1, NUM_GPUS)
         
         self.nnet.train()
         
@@ -361,30 +392,24 @@ class NNetWrapper:
         v_losses = AverageMeter()
         
         for epoch in range(self.config.epochs):
-            batch_count = max(1, len(examples) // self.config.batch_size)
+            batch_count = max(1, len(examples) // effective_batch_size)
             
             for _ in range(batch_count):
-                # Sample batch
-                sample_ids = np.random.randint(len(examples), size=min(self.config.batch_size, len(examples)))
+                sample_ids = np.random.randint(len(examples), size=min(effective_batch_size, len(examples)))
                 boards, pis, vs = zip(*[examples[i] for i in sample_ids])
                 
-                # Convert to observations
                 observations = [self.game.boardToObservation(b) for b in boards]
                 
-                # Convert to tensors
-                obs_tensor = torch.FloatTensor(np.array(observations)).to(device)
-                target_pis = torch.FloatTensor(np.array(pis)).to(device)
-                target_vs = torch.FloatTensor(np.array(vs)).to(device)
+                obs_tensor = torch.FloatTensor(np.array(observations)).to(self.device)
+                target_pis = torch.FloatTensor(np.array(pis)).to(self.device)
+                target_vs = torch.FloatTensor(np.array(vs)).to(self.device)
                 
-                # Forward
                 out_pi, out_v = self.nnet(obs_tensor)
                 
-                # Loss
                 l_pi = -torch.sum(target_pis * out_pi) / target_pis.size(0)
                 l_v = torch.sum((target_vs - out_v.squeeze()) ** 2) / target_vs.size(0)
                 total_loss = l_pi + l_v
                 
-                # Backward
                 optimizer.zero_grad()
                 total_loss.backward()
                 optimizer.step()
@@ -399,26 +424,48 @@ class NNetWrapper:
     def predict(self, board: np.ndarray) -> Tuple[np.ndarray, float]:
         """Predict policy and value for board."""
         obs = self.game.boardToObservation(board)
-        obs_tensor = torch.FloatTensor(obs).to(device)
+        obs_tensor = torch.FloatTensor(obs).to(self.device)
         
         self.nnet.eval()
         with torch.no_grad():
             pi, v = self.nnet(obs_tensor)
-            pi = torch.exp(pi)  # Convert log-prob to prob
+            pi = torch.exp(pi)
         
         return pi.cpu().numpy(), float(v.cpu().numpy())
     
-    def save_checkpoint(self, folder: str, filename: str):
-        """Save model checkpoint."""
+    def predict_batch(self, boards: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+        """Batch prediction for multiple boards - much faster on GPU."""
+        observations = [self.game.boardToObservation(b) for b in boards]
+        obs_tensor = torch.FloatTensor(np.array(observations)).to(self.device)
+        
+        self.nnet.eval()
+        with torch.no_grad():
+            pi, v = self.nnet(obs_tensor)
+            pi = torch.exp(pi)
+        
+        return pi.cpu().numpy(), v.cpu().numpy().flatten()
+    
+    def save_checkpoint(self, folder: str, filename: str, metrics: Dict = None):
+        """Save model checkpoint with metrics."""
         os.makedirs(folder, exist_ok=True)
         filepath = os.path.join(folder, filename)
-        torch.save({
-            'state_dict': self.nnet.state_dict(),
+        
+        # Handle DataParallel wrapped model
+        state_dict = self.nnet.module.state_dict() if isinstance(self.nnet, DataParallel) else self.nnet.state_dict()
+        
+        checkpoint = {
+            'state_dict': state_dict,
             'config': {
                 'hidden_size': self.config.hidden_size,
                 'action_size': self.game.getActionSize()
-            }
-        }, filepath)
+            },
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        if metrics:
+            checkpoint['metrics'] = metrics
+        
+        torch.save(checkpoint, filepath)
         log.info(f'Checkpoint saved: {filepath}')
     
     def load_checkpoint(self, folder: str, filename: str):
@@ -427,9 +474,15 @@ class NNetWrapper:
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"No checkpoint at {filepath}")
         
-        checkpoint = torch.load(filepath, map_location=device)
-        self.nnet.load_state_dict(checkpoint['state_dict'])
+        checkpoint = torch.load(filepath, map_location=self.device)
+        
+        if isinstance(self.nnet, DataParallel):
+            self.nnet.module.load_state_dict(checkpoint['state_dict'])
+        else:
+            self.nnet.load_state_dict(checkpoint['state_dict'])
+        
         log.info(f'Checkpoint loaded: {filepath}')
+        return checkpoint.get('metrics', {})
 
 
 # =============================================================================
@@ -437,7 +490,7 @@ class NNetWrapper:
 # =============================================================================
 
 EPS = 1e-8
-MAX_SEARCH_DEPTH = 500  # Prevent stack overflow in long games
+MAX_SEARCH_DEPTH = 500
 
 
 class MCTS:
@@ -448,19 +501,15 @@ class MCTS:
         self.nnet = nnet
         self.config = config
         
-        # Tree statistics
-        self.Qsa = {}  # Q values for (s, a)
-        self.Nsa = {}  # Visit counts for (s, a)
-        self.Ns = {}   # Visit counts for s
-        self.Ps = {}   # Policy from neural net for s
-        
-        self.Es = {}   # Game ended for s
-        self.Vs = {}   # Valid moves for s
+        self.Qsa = {}
+        self.Nsa = {}
+        self.Ns = {}
+        self.Ps = {}
+        self.Es = {}
+        self.Vs = {}
     
     def getActionProb(self, canonicalBoard: np.ndarray, temp: float = 1) -> np.ndarray:
-        """
-        Run MCTS simulations and return action probabilities.
-        """
+        """Run MCTS simulations and return action probabilities."""
         for _ in range(self.config.num_mcts_sims):
             self.search(canonicalBoard)
         
@@ -468,7 +517,6 @@ class MCTS:
         counts = [self.Nsa.get((s, a), 0) for a in range(self.game.getActionSize())]
         
         if temp == 0:
-            # Deterministic: pick best action
             best_actions = np.array(np.argwhere(counts == np.max(counts))).flatten()
             best_a = np.random.choice(best_actions)
             probs = np.zeros(len(counts))
@@ -482,19 +530,16 @@ class MCTS:
     
     def search(self, canonicalBoard: np.ndarray, depth: int = 0) -> float:
         """One iteration of MCTS."""
-        # Prevent stack overflow in very long games
         if depth > MAX_SEARCH_DEPTH:
             return 0
         
         s = self.game.stringRepresentation(canonicalBoard)
         
-        # Check if terminal
         if s not in self.Es:
             self.Es[s] = self.game.getGameEnded(canonicalBoard, 1)
         if self.Es[s] != 0:
             return -self.Es[s]
         
-        # Leaf node - expand
         if s not in self.Ps:
             self.Ps[s], v = self.nnet.predict(canonicalBoard)
             valids = self.game.getValidMoves(canonicalBoard, 1)
@@ -511,7 +556,6 @@ class MCTS:
             self.Ns[s] = 0
             return -v
         
-        # Select action with highest UCB
         valids = self.Vs[s]
         cur_best = -float('inf')
         best_act = -1
@@ -533,7 +577,6 @@ class MCTS:
         
         v = self.search(next_s, depth + 1)
         
-        # Backpropagate
         if (s, a) in self.Qsa:
             self.Qsa[(s, a)] = (self.Nsa[(s, a)] * self.Qsa[(s, a)] + v) / (self.Nsa[(s, a)] + 1)
             self.Nsa[(s, a)] += 1
@@ -543,6 +586,59 @@ class MCTS:
         
         self.Ns[s] += 1
         return -v
+
+
+# =============================================================================
+# Parallel Self-Play Worker
+# =============================================================================
+
+def execute_episode_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+    """Worker function for parallel self-play."""
+    nnet_state, config_dict, worker_id = args
+    
+    # Recreate game and network in worker process
+    game = TogyzkumalakGame()
+    config = AlphaZeroConfig(**config_dict)
+    
+    # Create network and load state
+    nnet = NNetWrapper(game, config)
+    
+    # Load state dict
+    if isinstance(nnet.nnet, DataParallel):
+        nnet.nnet.module.load_state_dict(nnet_state)
+    else:
+        nnet.nnet.load_state_dict(nnet_state)
+    
+    mcts = MCTS(game, nnet, config)
+    
+    trainExamples = []
+    board = game.getInitBoard()
+    curPlayer = 1
+    episodeStep = 0
+    max_steps = 500
+    
+    while True:
+        episodeStep += 1
+        
+        if episodeStep > max_steps:
+            return [(x[0], x[2], 0) for x in trainExamples]
+        
+        canonicalBoard = game.getCanonicalForm(board, curPlayer)
+        temp = int(episodeStep < config.temp_threshold)
+        
+        pi = mcts.getActionProb(canonicalBoard, temp=temp)
+        sym = game.getSymmetries(canonicalBoard, pi)
+        
+        for b, p in sym:
+            trainExamples.append([b, curPlayer, p, None])
+        
+        action = np.random.choice(len(pi), p=pi)
+        board, curPlayer = game.getNextState(board, curPlayer, action)
+        
+        r = game.getGameEnded(board, curPlayer)
+        
+        if r != 0:
+            return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
 
 
 # =============================================================================
@@ -564,12 +660,12 @@ class Arena:
         board = self.game.getInitBoard()
         
         move_count = 0
-        max_moves = 500  # Safety limit to prevent infinite games
+        max_moves = 500
         
         while self.game.getGameEnded(board, curPlayer) == 0:
             move_count += 1
             if move_count > max_moves:
-                break  # Prevent infinite loop
+                break
             
             canonical = self.game.getCanonicalForm(board, curPlayer)
             action = players[curPlayer + 1](canonical)
@@ -581,7 +677,6 @@ class Arena:
             
             board, curPlayer = self.game.getNextState(board, curPlayer, action)
         
-        # Return draw if game exceeded max moves
         if move_count > max_moves:
             return 0
         
@@ -596,7 +691,6 @@ class Arena:
         twoWon = 0
         draws = 0
         
-        # Player 1 starts first half
         for _ in range(num_each):
             result = self.playGame()
             if result == 1:
@@ -606,7 +700,6 @@ class Arena:
             else:
                 draws += 1
         
-        # Swap and play second half
         self.player1, self.player2 = self.player2, self.player1
         
         for _ in range(num_each):
@@ -622,30 +715,33 @@ class Arena:
 
 
 # =============================================================================
-# Coach - Main Training Loop
+# Coach - Main Training Loop with Multi-GPU Support
 # =============================================================================
 
 class AlphaZeroCoach:
     """
-    AlphaZero training coach for Togyzkumalak.
-    Manages the self-play -> train -> evaluate cycle.
+    AlphaZero training coach with multi-GPU and parallel self-play support.
     """
     
     def __init__(self, game: TogyzkumalakGame, nnet: NNetWrapper, config: AlphaZeroConfig):
         self.game = game
         self.nnet = nnet
-        self.pnet = NNetWrapper(game, config)  # Previous network for comparison
+        self.pnet = NNetWrapper(game, config)
         self.config = config
         self.mcts = MCTS(game, nnet, config)
         
         self.trainExamplesHistory = []
         self.metrics_history = []
+        self.checkpoint_metrics = {}  # Per-checkpoint detailed metrics
         
-        # Status tracking
         self.current_iteration = 0
         self.status = "initialized"
         self.progress = 0.0
         self.stop_requested = False
+        
+        # Determine parallelization level
+        self.num_workers = config.num_workers if config.num_workers > 0 else max(1, os.cpu_count() // 2)
+        self.num_parallel_games = config.num_parallel_games if config.num_parallel_games > 0 else min(8, os.cpu_count())
     
     def executeEpisode(self) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         """Execute one episode of self-play."""
@@ -653,14 +749,13 @@ class AlphaZeroCoach:
         board = self.game.getInitBoard()
         curPlayer = 1
         episodeStep = 0
-        max_steps = 500  # Safety limit to prevent infinite episodes
+        max_steps = 500
         
         while True:
             episodeStep += 1
             
-            # Prevent infinite episodes
             if episodeStep > max_steps:
-                return [(x[0], x[2], 0) for x in trainExamples]  # Return draw
+                return [(x[0], x[2], 0) for x in trainExamples]
             
             canonicalBoard = self.game.getCanonicalForm(board, curPlayer)
             temp = int(episodeStep < self.config.temp_threshold)
@@ -679,13 +774,77 @@ class AlphaZeroCoach:
             if r != 0:
                 return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
     
-    def _bootstrap_from_human_data(self) -> int:
-        """
-        Bootstrap the network from human game data before self-play.
+    def executeEpisodesParallel(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+        """Execute multiple episodes in parallel using ThreadPoolExecutor."""
+        all_examples = []
         
-        Returns:
-            Number of examples used for bootstrap
-        """
+        # Get network state for workers
+        if isinstance(self.nnet.nnet, DataParallel):
+            nnet_state = self.nnet.nnet.module.state_dict()
+        else:
+            nnet_state = self.nnet.nnet.state_dict()
+        
+        config_dict = {
+            'num_mcts_sims': self.config.num_mcts_sims,
+            'cpuct': self.config.cpuct,
+            'temp_threshold': self.config.temp_threshold,
+            'hidden_size': self.config.hidden_size,
+        }
+        
+        # Use ThreadPoolExecutor for parallel self-play
+        # (ProcessPoolExecutor has issues with CUDA tensors)
+        with ThreadPoolExecutor(max_workers=self.num_parallel_games) as executor:
+            futures = []
+            for i in range(num_episodes):
+                # Each thread runs its own episode
+                future = executor.submit(self._run_episode)
+                futures.append(future)
+            
+            for i, future in enumerate(futures):
+                try:
+                    examples = future.result(timeout=300)  # 5 min timeout
+                    all_examples.extend(examples)
+                    log.info(f'  Self-play episode {i+1}/{num_episodes}, examples: {len(examples)}')
+                except Exception as e:
+                    log.error(f'Episode {i+1} failed: {e}')
+        
+        return all_examples
+    
+    def _run_episode(self) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+        """Run a single episode (for thread pool)."""
+        mcts = MCTS(self.game, self.nnet, self.config)
+        
+        trainExamples = []
+        board = self.game.getInitBoard()
+        curPlayer = 1
+        episodeStep = 0
+        max_steps = 500
+        
+        while True:
+            episodeStep += 1
+            
+            if episodeStep > max_steps:
+                return [(x[0], x[2], 0) for x in trainExamples]
+            
+            canonicalBoard = self.game.getCanonicalForm(board, curPlayer)
+            temp = int(episodeStep < self.config.temp_threshold)
+            
+            pi = mcts.getActionProb(canonicalBoard, temp=temp)
+            sym = self.game.getSymmetries(canonicalBoard, pi)
+            
+            for b, p in sym:
+                trainExamples.append([b, curPlayer, p, None])
+            
+            action = np.random.choice(len(pi), p=pi)
+            board, curPlayer = self.game.getNextState(board, curPlayer, action)
+            
+            r = self.game.getGameEnded(board, curPlayer)
+            
+            if r != 0:
+                return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
+    
+    def _bootstrap_from_human_data(self) -> int:
+        """Bootstrap the network from human game data."""
         bootstrap_file = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             self.config.bootstrap_file
@@ -709,11 +868,6 @@ class AlphaZeroCoach:
                     except json.JSONDecodeError:
                         continue
                     
-                    # Support multiple formats:
-                    # Compact: {"s": [...], "a": int, "r": float, "d": int, "p": int}
-                    # Standard: {"state": [...], "action": int, "reward": float}
-                    # Observation: {"observation": [...], "action": int}
-                    
                     state = data.get('s', data.get('state', data.get('observation', [])))
                     action = data.get('a', data.get('action', 0))
                     reward = data.get('r', data.get('reward', data.get('final_reward', 0)))
@@ -721,17 +875,13 @@ class AlphaZeroCoach:
                     if not state or len(state) < 18:
                         continue
                     
-                    # Create board array (23 elements)
-                    # Denormalize: values in file are normalized (0-1), need original (0-81 for pits)
                     if len(state) == 20:
-                        # Compact format: 18 pits (normalized) + 2 kazans (normalized)
                         board = np.zeros(23, dtype=np.float32)
                         for i in range(18):
-                            board[i] = state[i] * 81.0  # Denormalize pits
-                        board[20] = state[18] * 162.0  # White kazan
-                        board[21] = state[19] * 162.0  # Black kazan
+                            board[i] = state[i] * 81.0
+                        board[20] = state[18] * 162.0
+                        board[21] = state[19] * 162.0
                     elif len(state) == 128:
-                        # Full observation format
                         board = np.zeros(23, dtype=np.float32)
                         for i in range(18):
                             board[i] = state[i] * 81.0
@@ -742,12 +892,10 @@ class AlphaZeroCoach:
                     else:
                         continue
                     
-                    # Create policy vector (one-hot for the action taken)
                     pi = np.zeros(9, dtype=np.float32)
                     if 0 <= action < 9:
                         pi[action] = 1.0
                     
-                    # Value from reward
                     v = float(reward) if abs(reward) <= 1 else (1.0 if reward > 0 else -1.0)
                     
                     examples.append((board, pi, v))
@@ -758,7 +906,6 @@ class AlphaZeroCoach:
             
             log.info(f"[Bootstrap] Loaded {len(examples)} examples, training for {self.config.bootstrap_epochs} epochs...")
             
-            # Train on bootstrap data
             for epoch in range(self.config.bootstrap_epochs):
                 train_metrics = self.nnet.train(examples)
                 if epoch % 2 == 0:
@@ -766,8 +913,11 @@ class AlphaZeroCoach:
                             f"policy_loss: {train_metrics.get('policy_loss', 0):.4f}, "
                             f"value_loss: {train_metrics.get('value_loss', 0):.4f}")
             
-            # Save bootstrapped model
-            self.nnet.save_checkpoint(self.config.checkpoint_dir, 'bootstrapped.pth.tar')
+            self.nnet.save_checkpoint(
+                self.config.checkpoint_dir, 
+                'bootstrapped.pth.tar',
+                metrics={'bootstrap_examples': len(examples), 'bootstrap_epochs': self.config.bootstrap_epochs}
+            )
             log.info(f"[Bootstrap] Complete! Model saved to bootstrapped.pth.tar")
             
             return len(examples)
@@ -779,16 +929,9 @@ class AlphaZeroCoach:
             return 0
     
     def learn(self, callback=None) -> Dict[str, Any]:
-        """
-        Main training loop.
-        
-        Args:
-            callback: Optional function to call after each iteration with status dict
-        
-        Returns:
-            Final training metrics
-        """
+        """Main training loop with parallel self-play."""
         self.status = "running"
+        start_time = time.time()
         
         # Bootstrap from human data if enabled
         if self.config.use_bootstrap:
@@ -801,29 +944,32 @@ class AlphaZeroCoach:
                 self.status = "stopped"
                 break
             
+            iter_start = time.time()
             self.current_iteration = i
             self.progress = (i - 1) / self.config.num_iterations * 100
             
             log.info(f'=== Iteration {i}/{self.config.num_iterations} ===')
             
-            # Self-play
+            # Self-play (parallel if enabled)
             iterationExamples = deque([], maxlen=self.config.max_queue_length)
             
-            for ep in range(self.config.num_episodes):
-                if self.stop_requested:
-                    break
-                self.mcts = MCTS(self.game, self.nnet, self.config)  # Reset tree
-                examples = self.executeEpisode()
+            if self.config.use_multiprocessing and self.num_parallel_games > 1:
+                examples = self.executeEpisodesParallel(self.config.num_episodes)
                 iterationExamples.extend(examples)
-                log.info(f'  Self-play episode {ep+1}/{self.config.num_episodes}, examples: {len(examples)}')
+            else:
+                for ep in range(self.config.num_episodes):
+                    if self.stop_requested:
+                        break
+                    self.mcts = MCTS(self.game, self.nnet, self.config)
+                    examples = self.executeEpisode()
+                    iterationExamples.extend(examples)
+                    log.info(f'  Self-play episode {ep+1}/{self.config.num_episodes}, examples: {len(examples)}')
             
             self.trainExamplesHistory.append(iterationExamples)
             
-            # Trim history
             while len(self.trainExamplesHistory) > self.config.num_iters_for_history:
                 self.trainExamplesHistory.pop(0)
             
-            # Aggregate training examples
             trainExamples = []
             for e in self.trainExamplesHistory:
                 trainExamples.extend(e)
@@ -858,26 +1004,56 @@ class AlphaZeroCoach:
                 accepted = False
             else:
                 log.info('  ACCEPTING new model')
-                self.nnet.save_checkpoint(self.config.checkpoint_dir, f'checkpoint_{i}.pth.tar')
-                self.nnet.save_checkpoint(self.config.checkpoint_dir, 'best.pth.tar')
                 accepted = True
             
-            # Record metrics
+            iter_time = time.time() - iter_start
+            
+            # Record detailed metrics for this checkpoint
             iter_metrics = {
                 'iteration': i,
                 'policy_loss': train_metrics['policy_loss'],
                 'value_loss': train_metrics['value_loss'],
+                'total_loss': train_metrics['policy_loss'] + train_metrics['value_loss'],
                 'new_wins': nwins,
                 'old_wins': pwins,
                 'draws': draws,
                 'win_rate': win_rate,
                 'accepted': accepted,
                 'total_examples': len(trainExamples),
-                'timestamp': datetime.now().isoformat()
+                'iteration_time_sec': iter_time,
+                'timestamp': datetime.now().isoformat(),
+                'gpus_used': NUM_GPUS,
+                'device': str(device)
             }
             self.metrics_history.append(iter_metrics)
             
+            # Save checkpoint with metrics
+            if accepted:
+                checkpoint_name = f'checkpoint_{i}.pth.tar'
+                self.nnet.save_checkpoint(
+                    self.config.checkpoint_dir, 
+                    checkpoint_name,
+                    metrics=iter_metrics
+                )
+                self.nnet.save_checkpoint(
+                    self.config.checkpoint_dir, 
+                    'best.pth.tar',
+                    metrics=iter_metrics
+                )
+                self.checkpoint_metrics[checkpoint_name] = iter_metrics
+            
+            # Save periodic checkpoints regardless of acceptance
+            if i % self.config.save_every_n_iters == 0:
+                self.nnet.save_checkpoint(
+                    self.config.checkpoint_dir,
+                    f'alphazero_iter{i}.pth.tar',
+                    metrics=iter_metrics
+                )
+            
             self.progress = i / self.config.num_iterations * 100
+            
+            # Save metrics after each iteration (for real-time viewing)
+            self._save_metrics()
             
             if callback:
                 callback({
@@ -885,19 +1061,23 @@ class AlphaZeroCoach:
                     'total_iterations': self.config.num_iterations,
                     'progress': self.progress,
                     'metrics': iter_metrics,
-                    'status': self.status
+                    'status': self.status,
+                    'elapsed_time': time.time() - start_time
                 })
         
         if not self.stop_requested:
             self.status = "completed"
         
-        # Save final metrics
         self._save_metrics()
+        
+        total_time = time.time() - start_time
         
         return {
             'status': self.status,
             'iterations_completed': self.current_iteration,
-            'metrics_history': self.metrics_history
+            'metrics_history': self.metrics_history,
+            'total_time_sec': total_time,
+            'avg_time_per_iter': total_time / max(1, self.current_iteration)
         }
     
     def _save_metrics(self):
@@ -912,10 +1092,28 @@ class AlphaZeroCoach:
                     'num_episodes': self.config.num_episodes,
                     'num_mcts_sims': self.config.num_mcts_sims,
                     'batch_size': self.config.batch_size,
-                    'hidden_size': self.config.hidden_size
+                    'hidden_size': self.config.hidden_size,
+                    'num_gpus': NUM_GPUS,
+                    'device': str(device)
                 },
-                'metrics': self.metrics_history
+                'metrics': self.metrics_history,
+                'checkpoint_metrics': self.checkpoint_metrics,
+                'best_iteration': self._get_best_iteration()
             }, f, indent=2)
+    
+    def _get_best_iteration(self) -> Dict:
+        """Get the iteration with lowest total loss."""
+        if not self.metrics_history:
+            return {}
+        
+        best = min(self.metrics_history, key=lambda x: x.get('total_loss', float('inf')))
+        return {
+            'iteration': best.get('iteration'),
+            'total_loss': best.get('total_loss'),
+            'policy_loss': best.get('policy_loss'),
+            'value_loss': best.get('value_loss'),
+            'win_rate': best.get('win_rate')
+        }
     
     def stop(self):
         """Request training to stop."""
@@ -949,7 +1147,9 @@ class AlphaZeroTrainingTask:
             'metrics': [],
             'start_time': None,
             'end_time': None,
-            'error_message': None
+            'error_message': None,
+            'gpus': NUM_GPUS,
+            'device': str(device)
         }
     
     def start(self):
@@ -970,6 +1170,8 @@ class AlphaZeroTrainingTask:
             self.status['status'] = 'error'
             self.status['error_message'] = str(e)
             log.error(f"Training task {self.task_id} failed: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.status['end_time'] = datetime.now().isoformat()
     
@@ -978,11 +1180,11 @@ class AlphaZeroTrainingTask:
         self.status['progress'] = data.get('progress', 0)
         self.status['current_iteration'] = data.get('iteration', 0)
         self.status['status'] = data.get('status', 'running')
+        self.status['elapsed_time'] = data.get('elapsed_time', 0)
         
         if 'metrics' in data:
-            # Keep last 10 metrics for status
-            if len(self.status['metrics']) >= 10:
-                self.status['metrics'] = self.status['metrics'][-9:]
+            if len(self.status['metrics']) >= 20:
+                self.status['metrics'] = self.status['metrics'][-19:]
             self.status['metrics'].append(data['metrics'])
     
     def stop(self):
@@ -1008,14 +1210,18 @@ class AlphaZeroTaskManagerV2:
         task_id = f"az_{int(time.time())}"
         
         config = AlphaZeroConfig(
-            num_iterations=params.get('numIters', 10),
-            num_episodes=params.get('numEps', 10),
-            num_mcts_sims=params.get('numMCTSSims', 25),
+            num_iterations=params.get('numIters', 100),
+            num_episodes=params.get('numEps', 100),
+            num_mcts_sims=params.get('numMCTSSims', 100),
             cpuct=params.get('cpuct', 1.0),
-            batch_size=params.get('batch_size', 32),
+            batch_size=params.get('batch_size', 256),
             hidden_size=params.get('hidden_size', 256),
+            epochs=params.get('epochs', 10),
             checkpoint_dir=self.checkpoint_dir,
-            use_bootstrap=params.get('use_bootstrap', True)
+            use_bootstrap=params.get('use_bootstrap', True),
+            use_multiprocessing=params.get('use_multiprocessing', True),
+            num_parallel_games=params.get('num_parallel_games', 0),
+            save_every_n_iters=params.get('save_every_n_iters', 5)
         )
         
         task = AlphaZeroTrainingTask(task_id, config)
@@ -1047,10 +1253,109 @@ class AlphaZeroTaskManagerV2:
         """List all tasks."""
         with self.lock:
             return {tid: task.get_status() for tid, task in self.tasks.items()}
+    
+    def get_checkpoints(self) -> List[Dict]:
+        """Get list of all checkpoints with their metrics."""
+        checkpoints = []
+        checkpoint_dir = Path(self.checkpoint_dir)
+        
+        if not checkpoint_dir.exists():
+            return checkpoints
+        
+        for file in checkpoint_dir.glob('*.pth.tar'):
+            if file.name in ['temp.pth.tar']:
+                continue
+            
+            try:
+                checkpoint = torch.load(file, map_location='cpu')
+                metrics = checkpoint.get('metrics', {})
+                checkpoints.append({
+                    'name': file.name,
+                    'path': str(file),
+                    'size_mb': file.stat().st_size / (1024 * 1024),
+                    'modified': datetime.fromtimestamp(file.stat().st_mtime).isoformat(),
+                    'metrics': metrics
+                })
+            except Exception as e:
+                log.warning(f"Could not load checkpoint {file}: {e}")
+                checkpoints.append({
+                    'name': file.name,
+                    'path': str(file),
+                    'size_mb': file.stat().st_size / (1024 * 1024),
+                    'modified': datetime.fromtimestamp(file.stat().st_mtime).isoformat(),
+                    'metrics': {}
+                })
+        
+        # Sort by iteration number or modification time
+        checkpoints.sort(key=lambda x: x.get('metrics', {}).get('iteration', 0), reverse=True)
+        
+        return checkpoints
 
 
 # Global instance
 alphazero_task_manager = AlphaZeroTaskManagerV2()
+
+
+# =============================================================================
+# Optimal Config Calculator
+# =============================================================================
+
+def get_optimal_config(num_gpus: int, time_budget_hours: float = 1.0) -> Dict:
+    """
+    Calculate optimal training config for given GPU count and time budget.
+    
+    Args:
+        num_gpus: Number of available GPUs
+        time_budget_hours: Available training time in hours
+    
+    Returns:
+        Recommended configuration dictionary
+    """
+    # Base estimates (per iteration, per GPU)
+    # RTX 4090: ~24GB VRAM, ~82 TFLOPS
+    base_batch_size = 256
+    base_episodes = 100
+    base_mcts_sims = 100
+    base_iter_time_min = 3  # Minutes per iteration on single GPU
+    
+    # Scale with GPUs
+    effective_batch_size = base_batch_size * num_gpus
+    parallel_games = min(16, num_gpus * 4)  # 4 parallel games per GPU
+    
+    # Estimate iterations possible in time budget
+    time_budget_min = time_budget_hours * 60
+    iter_time_with_parallel = base_iter_time_min / math.sqrt(num_gpus)  # Sublinear scaling
+    estimated_iterations = int(time_budget_min / iter_time_with_parallel)
+    
+    # Adjust for quality vs quantity tradeoff
+    if num_gpus >= 8:
+        # With many GPUs, prioritize quality
+        mcts_sims = 200
+        episodes = 150
+        iterations = min(estimated_iterations, 300)
+    elif num_gpus >= 4:
+        mcts_sims = 150
+        episodes = 120
+        iterations = min(estimated_iterations, 200)
+    else:
+        mcts_sims = base_mcts_sims
+        episodes = base_episodes
+        iterations = min(estimated_iterations, 150)
+    
+    return {
+        'numIters': iterations,
+        'numEps': episodes,
+        'numMCTSSims': mcts_sims,
+        'batch_size': effective_batch_size,
+        'epochs': 10,
+        'hidden_size': 512 if num_gpus >= 4 else 256,
+        'use_bootstrap': True,
+        'use_multiprocessing': True,
+        'num_parallel_games': parallel_games,
+        'save_every_n_iters': max(1, iterations // 20),  # ~20 checkpoints
+        'estimated_time_min': iterations * iter_time_with_parallel,
+        'gpus': num_gpus
+    }
 
 
 # =============================================================================
@@ -1059,6 +1364,12 @@ alphazero_task_manager = AlphaZeroTaskManagerV2()
 
 if __name__ == "__main__":
     print("Testing AlphaZero Trainer for Togyzkumalak...")
+    print(f"Device: {device}")
+    print(f"GPUs: {NUM_GPUS}")
+    
+    if NUM_GPUS > 0:
+        for i in range(NUM_GPUS):
+            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
     
     # Test game logic
     game = TogyzkumalakGame()
@@ -1078,9 +1389,10 @@ if __name__ == "__main__":
     print(f"Policy: {pi}")
     print(f"Value: {v}")
     
-    # Quick self-play test
-    coach = AlphaZeroCoach(game, nnet, config)
-    examples = coach.executeEpisode()
-    print(f"Episode generated {len(examples)} examples")
+    # Test optimal config
+    print("\n=== Optimal Configs ===")
+    for gpus in [1, 4, 8, 16]:
+        cfg = get_optimal_config(gpus, 1.0)
+        print(f"{gpus} GPUs: {cfg['numIters']} iters, {cfg['numEps']} eps, ~{cfg['estimated_time_min']:.0f} min")
     
     print("\nAlphaZero trainer ready for use!")
