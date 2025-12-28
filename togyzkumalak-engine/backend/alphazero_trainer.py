@@ -423,28 +423,56 @@ class NNetWrapper:
     
     def predict(self, board: np.ndarray) -> Tuple[np.ndarray, float]:
         """Predict policy and value for board."""
+        # Convert to numpy array if needed
+        if not isinstance(board, np.ndarray):
+            board = np.array(board, dtype=np.float32)
+        
         # Ensure board has correct shape (23 elements)
-        if len(board) < 23:
-            log.warning(f"Board has wrong size: {len(board)}, expected 23. Padding or fixing...")
-            if len(board) == 8:
-                # This might be a partial board, reconstruct
-                board = np.concatenate([board, np.zeros(23 - len(board), dtype=np.float32)])
-            elif len(board) < 23:
-                board = np.pad(board, (0, 23 - len(board)), mode='constant', constant_values=0)
+        original_size = len(board)
+        if original_size != 23:
+            log.warning(f"Board has wrong size: {original_size}, expected 23. Board: {board[:10]}...")
+            if original_size < 23:
+                if original_size == 8:
+                    # This might be a partial board (first 8 pits), reconstruct full board
+                    log.warning(f"Detected 8-element board, reconstructing to 23 elements")
+                    board = np.concatenate([
+                        board,  # First 8 pits
+                        np.zeros(10, dtype=np.float32),  # Remaining 10 pits
+                        np.zeros(5, dtype=np.float32)  # Tuzduk, kazan, player
+                    ])
+                else:
+                    # Pad with zeros
+                    board = np.pad(board, (0, 23 - original_size), mode='constant', constant_values=0)
             else:
+                # Truncate if too long
                 board = board[:23]
+        
+        # Validate board size before conversion
+        if len(board) != 23:
+            log.error(f"CRITICAL: Board still has wrong size after fix: {len(board)}")
+            raise ValueError(f"Board must have exactly 23 elements, got {len(board)}")
         
         obs = self.game.boardToObservation(board)
         
         # Ensure observation has correct size (128)
         if len(obs) != 128:
-            log.error(f"Observation has wrong size: {len(obs)}, expected 128")
+            log.error(f"Observation has wrong size: {len(obs)}, expected 128. Board size was: {len(board)}")
             if len(obs) < 128:
                 obs = np.pad(obs, (0, 128 - len(obs)), mode='constant', constant_values=0)
             else:
                 obs = obs[:128]
         
+        # Final validation
+        if len(obs) != 128:
+            log.error(f"CRITICAL: Observation still has wrong size: {len(obs)}")
+            raise ValueError(f"Observation must have exactly 128 elements, got {len(obs)}")
+        
         obs_tensor = torch.FloatTensor(obs).to(self.device)
+        
+        # Validate tensor shape
+        if obs_tensor.shape[0] != 128:
+            log.error(f"CRITICAL: Tensor has wrong shape: {obs_tensor.shape}, expected (128,)")
+            raise ValueError(f"Tensor must have shape (128,), got {obs_tensor.shape}")
         
         self.nnet.eval()
         with torch.no_grad():
