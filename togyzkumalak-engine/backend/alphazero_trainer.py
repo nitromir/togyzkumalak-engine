@@ -374,6 +374,19 @@ class AlphaZeroNetwork(nn.Module):
         self.dropout = nn.Dropout(0.3)
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        # Validate input tensor shape
+        if x.shape[-1] != 128:
+            log.error(f"FORWARD: Input tensor has wrong shape: {x.shape}, expected last dim 128")
+            log.error(f"FORWARD: This means board was incorrectly converted to observation!")
+            # Try to fix if possible
+            if x.shape[-1] < 128:
+                padding = torch.zeros(*x.shape[:-1], 128 - x.shape[-1], device=x.device, dtype=x.dtype)
+                x = torch.cat([x, padding], dim=-1)
+                log.warning(f"FORWARD: Padded tensor to shape: {x.shape}")
+            else:
+                x = x[..., :128]
+                log.warning(f"FORWARD: Truncated tensor to shape: {x.shape}")
+        
         single_sample = x.dim() == 1
         if single_sample:
             x = x.unsqueeze(0)
