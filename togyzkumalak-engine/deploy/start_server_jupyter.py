@@ -22,7 +22,7 @@ try:
     response = requests.get('http://localhost:8000/api/health', timeout=2)
     if response.status_code == 200:
         print("✅ Server is already running!")
-        display(HTML('<iframe src="http://localhost:8000" width="100%" height="800" style="border:none"></iframe>'))
+        display(IFrame(src="http://localhost:8000", width="100%", height=800))
     else:
         raise Exception("Server not responding")
 except Exception as e:

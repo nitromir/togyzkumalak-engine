@@ -8,7 +8,7 @@ import subprocess
 import os
 import time
 import requests
-from IPython.display import display, HTML, clear_output
+from IPython.display import display, IFrame, clear_output
 
 # Change to project directory
 os.chdir('/workspace/togyzkumalak/togyzkumalak-engine')
@@ -18,7 +18,7 @@ try:
     response = requests.get('http://localhost:8000/api/health', timeout=2)
     if response.status_code == 200:
         display(HTML('<h3 style="color:green">✅ Server is already running!</h3>'))
-        display(HTML('<iframe src="http://localhost:8000" width="100%" height="800" style="border:none"></iframe>'))
+        display(IFrame(src="http://localhost:8000", width="100%", height=800))
     else:
         raise Exception("Server not responding")
 except:
@@ -39,7 +39,7 @@ except:
             response = requests.get('http://localhost:8000/api/health', timeout=1)
             if response.status_code == 200:
                 display(HTML('<h3 style="color:green">✅ Server started successfully!</h3>'))
-                display(HTML('<iframe src="http://localhost:8000" width="100%" height="800" style="border:none"></iframe>'))
+                display(IFrame(src="http://localhost:8000", width="100%", height=800))
                 break
         except:
             if i == 9:
