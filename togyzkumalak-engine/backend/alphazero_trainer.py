@@ -663,7 +663,11 @@ class MCTS:
         
         # Validate board size before using
         if len(canonicalBoard) != 23:
-            log.error(f"MCTS.search: canonicalBoard has wrong size: {len(canonicalBoard)}, expected 23")
+            log.error(f"MCTS.search: canonicalBoard has wrong size: {len(canonicalBoard)}, expected 23. Board: {canonicalBoard[:min(10, len(canonicalBoard))]}")
+            if len(canonicalBoard) == 8:
+                log.error(f"MCTS.search: CRITICAL - 8-element board detected! This is likely the source of the error.")
+                import traceback
+                log.error(f"MCTS.search: Call stack:\n{''.join(traceback.format_stack()[-8:-1])}")
             # Try to fix it
             if len(canonicalBoard) < 23:
                 canonicalBoard = np.pad(canonicalBoard, (0, 23 - len(canonicalBoard)), mode='constant', constant_values=0)
