@@ -8,7 +8,7 @@ import subprocess
 import os
 import time
 import requests
-from IPython.display import display, IFrame, clear_output
+from IPython.display import display, IFrame, HTML, clear_output
 
 # Change to project directory
 os.chdir('/workspace/togyzkumalak/togyzkumalak-engine')
