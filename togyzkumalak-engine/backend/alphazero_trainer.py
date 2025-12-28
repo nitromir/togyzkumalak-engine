@@ -160,6 +160,14 @@ class TogyzkumalakGame:
     
     def getNextState(self, board: np.ndarray, player: int, action: int) -> Tuple[np.ndarray, int]:
         """Execute action and return new board and next player."""
+        # Validate board size
+        if len(board) != 23:
+            log.error(f"getNextState: Board has wrong size: {len(board)}, expected 23. Board: {board[:min(10, len(board))]}")
+            if len(board) < 23:
+                if len(board) == 8:
+                    log.error(f"getNextState: CRITICAL - 8-element board detected!")
+                board = np.pad(board, (0, 23 - len(board)), mode='constant', constant_values=0) if len(board) < 23 else board[:23]
+        
         new_board = board.copy()
         color = 0 if player == 1 else 1
         
