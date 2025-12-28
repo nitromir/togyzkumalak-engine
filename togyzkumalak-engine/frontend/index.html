@@ -205,6 +205,14 @@
                     <div class="move-list" id="moveList">
                         <!-- Moves will be added here -->
                     </div>
+                    
+                    <!-- Panel Annotation -->
+                    <div class="panel-annotation">
+                        <h4>📖 About this panel</h4>
+                        <p><strong>Move History</strong> - A chronological list of all moves made in the current game.</p>
+                        <p><strong>Notation:</strong> Each entry shows the pit number (1-9) selected by the player.</p>
+                        <p><strong>Interactive:</strong> Clicking on a move in the list allows you to jump back to that state (if supported by the mode).</p>
+                    </div>
                 </div>
 
                 <!-- Gemini Analysis Panel -->
@@ -216,6 +224,18 @@
                     </div>
                     <div class="analysis-content" id="analysisContent">
                         <p class="placeholder">Нажмите "Анализировать" для получения анализа от Gemini.</p>
+                    </div>
+                    
+                    <!-- Panel Annotation -->
+                    <div class="panel-annotation">
+                        <h4>📖 About this panel</h4>
+                        <p><strong>AI Analysis</strong> - Real-time strategic insights provided by the Gemini Large Language Model.</p>
+                        <p><strong>Features:</strong></p>
+                        <ul>
+                            <li><strong>Analyze:</strong> Provides a deep dive into the current board state, identifying threats and opportunities.</li>
+                            <li><strong>Suggest:</strong> Gemini recommends the best move based on its tactical understanding.</li>
+                        </ul>
+                        <p><strong>Tip:</strong> Use this during practice games to understand expert-level Togyzkumalak logic.</p>
                     </div>
                 </div>
             </aside>
@@ -315,11 +335,25 @@
                         <div id="replayInfo" class="replay-info">
                             <p class="placeholder">Выберите партию для просмотра</p>
                         </div>
+                        
+                        <!-- Panel Annotation -->
+                        <div class="panel-annotation">
+                            <h4>📖 About this panel</h4>
+                            <p><strong>Game Metadata</strong> - Displays technical details about the recorded game.</p>
+                            <p><strong>Content:</strong> Final scores, winning side, model versions, and total steps taken. This is essential for distinguishing between human-like and AI-only games.</p>
+                        </div>
                     </div>
                     <div class="panel">
                         <h3>🔍 Последнее Действие</h3>
                         <div id="replayLastAction" class="last-action-info">
                             -
+                        </div>
+                        
+                        <!-- Panel Annotation -->
+                        <div class="panel-annotation">
+                            <h4>📖 About this panel</h4>
+                            <p><strong>Action Inspector</strong> - Shows the detailed logic of the most recent move.</p>
+                            <p><strong>Details:</strong> Pit number, captures made, and any special board rules (like <em>Tuzdyk</em>) that were triggered during the move distribution.</p>
                         </div>
                     </div>
                 </div>
@@ -496,6 +530,19 @@
                 <button id="btnStartTraining" class="btn btn-primary btn-large">
                     🚀 Запустить Self-Play
                 </button>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Self-Play Training (PolicyNetwork)</strong> - Basic reinforcement learning where the AI plays against itself to improve.</p>
+                    <p><strong>When to use:</strong> Use this for rapid iteration or testing changes in the <code>PolicyNetwork</code> architecture before moving to more intensive AlphaZero training.</p>
+                    <p><strong>Parameters:</strong></p>
+                    <ul>
+                        <li><strong>Epsilon:</strong> Chance of making a random move. Lower values (0.1-0.2) make the AI focus on what it already knows.</li>
+                        <li><strong>Hidden Size:</strong> Number of neurons in the network layers (64-128 recommended).</li>
+                    </ul>
+                    <p><strong>Workflow:</strong> Set games count, click 🚀, and watch the win rates evolve in the progress panel.</p>
+                </div>
             </div>
             
             <!-- Training Progress Panel -->
@@ -536,6 +583,19 @@
                 <div id="modelsList" class="models-list">
                     <p class="empty-text">Нет сохранённых моделей</p>
                 </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Training Progress & Models</strong> - Real-time tracking of the current self-play session and management of saved model weights.</p>
+                    <p><strong>Functionality:</strong></p>
+                    <ul>
+                        <li><strong>Progress Bar:</strong> Shows how many games are completed in the current run.</li>
+                        <li><strong>Stats Table:</strong> Displays the distribution of wins/losses/draws.</li>
+                        <li><strong>Model List:</strong> Your library of saved <code>.pt</code> and <code>.pth.tar</code> files.</li>
+                    </ul>
+                    <p><strong>Actions:</strong> Use the "Загрузить" button on any model card to make it active for play or further training.</p>
+                </div>
             </div>
             
             <!-- Training Sessions Panel -->
@@ -543,6 +603,13 @@
                 <h2>📝 История Тренировок</h2>
                 <div id="sessionsList" class="sessions-list">
                     <p class="empty-text">Нет завершённых сессий</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Training History</strong> - Logs of completed <code>Gym</code> reinforcement learning sessions.</p>
+                    <p><strong>Information:</strong> Each card represents a session, showing the win/loss distribution and average game length. This helps you identify which training parameters yielded the most competitive AI.</p>
                 </div>
             </div>
 
@@ -760,6 +827,18 @@
                         📤 Экспорт для обучения
                     </button>
                 </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>VS Arena</strong> - Test your models against each other or against the Gemini LLM.</p>
+                    <p><strong>Modes:</strong></p>
+                    <ul>
+                        <li><strong>vs Gemini:</strong> Use this to estimate your model's real-world ELO. Gemini plays at a consistent level (~700-1500 ELO depending on settings).</li>
+                        <li><strong>vs Local Model:</strong> Compare two different saved models to see which architecture or training run is superior.</li>
+                    </ul>
+                    <p><strong>Workflow:</strong> Select models, set number of games (even numbers recommended for color switching), and click ⚔️.</p>
+                </div>
             </div>
             
             <!-- Battle Progress Panel -->
@@ -800,6 +879,18 @@
                 <button id="btnStopBattle" class="btn btn-danger hidden">
                     ⏹️ Остановить Батл
                 </button>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Battle Progress</strong> - Monitors the ongoing competition.</p>
+                    <p><strong>Key Metrics:</strong></p>
+                    <ul>
+                        <li><strong>ELO Rating:</strong> Calculated dynamically based on wins/losses against the opponent.</li>
+                        <li><strong>Category:</strong> Your model's rank (from Novice to Grandmaster) based on its ELO.</li>
+                    </ul>
+                    <p><strong>Tip:</strong> If the model is losing consistently, stop the battle and try further training with different parameters.</p>
+                </div>
             </div>
             
             <!-- ELO Chart Panel -->
@@ -815,6 +906,14 @@
                     <div class="legend-item"><span class="legend-line cm"></span> КМС (1800)</div>
                     <div class="legend-item"><span class="legend-line club"></span> Клубный (1400)</div>
                 </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>ELO Rating Chart</strong> - Visual history of model's performance trends.</p>
+                    <p><strong>Stage:</strong> Useful during "Validation" stage to see if new model versions are truly better or just lucky in a few games.</p>
+                    <p><strong>Interpretation:</strong> Upward trend means the model is learning effective strategies against the opponent (Gemini or Local).</p>
+                </div>
             </div>
             
             <!-- Last Game Summary Panel -->
@@ -822,6 +921,14 @@
                 <h2>📝 Резюме Последней Игры</h2>
                 <div id="lastGameSummary" class="game-summary">
                     <p class="placeholder">Резюме появится после завершения игры...</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Last Game Summary</strong> - AI-generated commentary on the most recent match.</p>
+                    <p><strong>Content:</strong> Key mistakes, brilliant moves, and tactical shifts observed during the game.</p>
+                    <p><strong>Benefit:</strong> Helps you understand <em>why</em> a model won or lost beyond just looking at the final score.</p>
                 </div>
             </div>
             
@@ -934,6 +1041,18 @@
                     </button>
                     <span id="metricsTimestamp" class="timestamp">Ожидание...</span>
                 </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Real Metrics</strong> - The command center for the analytics dashboard.</p>
+                    <p><strong>Workflow:</strong></p>
+                    <ul>
+                        <li><strong>Refresh:</strong> Manually trigger a rescan of all game log files on the server.</li>
+                        <li><strong>Auto:</strong> Enable live updates as games are being played.</li>
+                        <li><strong>Sync W&B:</strong> Upload these metrics to Weights & Biases for long-term experiment tracking.</li>
+                    </ul>
+                </div>
             </div>
             
             <!-- Gemini Battle Stats Panel -->
@@ -965,6 +1084,13 @@
                         <div class="stat-label">Ср. длина игры</div>
                     </div>
                 </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Gemini Battle Stats</strong> - Aggregated performance data of your active model against Gemini.</p>
+                    <p><strong>Insights:</strong> Use <em>Winrate</em> and <em>Avg Game Length</em> to gauge the tactical efficiency of your model. Higher winrates against Gemini at high ELO settings indicate a robust neural network.</p>
+                </div>
             </div>
             
             <!-- ELO Panel -->
@@ -989,6 +1115,13 @@
                 </div>
                 <div class="chart-container">
                     <canvas id="eloProgressChart" height="200"></canvas>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>ELO Rating Progress</strong> - A detailed look at the player's or model's skill evolution.</p>
+                    <p><strong>Metrics:</strong> Shows the current rating, the all-time peak, and a historical trend graph. This provides a clear visualization of progress over hundreds of games.</p>
                 </div>
             </div>
             
@@ -1025,6 +1158,19 @@
                         <span id="datasetDiskSize">0 MB</span>
                     </div>
                 </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Training Dataset</strong> - Overview of all data collected for training neural networks.</p>
+                    <p><strong>Components:</strong></p>
+                    <ul>
+                        <li><strong>Gemini:</strong> High-quality games played by the LLM.</li>
+                        <li><strong>Self-Play:</strong> Large volumes of AI vs AI games.</li>
+                        <li><strong>Tournament:</strong> Historical expert games from the Android APK and PlayOK.</li>
+                    </ul>
+                    <p><strong>Importance:</strong> A diverse dataset prevents the AI from repeating the same mistakes and helps it discover new winning patterns.</p>
+                </div>
             </div>
             
             <!-- Convergence Panel -->
@@ -1046,6 +1192,18 @@
                         Нужно больше данных для анализа
                     </p>
                 </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Training Status (Convergence)</strong> - Scientific analysis of whether the AI is actually improving over time.</p>
+                    <p><strong>Metrics:</strong></p>
+                    <ul>
+                        <li><strong>Variance:</strong> Consistency of the AI performance. High variance means it's unpredictable.</li>
+                        <li><strong>Trend:</strong> Long-term direction of the ELO rating.</li>
+                    </ul>
+                    <p><strong>Recommendation:</strong> Use this to decide if you need more training epochs or if the model has "plateaued" (reached its maximum potential with current architecture).</p>
+                </div>
             </div>
             
             <!-- A/B Testing Panel -->
@@ -1060,6 +1218,14 @@
                 <div id="experimentsList" class="experiments-list">
                     <p class="empty-text">Нет активных экспериментов</p>
                 </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Schema A/B Testing</strong> - Experimental feature to test how different data formats affect Gemini LLM performance.</p>
+                    <p><strong>Purpose:</strong> LLMs are sensitive to how the board is described (JSON vs Text vs Compact). This tool runs controlled batches of games to find the most "readable" format for the AI.</p>
+                    <p><strong>Workflow:</strong> Create an experiment, select two different schemas, and run a set of games to see which one results in higher accuracy.</p>
+                </div>
             </div>
             
             <!-- Recent Games Panel -->
@@ -1067,6 +1233,13 @@
                 <h2>🕐 Последние игры</h2>
                 <div id="recentGamesList" class="recent-games-list">
                     <p class="empty-text">Нет сыгранных игр</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Recent Games</strong> - Chronological feed of every game played on this server.</p>
+                    <p><strong>Audit Trail:</strong> Useful for spotting anomalies in AI behavior or verifying that training sessions are producing valid game files.</p>
                 </div>
             </div>
         </main>
