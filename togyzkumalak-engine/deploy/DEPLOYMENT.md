@@ -212,6 +212,55 @@ curl http://localhost:8000/api/training/alphazero/metrics
 
 ---
 
+## 📊 Monitoring Tools
+
+### Rich CLI Monitor (Recommended)
+
+Beautiful terminal dashboard with progress bars and graphs:
+
+```bash
+# On the server
+cd /workspace/togyzkumalak/gym-togyzkumalak-master/togyzkumalak-engine
+python deploy/monitor.py
+
+# Or monitor remotely
+python deploy/monitor.py --host <vast-ip> --port 8000
+```
+
+Features:
+- Real-time progress bars
+- ASCII loss graphs
+- GPU status
+- Checkpoint list
+- Color-coded metrics
+
+### Simple Watch Script
+
+Lightweight bash alternative:
+
+```bash
+./deploy/watch.sh              # localhost
+./deploy/watch.sh 192.168.1.1  # remote host
+```
+
+### Auto-Sync Checkpoints (IMPORTANT!)
+
+**Run this on YOUR LOCAL machine** to automatically download checkpoints while training runs on Vast.ai:
+
+#### Linux/Mac:
+```bash
+./deploy/sync_checkpoints.sh "root@123.45.67.89 -p 12345" ./my_checkpoints 30
+```
+
+#### Windows PowerShell:
+```powershell
+.\deploy\sync_checkpoints.ps1 -SshConnection "root@123.45.67.89 -p 12345" -LocalDir ".\checkpoints"
+```
+
+This ensures you don't lose progress if your Vast.ai instance times out!
+
+---
+
 ## 🔧 Troubleshooting
 
 ### CUDA Out of Memory
