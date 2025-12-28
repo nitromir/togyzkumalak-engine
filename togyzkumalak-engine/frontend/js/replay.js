@@ -168,11 +168,17 @@ class ReplayViewer {
             data.replays.forEach(replay => {
                 const btn = document.createElement('button');
                 btn.className = 'replay-btn';
+                
+                // Model info for gym simulations
+                const modelName = replay.model_name || 'policy_net';
+                const modelIcon = replay.model_type === 'alphazero' ? '🦾' : '🧠';
+                
                 btn.innerHTML = `
                     <span class="replay-id">Партия #${replay.game_id}</span>
                     <span class="replay-winner ${replay.winner.toLowerCase()}">${replay.winner}</span>
                     <span class="replay-score">${replay.final_score.white}:${replay.final_score.black}</span>
                     <span class="replay-steps">${replay.total_steps} ходов</span>
+                    <span class="replay-model">${modelIcon} ${modelName}</span>
                 `;
                 btn.onclick = () => this.loadReplay(replay.game_id);
                 listContainer.appendChild(btn);
@@ -212,12 +218,17 @@ class ReplayViewer {
                 const eloChange = replay.elo_change > 0 ? `+${replay.elo_change}` : replay.elo_change;
                 const eloClass = replay.elo_change >= 0 ? 'elo-up' : 'elo-down';
                 
+                // Model info
+                const modelName = replay.model_name || 'default';
+                const modelIcon = replay.model_type === 'alphazero' ? '🦾' : '🧠';
+                
                 btn.innerHTML = `
                     <span class="replay-id">Игра #${replay.game_id}</span>
                     <span class="replay-winner ${winnerClass}">${winnerText}</span>
                     <span class="replay-score">${replay.final_score?.white_kazan || 0}:${replay.final_score?.black_kazan || 0}</span>
                     <span class="replay-elo ${eloClass}">${eloChange} ELO</span>
                     <span class="replay-steps">${replay.total_moves} ходов</span>
+                    <span class="replay-model">${modelIcon} ${modelName} vs 🤖 Gemini</span>
                 `;
                 btn.onclick = () => this.showGeminiBattleDetails(replay.filename);
                 listContainer.appendChild(btn);

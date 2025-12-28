@@ -31,6 +31,33 @@ class TogyzkumalakApp {
         this.initBoard();
         this.loadEloStats();
         this.loadConfidenceSetting();  // Apply saved preference at startup
+        this.loadActiveModelInfo();    // Load active model info for setup panel
+    }
+    
+    /**
+     * Load and display active model info in setup panel.
+     */
+    async loadActiveModelInfo() {
+        try {
+            const response = await fetch('/api/ai/model-info?level=5');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const modelNameEl = document.getElementById('activeModelName');
+            
+            if (modelNameEl) {
+                const typeIcon = data.type === 'alphazero' ? '🦾' : '🧠';
+                const name = data.name || 'default (встроенная)';
+                modelNameEl.textContent = `${typeIcon} ${name}`;
+                
+                // Add styling based on type
+                modelNameEl.className = 'model-name ' + (data.type === 'alphazero' ? 'alphazero' : 'gym');
+            }
+        } catch (e) {
+            console.error('Error loading active model info:', e);
+            const modelNameEl = document.getElementById('activeModelName');
+            if (modelNameEl) modelNameEl.textContent = '🧠 default';
+        }
     }
 
     /**

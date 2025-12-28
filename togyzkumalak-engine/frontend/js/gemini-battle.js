@@ -747,3 +747,397 @@
     
 })();
 
+// =========================================================================
+// GAME VISUALIZER MODULE
+// =========================================================================
+
+(function() {
+    'use strict';
+    
+    let vizState = {
+        moves: [],
+        currentStep: 0,
+        isPlaying: false,
+        playInterval: null,
+        // Board state: 18 pits (0-8 white, 9-17 black) + 2 kazans (18 white, 19 black)
+        board: null,
+        currentPlayer: 0 // 0 = white, 1 = black
+    };
+    
+    const INITIAL_KUMALAKS = 9;
+    const TOTAL_KUMALAKS = 162;
+    
+    // Initialize board state
+    function initBoard() {
+        vizState.board = new Array(18).fill(INITIAL_KUMALAKS).concat([0, 0]);
+        vizState.currentPlayer = 0;
+    }
+    
+    // Parse moves from various formats
+    function parseMoves(input) {
+        if (!input || !input.trim()) return [];
+        
+        const cleaned = input.trim();
+        let moves = [];
+        
+        // Try comma-separated: 1,5,3,7...
+        if (cleaned.includes(',')) {
+            moves = cleaned.split(',').map(m => parseInt(m.trim())).filter(m => m >= 1 && m <= 9);
+        }
+        // Try space-separated: 1 5 3 7...
+        else if (/^\d+(\s+\d+)*$/.test(cleaned)) {
+            moves = cleaned.split(/\s+/).map(m => parseInt(m)).filter(m => m >= 1 && m <= 9);
+        }
+        // Try notation: 1.e4 e5 2.Nf3... (extract numbers)
+        else {
+            const matches = cleaned.match(/\d+/g);
+            if (matches) {
+                moves = matches.map(m => parseInt(m)).filter(m => m >= 1 && m <= 9);
+            }
+        }
+        
+        return moves;
+    }
+    
+    // Execute a move on the board
+    function executeMove(pitIndex) {
+        // pitIndex is 1-9, convert to array index
+        const isWhite = vizState.currentPlayer === 0;
+        const baseIndex = isWhite ? 0 : 9;
+        const pit = baseIndex + (pitIndex - 1);
+        
+        if (vizState.board[pit] === 0) return false; // Invalid move
+        
+        let kumalaks = vizState.board[pit];
+        vizState.board[pit] = 0;
+        
+        let currentPit = pit;
+        
+        // Distribute kumalaks
+        while (kumalaks > 0) {
+            currentPit = (currentPit + 1) % 18;
+            
+            // Skip tuzdyk (not implemented here for simplicity)
+            vizState.board[currentPit]++;
+            kumalaks--;
+        }
+        
+        // Check for capture (last pit has even number and in opponent's territory)
+        const opponentBase = isWhite ? 9 : 0;
+        const opponentEnd = isWhite ? 18 : 9;
+        
+        if (currentPit >= opponentBase && currentPit < opponentEnd) {
+            const finalCount = vizState.board[currentPit];
+            if (finalCount % 2 === 0) {
+                const kazanIndex = isWhite ? 18 : 19;
+                vizState.board[kazanIndex] += finalCount;
+                vizState.board[currentPit] = 0;
+            }
+        }
+        
+        // Switch player
+        vizState.currentPlayer = 1 - vizState.currentPlayer;
+        return true;
+    }
+    
+    // Draw board on canvas
+    function drawBoard() {
+        const canvas = document.getElementById('visualizerBoard');
+        if (!canvas || !vizState.board) return;
+        
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // Clear
+        ctx.fillStyle = '#8B5A2B';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Draw pits
+        const pitWidth = width / 11;
+        const pitHeight = height / 3;
+        const pitRadius = Math.min(pitWidth, pitHeight) * 0.35;
+        
+        // Draw black side (top row, pits 9-17, displayed right to left)
+        for (let i = 0; i < 9; i++) {
+            const x = (9 - i) * pitWidth + pitWidth / 2;
+            const y = pitHeight / 2 + 20;
+            const pitIndex = 9 + i;
+            
+            drawPit(ctx, x, y, pitRadius, vizState.board[pitIndex], 'black', i + 1);
+        }
+        
+        // Draw white side (bottom row, pits 0-8, displayed left to right)
+        for (let i = 0; i < 9; i++) {
+            const x = (i + 1) * pitWidth + pitWidth / 2;
+            const y = height - pitHeight / 2 - 20;
+            const pitIndex = i;
+            
+            drawPit(ctx, x, y, pitRadius, vizState.board[pitIndex], 'white', i + 1);
+        }
+        
+        // Draw kazans
+        const kazanRadius = pitRadius * 0.8;
+        
+        // Black kazan (top left)
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath();
+        ctx.arc(pitWidth / 2, height / 2 - 40, kazanRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(vizState.board[19], pitWidth / 2, height / 2 - 35);
+        
+        // White kazan (bottom right)
+        ctx.fillStyle = '#f0f0f0';
+        ctx.beginPath();
+        ctx.arc(width - pitWidth / 2, height / 2 + 40, kazanRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.fillText(vizState.board[18], width - pitWidth / 2, height / 2 + 45);
+    }
+    
+    function drawPit(ctx, x, y, radius, count, side, pitNum) {
+        // Pit background
+        ctx.fillStyle = side === 'white' ? '#D2B48C' : '#654321';
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Border
+        ctx.strokeStyle = side === 'white' ? '#A0522D' : '#3d2817';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Kumalak count
+        ctx.fillStyle = side === 'white' ? '#000' : '#fff';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(count, x, y);
+        
+        // Pit number (small)
+        ctx.font = '10px Arial';
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillText(pitNum, x, y + radius + 12);
+    }
+    
+    // Update UI
+    function updateUI() {
+        const moveCounter = document.getElementById('vizMoveCounter');
+        const currentPlayer = document.getElementById('vizCurrentPlayer');
+        const blackScore = document.getElementById('vizBlackScore');
+        const whiteScore = document.getElementById('vizWhiteScore');
+        const slider = document.getElementById('vizSlider');
+        
+        if (moveCounter) {
+            moveCounter.textContent = `Ход: ${vizState.currentStep} / ${vizState.moves.length}`;
+        }
+        if (currentPlayer) {
+            currentPlayer.textContent = vizState.currentPlayer === 0 ? 'Ход белых' : 'Ход чёрных';
+        }
+        if (blackScore && vizState.board) {
+            blackScore.textContent = vizState.board[19];
+        }
+        if (whiteScore && vizState.board) {
+            whiteScore.textContent = vizState.board[18];
+        }
+        if (slider) {
+            slider.max = vizState.moves.length;
+            slider.value = vizState.currentStep;
+        }
+        
+        // Update moves list
+        renderMovesList();
+        
+        drawBoard();
+    }
+    
+    function renderMovesList() {
+        const container = document.getElementById('vizMovesList');
+        if (!container || vizState.moves.length === 0) return;
+        
+        container.innerHTML = vizState.moves.map((move, i) => {
+            const isWhite = i % 2 === 0;
+            const moveNum = Math.floor(i / 2) + 1;
+            const prefix = isWhite ? `${moveNum}.` : '';
+            return `<span class="move-item ${i < vizState.currentStep ? 'played' : ''} ${i === vizState.currentStep - 1 ? 'current' : ''}" 
+                          data-step="${i + 1}">${prefix}${move}</span>`;
+        }).join(' ');
+        
+        // Add click handlers
+        container.querySelectorAll('.move-item').forEach(el => {
+            el.addEventListener('click', () => {
+                goToStep(parseInt(el.dataset.step));
+            });
+        });
+    }
+    
+    // Navigation functions
+    function goToStep(step) {
+        step = Math.max(0, Math.min(step, vizState.moves.length));
+        
+        // Reset and replay to step
+        initBoard();
+        vizState.currentStep = 0;
+        
+        for (let i = 0; i < step; i++) {
+            executeMove(vizState.moves[i]);
+            vizState.currentStep++;
+        }
+        
+        updateUI();
+    }
+    
+    function nextStep() {
+        if (vizState.currentStep < vizState.moves.length) {
+            executeMove(vizState.moves[vizState.currentStep]);
+            vizState.currentStep++;
+            updateUI();
+        }
+    }
+    
+    function prevStep() {
+        if (vizState.currentStep > 0) {
+            goToStep(vizState.currentStep - 1);
+        }
+    }
+    
+    function firstStep() {
+        goToStep(0);
+    }
+    
+    function lastStep() {
+        goToStep(vizState.moves.length);
+    }
+    
+    function togglePlay() {
+        if (vizState.isPlaying) {
+            clearInterval(vizState.playInterval);
+            vizState.isPlaying = false;
+            document.getElementById('btnVizPlay').textContent = '▶️';
+        } else {
+            vizState.isPlaying = true;
+            document.getElementById('btnVizPlay').textContent = '⏸';
+            vizState.playInterval = setInterval(() => {
+                if (vizState.currentStep >= vizState.moves.length) {
+                    togglePlay();
+                    return;
+                }
+                nextStep();
+            }, 800);
+        }
+    }
+    
+    // Load moves from input
+    function loadCustomMoves() {
+        const input = document.getElementById('visualizerMovesInput');
+        if (!input) return;
+        
+        const moves = parseMoves(input.value);
+        if (moves.length === 0) {
+            alert('Не удалось распознать ходы. Используйте формат: 1,5,3,7... или 1 5 3 7...');
+            return;
+        }
+        
+        vizState.moves = moves;
+        initBoard();
+        vizState.currentStep = 0;
+        updateUI();
+        
+        document.getElementById('vizMovesList').innerHTML = '';
+        renderMovesList();
+    }
+    
+    // Load game from battle history
+    async function loadGameFromHistory(gameId) {
+        try {
+            const response = await fetch(`/api/gemini-battle/game/${gameId}`);
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            if (data.moves && data.moves.length > 0) {
+                vizState.moves = data.moves;
+                initBoard();
+                vizState.currentStep = 0;
+                updateUI();
+            }
+        } catch (e) {
+            console.error('Error loading game:', e);
+        }
+    }
+    
+    // Populate game selector from sessions
+    async function populateGameSelector() {
+        const select = document.getElementById('visualizerGameSelect');
+        if (!select) return;
+        
+        try {
+            const response = await fetch('/api/gemini-battle/sessions');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const sessions = data.sessions || [];
+            
+            select.innerHTML = '<option value="">-- Выберите игру --</option>';
+            
+            sessions.forEach(session => {
+                if (session.games && session.games.length > 0) {
+                    session.games.forEach((game, i) => {
+                        const option = document.createElement('option');
+                        option.value = game.id || `${session.session_id}_${i}`;
+                        const result = game.winner === 'model' ? '✅' : game.winner === 'gemini' ? '❌' : '🤝';
+                        option.textContent = `${result} Игра ${i + 1} (${session.session_id.slice(0, 8)})`;
+                        select.appendChild(option);
+                    });
+                }
+            });
+        } catch (e) {
+            console.error('Error loading sessions for visualizer:', e);
+        }
+    }
+    
+    function initVisualizer() {
+        // Buttons
+        document.getElementById('btnVizFirst')?.addEventListener('click', firstStep);
+        document.getElementById('btnVizPrev')?.addEventListener('click', prevStep);
+        document.getElementById('btnVizPlay')?.addEventListener('click', togglePlay);
+        document.getElementById('btnVizNext')?.addEventListener('click', nextStep);
+        document.getElementById('btnVizLast')?.addEventListener('click', lastStep);
+        document.getElementById('btnLoadCustomMoves')?.addEventListener('click', loadCustomMoves);
+        
+        // Slider
+        document.getElementById('vizSlider')?.addEventListener('input', (e) => {
+            goToStep(parseInt(e.target.value));
+        });
+        
+        // Game selector
+        document.getElementById('visualizerGameSelect')?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                loadGameFromHistory(e.target.value);
+            }
+        });
+        
+        // Initialize board and draw
+        initBoard();
+        drawBoard();
+        
+        // Populate selector when tab is shown
+        const geminiBattleTab = document.querySelector('[data-mode="gemini-battle"]');
+        if (geminiBattleTab) {
+            geminiBattleTab.addEventListener('click', populateGameSelector);
+        }
+        
+        console.log('[OK] Game Visualizer initialized');
+    }
+    
+    // Initialize
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initVisualizer);
+    } else {
+        initVisualizer();
+    }
+    
+})();
+

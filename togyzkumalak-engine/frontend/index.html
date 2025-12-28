@@ -53,6 +53,12 @@
             <div id="setupPanel" class="panel setup-panel">
                 <h2>🎯 Новая Игра</h2>
                 
+                <!-- Active Model Info -->
+                <div class="active-model-info" id="activeModelInfo">
+                    <span class="model-label">🧠 Активная модель:</span>
+                    <span class="model-name" id="activeModelName">Загрузка...</span>
+                </div>
+                
                 <div class="setup-section">
                     <label>Играть за:</label>
                     <div class="color-selector">
@@ -104,6 +110,16 @@
                 <button id="btnStartGame" class="btn btn-primary btn-large">
                     ▶️ Начать Игру
                 </button>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>New Game</strong> - Start a game against the AI at different difficulty levels.</p>
+                    <p><strong>Levels 1-2:</strong> Simple heuristics, good for learning the rules.</p>
+                    <p><strong>Levels 3-5:</strong> Neural network AI. Level 5 uses the currently loaded model (shown above).</p>
+                    <p><strong>Gemini AI:</strong> Google's LLM plays via API - unpredictable but educational.</p>
+                    <p><strong>Tip:</strong> Load a trained model in the Training tab to improve Level 5 AI.</p>
+                </div>
             </div>
 
             <!-- Game Panel (hidden initially) -->
@@ -220,6 +236,24 @@
                 <h3 style="margin-top: 24px; color: var(--accent-secondary);">🤖 Батлы против Gemini</h3>
                 <div class="replay-list" id="geminiBattleReplayList">
                     <p class="placeholder">Загрузка игр против Gemini...</p>
+                </div>
+                
+                <!-- Custom Move Parser Section -->
+                <div class="custom-replay-section">
+                    <h3>📝 Разобрать свою партию</h3>
+                    <p class="section-hint">Вставьте запись ходов в формате: 1.e4 e5 2.Nf3... или 1,5,3,7...</p>
+                    <textarea id="customMovesInput" class="custom-moves-input" placeholder="Пример: 1,5,3,7,2,6,4,8,9 или 1.1 5 2.3 7..."></textarea>
+                    <button id="btnParseCustomMoves" class="btn btn-secondary">🔍 Разобрать на доске</button>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Replays</strong> - Review past games to learn and improve.</p>
+                    <p><strong>Gym Simulations:</strong> Games played during self-play training (AI vs AI).</p>
+                    <p><strong>Gemini Battles:</strong> Games where your model played against Google's Gemini LLM.</p>
+                    <p><strong>Custom Parser:</strong> Paste your own game notation to visualize on the board.</p>
+                    <p><strong>Tip:</strong> Use replay controls to step through moves and analyze positions.</p>
                 </div>
             </div>
 
@@ -405,6 +439,21 @@
                     </div>
                 </div>
                 
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Human Training Data</strong> - Train your model on real human games.</p>
+                    <p><strong>Data sources:</strong> Opening books (debut strategies), tournament games, PlayOK online games.</p>
+                    <p><strong>Workflow:</strong></p>
+                    <ol>
+                        <li>Click "🔄 Обновить парсинг" to parse new game files</li>
+                        <li>Select base model (or start fresh)</li>
+                        <li>Set epochs (50-100), batch size (128), learning rate (0.001)</li>
+                        <li>Click "🎓 Дообучить" to start training</li>
+                    </ol>
+                    <p><strong>Expected results:</strong> Accuracy 30-40% is typical. Higher epochs may overfit.</p>
+                </div>
+                
             </div>
             
             <!-- Training Configuration Panel -->
@@ -587,6 +636,7 @@
                     </div>
                 </div>
 
+                <!-- Training Progress (shown during training) -->
                 <div id="azProgressSection" class="az-progress-section hidden">
                     <div class="progress-bar-container">
                         <div class="progress-bar" id="azProgressBar"></div>
@@ -601,17 +651,34 @@
                             <span class="value" id="azStatusText">Обучение...</span>
                         </div>
                     </div>
-
-                    <div class="az-charts-container">
-                        <div class="chart-box">
-                            <h3>📉 Loss (Policy & Value)</h3>
-                            <canvas id="azLossChart" height="150"></canvas>
-                        </div>
-                        <div class="chart-box">
-                            <h3>📈 Оценочный ELO</h3>
-                            <canvas id="azEloChart" height="150"></canvas>
-                        </div>
+                </div>
+                
+                <!-- Charts (always visible when data exists) -->
+                <div id="azChartsSection" class="az-charts-container">
+                    <div class="chart-box">
+                        <h3>📉 Loss (Policy & Value)</h3>
+                        <canvas id="azLossChart" height="150"></canvas>
                     </div>
+                    <div class="chart-box">
+                        <h3>📈 Win Rate %</h3>
+                        <canvas id="azEloChart" height="150"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Panel Annotation (shown in fullscreen mode) -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>AlphaZero Deep Learning</strong> trains a neural network using self-play and Monte Carlo Tree Search (MCTS).</p>
+                    <p><strong>When to use:</strong> After you have some human training data, use AlphaZero to create a stronger model through reinforcement learning.</p>
+                    <p><strong>Workflow:</strong></p>
+                    <ol>
+                        <li>Set iterations (50-100 recommended for CPU)</li>
+                        <li>Enable "Bootstrap with human data" for better starting point</li>
+                        <li>Click "⚔️ Запустить AlphaZero" to start training</li>
+                        <li>Monitor Loss charts - lower is better</li>
+                        <li>After training, load best checkpoint from the list</li>
+                    </ol>
+                    <p><strong>Key metrics:</strong> Policy Loss &lt;1.0 is good, Win Rate &gt;55% means model improved.</p>
                 </div>
             </div>
         </main>
@@ -758,11 +825,90 @@
                 </div>
             </div>
             
+            <!-- Game Visualizer Panel -->
+            <div class="panel battle-visualizer-panel">
+                <h2>🎬 Визуализатор Партии</h2>
+                <p class="panel-description">Просмотр игры на доске с пошаговой навигацией</p>
+                
+                <!-- Game Selection -->
+                <div class="visualizer-controls">
+                    <div class="control-group">
+                        <label>Выберите игру:</label>
+                        <select id="visualizerGameSelect" class="input-field">
+                            <option value="">-- Выберите из истории --</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Или вставьте ходы:</label>
+                        <textarea id="visualizerMovesInput" class="moves-input" placeholder="Формат: 1,5,3,7,2,6... или разделённые пробелами"></textarea>
+                        <button id="btnLoadCustomMoves" class="btn btn-secondary">📥 Загрузить ходы</button>
+                    </div>
+                </div>
+                
+                <!-- Visualizer Board -->
+                <div class="visualizer-board-container">
+                    <div class="visualizer-info-bar">
+                        <div class="visualizer-player black-player">
+                            <span class="player-icon">⚫</span>
+                            <span class="player-label">ЧЁРНЫЕ</span>
+                            <span class="player-score" id="vizBlackScore">0</span>
+                        </div>
+                        <div class="visualizer-status">
+                            <span class="move-counter" id="vizMoveCounter">Ход: 0 / 0</span>
+                            <span class="current-player" id="vizCurrentPlayer">Белые</span>
+                        </div>
+                        <div class="visualizer-player white-player">
+                            <span class="player-icon">⚪</span>
+                            <span class="player-label">БЕЛЫЕ</span>
+                            <span class="player-score" id="vizWhiteScore">0</span>
+                        </div>
+                    </div>
+                    
+                    <canvas id="visualizerBoard" class="visualizer-canvas" width="800" height="400"></canvas>
+                    
+                    <div class="visualizer-nav">
+                        <button id="btnVizFirst" class="btn btn-small">⏮</button>
+                        <button id="btnVizPrev" class="btn btn-small">◀</button>
+                        <button id="btnVizPlay" class="btn btn-primary">▶️</button>
+                        <button id="btnVizNext" class="btn btn-small">▶</button>
+                        <button id="btnVizLast" class="btn btn-small">⏭</button>
+                        <input type="range" id="vizSlider" class="viz-slider" min="0" max="100" value="0">
+                    </div>
+                </div>
+                
+                <!-- Move History -->
+                <div class="visualizer-moves-list" id="vizMovesList">
+                    <p class="placeholder">Выберите игру или вставьте ходы для просмотра</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Game Visualizer</strong> - Step through any game move by move on the board.</p>
+                    <p><strong>How to use:</strong></p>
+                    <ol>
+                        <li>Select a game from dropdown (loaded from battle history)</li>
+                        <li>Or paste custom moves in format: 1,5,3,7... (pit numbers 1-9)</li>
+                        <li>Use navigation buttons or slider to step through moves</li>
+                        <li>▶️ button auto-plays the game</li>
+                    </ol>
+                    <p><strong>Move format:</strong> Numbers 1-9 representing pit to play from. White plays from bottom row, Black from top.</p>
+                </div>
+            </div>
+            
             <!-- Battle Sessions History -->
             <div class="panel battle-sessions-panel">
                 <h2>📜 История Батлов</h2>
                 <div id="battleSessionsList" class="sessions-list">
                     <p class="empty-text">Нет завершённых батлов</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Battle History</strong> - Record of all completed model competitions.</p>
+                    <p><strong>Stats shown:</strong> Win/Loss/Draw count, ELO changes, model versions used.</p>
+                    <p><strong>Tip:</strong> Click any battle to load its games into the Visualizer above.</p>
                 </div>
             </div>
         </main>

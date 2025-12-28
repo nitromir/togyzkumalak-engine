@@ -637,19 +637,57 @@ class TrainingController {
         const ctxLoss = document.getElementById('azLossChart')?.getContext('2d');
         const ctxElo = document.getElementById('azEloChart')?.getContext('2d');
         
-        if (!ctxLoss || !ctxElo) return;
+        if (!ctxLoss || !ctxElo) {
+            console.warn('[Training] AlphaZero chart canvases not found');
+            return;
+        }
+
+        // Destroy existing charts if any
+        if (this.azLossChart) this.azLossChart.destroy();
+        if (this.azEloChart) this.azEloChart.destroy();
 
         this.azLossChart = new Chart(ctxLoss, {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'Loss', data: [], borderColor: '#ff0055', tension: 0.3 }] },
-            options: { responsive: true, maintainAspectRatio: false }
+            data: { 
+                labels: [], 
+                datasets: [
+                    { label: 'Policy Loss', data: [], borderColor: '#ff0055', tension: 0.3, borderWidth: 2 },
+                    { label: 'Value Loss', data: [], borderColor: '#f59e0b', tension: 0.3, borderWidth: 2 }
+                ]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(100,116,139,0.2)' } },
+                    x: { grid: { color: 'rgba(100,116,139,0.2)' } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#94a3b8', font: { size: 10 } } }
+                }
+            }
         });
 
         this.azEloChart = new Chart(ctxElo, {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'Accuracy %', data: [], borderColor: '#00f2ff', tension: 0.3 }] },
-            options: { responsive: true, maintainAspectRatio: false }
+            data: { 
+                labels: [], 
+                datasets: [{ label: 'Win Rate %', data: [], borderColor: '#22c55e', tension: 0.3, borderWidth: 2, fill: true, backgroundColor: 'rgba(34,197,94,0.1)' }]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                scales: {
+                    y: { min: 0, max: 100, grid: { color: 'rgba(100,116,139,0.2)' } },
+                    x: { grid: { color: 'rgba(100,116,139,0.2)' } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#94a3b8', font: { size: 10 } } }
+                }
+            }
         });
+        
+        console.log('[Training] AlphaZero charts initialized');
     }
 
     showNotification(message) {

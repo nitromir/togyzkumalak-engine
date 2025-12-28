@@ -2893,3 +2893,329 @@ body::after {
 .fullscreen-modal-body .btn {
     margin: 4px;
 }
+
+/* ============================================
+   PANEL ANNOTATIONS
+   ============================================ */
+
+.panel-annotation {
+    display: none; /* Hidden by default */
+    margin-top: 24px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(0, 242, 255, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%);
+    border: 1px dashed rgba(0, 242, 255, 0.3);
+    border-radius: 12px;
+}
+
+.fullscreen-modal-body .panel-annotation {
+    display: block; /* Show in fullscreen mode */
+}
+
+.panel-annotation h4 {
+    margin: 0 0 12px 0;
+    color: var(--accent-primary);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.panel-annotation p {
+    margin: 8px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.panel-annotation strong {
+    color: var(--text-primary);
+}
+
+.panel-annotation ol, .panel-annotation ul {
+    margin: 8px 0 8px 20px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.panel-annotation li {
+    margin: 4px 0;
+}
+
+/* ============================================
+   SETUP PANEL IMPROVEMENTS
+   ============================================ */
+
+.setup-panel .setup-section {
+    margin-bottom: 24px;
+}
+
+.setup-panel .setup-section label {
+    display: block;
+    margin-bottom: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.setup-panel .color-selector {
+    display: flex;
+    gap: 12px;
+}
+
+.setup-panel .level-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+/* Active Model Info Box */
+.active-model-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(0, 242, 255, 0.05) 100%);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.active-model-info .model-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.active-model-info .model-name {
+    font-weight: 600;
+    color: var(--accent-secondary);
+    font-family: monospace;
+}
+
+/* ============================================
+   CUSTOM REPLAY SECTION
+   ============================================ */
+
+.custom-replay-section {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+.custom-replay-section h3 {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.section-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.custom-moves-input,
+.moves-input {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(100, 116, 139, 0.3);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: monospace;
+    font-size: 13px;
+    resize: vertical;
+    margin-bottom: 12px;
+}
+
+.custom-moves-input:focus,
+.moves-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* ============================================
+   GAME VISUALIZER
+   ============================================ */
+
+.battle-visualizer-panel {
+    grid-column: span 2;
+}
+
+.visualizer-controls {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.control-group label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.visualizer-board-container {
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.visualizer-info-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(30, 41, 59, 0.6);
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.visualizer-player {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.visualizer-player .player-icon {
+    font-size: 20px;
+}
+
+.visualizer-player .player-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.visualizer-player .player-score {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.visualizer-status {
+    text-align: center;
+}
+
+.visualizer-status .move-counter {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.visualizer-status .current-player {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.visualizer-canvas {
+    display: block;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    background: linear-gradient(180deg, rgba(139, 92, 42, 0.3) 0%, rgba(101, 67, 33, 0.4) 100%);
+    border-radius: 8px;
+    border: 2px solid rgba(139, 92, 42, 0.5);
+}
+
+.visualizer-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.viz-slider {
+    flex: 1;
+    max-width: 300px;
+    margin: 0 16px;
+    height: 8px;
+    background: rgba(100, 116, 139, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.viz-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.visualizer-moves-list {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 12px;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.visualizer-moves-list .move-item {
+    display: inline-block;
+    padding: 4px 8px;
+    margin: 2px;
+    background: rgba(0, 242, 255, 0.1);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.visualizer-moves-list .move-item:hover {
+    background: rgba(0, 242, 255, 0.2);
+}
+
+.visualizer-moves-list .move-item.current {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+}
+
+/* ============================================
+   ALPHAZERO CHARTS ALWAYS VISIBLE
+   ============================================ */
+
+.az-charts-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.az-charts-container .chart-box {
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.az-charts-container .chart-box h3 {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+/* ============================================
+   REPLAY MODEL INFO
+   ============================================ */
+
+.replay-model {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-family: monospace;
+    opacity: 0.8;
+}
+
+.replay-btn:hover .replay-model {
+    opacity: 1;
+    color: var(--accent-primary);
+}
