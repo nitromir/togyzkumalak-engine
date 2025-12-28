@@ -361,6 +361,19 @@
         </main>
 
         <!-- Game Over Modal -->
+        <!-- Optimal Config Modal -->
+        <div id="optimalConfigModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>⚡ Автоматическая конфигурация</h2>
+                <p>Сколько часов доступно для обучения?</p>
+                <input type="number" id="hoursInput" value="1" min="0.5" max="24" step="0.5" class="input-field" style="width: 200px; margin: 20px 0;">
+                <div class="modal-buttons">
+                    <button id="btnApplyOptimalConfig" class="btn btn-primary">Применить</button>
+                    <button id="btnCancelOptimalConfig" class="btn btn-secondary">Отмена</button>
+                </div>
+            </div>
+        </div>
+
         <div id="gameOverModal" class="modal hidden">
             <div class="modal-content">
                 <h2 id="gameOverTitle">🎉 Игра Окончена!</h2>

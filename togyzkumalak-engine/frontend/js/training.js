@@ -415,6 +415,35 @@ class TrainingController {
         btnStop?.addEventListener('click', () => this.stopAlphaZero());
         btnOptimal?.addEventListener('click', () => this.loadOptimalConfig());
         
+        // Optimal config modal handlers
+        const btnApplyOptimal = document.getElementById('btnApplyOptimalConfig');
+        const btnCancelOptimal = document.getElementById('btnCancelOptimalConfig');
+        const optimalModal = document.getElementById('optimalConfigModal');
+        
+        btnApplyOptimal?.addEventListener('click', () => {
+            const hours = parseFloat(document.getElementById('hoursInput')?.value) || 1;
+            this._applyOptimalConfig(hours);
+        });
+        
+        btnCancelOptimal?.addEventListener('click', () => {
+            if (optimalModal) optimalModal.classList.add('hidden');
+        });
+        
+        // Close modal on outside click
+        optimalModal?.addEventListener('click', (e) => {
+            if (e.target === optimalModal) {
+                optimalModal.classList.add('hidden');
+            }
+        });
+        
+        // Close on Enter key
+        document.getElementById('hoursInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const hours = parseFloat(e.target.value) || 1;
+                this._applyOptimalConfig(hours);
+            }
+        });
+        
         this.initAlphaZeroCharts();
         this.loadAlphaZeroMetrics();  // Load last training metrics
         this.loadGpuInfo();  // Load GPU information
@@ -459,40 +488,74 @@ class TrainingController {
      * Load optimal training configuration based on available GPUs
      */
     async loadOptimalConfig() {
-        try {
-            const hours = parseFloat(prompt('Сколько часов доступно для обучения?', '1')) || 1;
+        // Show modal for hours input
+        const modal = document.getElementById('optimalConfigModal');
+        if (modal) {
+            modal.classList.remove('hidden');
             
-            const response = await fetch(`/api/training/alphazero/optimal-config?hours=${hours}`);
+            // Focus on input
+            setTimeout(() => {
+                const input = document.getElementById('hoursInput');
+                if (input) input.focus();
+            }, 100);
+        } else {
+            // Fallback to prompt if modal not found
+            this._applyOptimalConfig(1);
+        }
+    }
+    
+    /**
+     * Apply optimal config with given hours
+     */
+    async _applyOptimalConfig(hours) {
+        try {
+            const response = await fetch(`/api/training/alphazero/optimal-config?hours=${hours}&gpus=16`);
             if (!response.ok) throw new Error('Failed to load optimal config');
             
             const data = await response.json();
-            const config = data.recommended_config;
+            const config = data.recommended_config || data;
             
             // Apply config to form
-            document.getElementById('azIters').value = config.numIters || 100;
-            document.getElementById('azEps').value = config.numEps || 100;
-            document.getElementById('azSims').value = config.numMCTSSims || 100;
-            document.getElementById('azCpuct').value = config.cpuct || 1.0;
+            const itersEl = document.getElementById('azIters');
+            const epsEl = document.getElementById('azEps');
+            const simsEl = document.getElementById('azSims');
+            const cpuctEl = document.getElementById('azCpuct');
+            const batchEl = document.getElementById('azBatchSize');
+            const hiddenEl = document.getElementById('azHiddenSize');
+            const bootstrapEl = document.getElementById('azUseBootstrap');
             
-            if (document.getElementById('azBatchSize')) {
-                document.getElementById('azBatchSize').value = config.batch_size || 256;
-            }
-            if (document.getElementById('azHiddenSize')) {
-                document.getElementById('azHiddenSize').value = config.hidden_size || 256;
-            }
-            if (document.getElementById('azUseBootstrap')) {
-                document.getElementById('azUseBootstrap').checked = config.use_bootstrap !== false;
-            }
+            if (itersEl) itersEl.value = config.numIters || config.numIters || 250;
+            if (epsEl) epsEl.value = config.numEps || config.numEps || 200;
+            if (simsEl) simsEl.value = config.numMCTSSims || config.numMCTSSims || 200;
+            if (cpuctEl) cpuctEl.value = config.cpuct || 1.0;
+            if (batchEl) batchEl.value = config.batch_size || 4096;
+            if (hiddenEl) hiddenEl.value = config.hidden_size || 512;
+            if (bootstrapEl) bootstrapEl.checked = config.use_bootstrap !== false;
             
-            // Show tips
+            // Close modal
+            const modal = document.getElementById('optimalConfigModal');
+            if (modal) modal.classList.add('hidden');
+            
+            // Show success message
             const tips = data.tips || [];
-            if (tips.length > 0) {
-                alert(`🚀 Оптимальная конфигурация установлена!\n\n${tips.join('\n')}\n\nОжидаемое время: ~${Math.round(data.estimated_time_minutes)} мин`);
-            }
+            const timeEst = data.estimated_time_minutes || config.estimated_time_min || 60;
+            const message = `🚀 Оптимальная конфигурация установлена!\n\n` +
+                          `Итерации: ${config.numIters || 250}\n` +
+                          `Игр/итер: ${config.numEps || 200}\n` +
+                          `MCTS: ${config.numMCTSSims || 200}\n` +
+                          `Batch: ${config.batch_size || 4096}\n` +
+                          `Ожидаемое время: ~${Math.round(timeEst)} мин\n\n` +
+                          (tips.length > 0 ? tips.join('\n') : '');
+            
+            alert(message);
             
         } catch (e) {
             console.error('Error loading optimal config:', e);
             alert('Ошибка загрузки оптимальной конфигурации: ' + e.message);
+            
+            // Close modal on error
+            const modal = document.getElementById('optimalConfigModal');
+            if (modal) modal.classList.add('hidden');
         }
     }
     
