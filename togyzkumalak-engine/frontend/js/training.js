@@ -769,7 +769,15 @@ class TrainingController {
         };
 
         try {
-            document.getElementById('btnStartAlphaZero').disabled = true;
+            const btnStart = document.getElementById('btnStartAlphaZero');
+            if (!btnStart) {
+                throw new Error('Кнопка запуска не найдена');
+            }
+            
+            btnStart.disabled = true;
+            btnStart.textContent = '⏳ Запуск...';
+            
+            console.log('Отправляю конфигурацию:', config);
             
             const response = await fetch('/api/training/alphazero/start', {
                 method: 'POST',
@@ -777,23 +785,44 @@ class TrainingController {
                 body: JSON.stringify(config)
             });
 
-            if (!response.ok) throw new Error('Failed to start AlphaZero');
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Ошибка ответа сервера:', response.status, errorText);
+                throw new Error(`Сервер вернул ошибку ${response.status}: ${errorText}`);
+            }
 
             const data = await response.json();
+            console.log('Ответ сервера:', data);
+            
+            if (!data.task_id) {
+                throw new Error('Сервер не вернул task_id');
+            }
+            
             this.azTaskId = data.task_id;
 
-            document.getElementById('azProgressSection').classList.remove('hidden');
-            document.getElementById('btnStopAlphaZero').classList.remove('hidden');
+            const progressSection = document.getElementById('azProgressSection');
+            if (progressSection) progressSection.classList.remove('hidden');
+            
+            const btnStop = document.getElementById('btnStopAlphaZero');
+            if (btnStop) btnStop.classList.remove('hidden');
             
             // Show live checkpoints section
             const liveCheckpointsEl = document.getElementById('azLiveCheckpoints');
             if (liveCheckpointsEl) liveCheckpointsEl.classList.remove('hidden');
             
             this.startAlphaZeroPolling();
+            
+            // Показываем уведомление об успешном запуске
+            alert('✅ Обучение AlphaZero запущено! Task ID: ' + data.task_id);
+            
         } catch (error) {
             console.error('Error starting AlphaZero:', error);
-            alert('Ошибка запуска AlphaZero: ' + error.message);
-            document.getElementById('btnStartAlphaZero').disabled = false;
+            alert('Ошибка запуска AlphaZero: ' + error.message + '\n\nПроверь консоль браузера (F12) для деталей.');
+            const btnStart = document.getElementById('btnStartAlphaZero');
+            if (btnStart) {
+                btnStart.disabled = false;
+                btnStart.textContent = '🚀 Запустить AlphaZero';
+            }
         }
     }
 
