@@ -2034,20 +2034,32 @@ async def update_and_restart():
     2. Restarts the server process
     """
     try:
-        # Get the repository root directory
-        repo_root = os.path.dirname(os.path.dirname(engine_dir))
-        git_dir = os.path.join(repo_root, ".git")
+        # Get the repository root directory - try multiple possible paths
+        possible_paths = [
+            os.path.dirname(os.path.dirname(engine_dir)),  # /workspace/togyzkumalak
+            os.path.dirname(engine_dir),  # /workspace/togyzkumalak/togyzkumalak-engine -> /workspace/togyzkumalak
+            engine_dir,  # /workspace/togyzkumalak/togyzkumalak-engine
+            '/workspace/togyzkumalak',  # Direct path
+            os.path.dirname(os.path.dirname(os.path.dirname(engine_dir))),  # One level up
+        ]
         
-        if not os.path.exists(git_dir):
-            # Try alternative path (if engine_dir is already at repo root)
-            repo_root = engine_dir
-            git_dir = os.path.join(repo_root, ".git")
+        repo_root = None
+        git_dir = None
         
-        if not os.path.exists(git_dir):
+        for path in possible_paths:
+            if path and os.path.exists(path):
+                test_git = os.path.join(path, ".git")
+                if os.path.exists(test_git):
+                    repo_root = path
+                    git_dir = test_git
+                    break
+        
+        if not repo_root or not os.path.exists(git_dir):
             return {
                 "success": False,
-                "error": "Git repository not found. Make sure you're in a git repository.",
-                "repo_root": repo_root
+                "error": f"Git repository not found. Tried paths: {possible_paths[:3]}",
+                "engine_dir": engine_dir,
+                "current_dir": os.getcwd()
             }
         
         # Change to repository root
