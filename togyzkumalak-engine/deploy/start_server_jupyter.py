@@ -5,7 +5,7 @@ import subprocess
 import os
 import time
 import requests
-from IPython.display import display, HTML
+from IPython.display import display, IFrame
 import sys
 
 # Переходим в папку проекта
@@ -46,7 +46,7 @@ except Exception as e:
                 response = requests.get('http://localhost:8000/api/health', timeout=1)
                 if response.status_code == 200:
                     print("✅ Server started successfully!")
-                    display(HTML('<iframe src="http://localhost:8000" width="100%" height="800" style="border:none"></iframe>'))
+                    display(IFrame(src="http://localhost:8000", width="100%", height=800))
                     break
             except:
                 if i == 14:
