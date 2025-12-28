@@ -2034,20 +2034,47 @@ async def update_and_restart():
     2. Restarts the server process
     """
     try:
-        # Get the repository root directory
-        repo_root = os.path.dirname(os.path.dirname(engine_dir))
-        git_dir = os.path.join(repo_root, ".git")
+        # Get the repository root directory - try multiple paths
+        possible_roots = [
+            os.path.dirname(os.path.dirname(engine_dir)),  # /workspace/togyzkumalak
+            engine_dir,  # /workspace/togyzkumalak/togyzkumalak-engine
+            os.path.dirname(engine_dir),  # /workspace/togyzkumalak (if engine_dir is wrong)
+            '/workspace/togyzkumalak',  # Direct path
+            os.getcwd(),  # Current working directory
+        ]
         
-        if not os.path.exists(git_dir):
-            # Try alternative path (if engine_dir is already at repo root)
-            repo_root = engine_dir
-            git_dir = os.path.join(repo_root, ".git")
+        repo_root = None
+        git_dir = None
         
-        if not os.path.exists(git_dir):
+        for root in possible_roots:
+            if root and os.path.exists(root):
+                test_git = os.path.join(root, ".git")
+                if os.path.exists(test_git):
+                    repo_root = root
+                    git_dir = test_git
+                    break
+        
+        if not repo_root or not os.path.exists(git_dir):
+            # Last resort: search from engine_dir up
+            current = engine_dir
+            for _ in range(5):  # Max 5 levels up
+                test_git = os.path.join(current, ".git")
+                if os.path.exists(test_git):
+                    repo_root = current
+                    git_dir = test_git
+                    break
+                parent = os.path.dirname(current)
+                if parent == current:  # Reached root
+                    break
+                current = parent
+        
+        if not repo_root or not os.path.exists(git_dir):
             return {
                 "success": False,
-                "error": "Git repository not found. Make sure you're in a git repository.",
-                "repo_root": repo_root
+                "error": f"Git repository not found. Checked paths: {possible_roots}. Current engine_dir: {engine_dir}",
+                "repo_root": repo_root,
+                "engine_dir": engine_dir,
+                "cwd": os.getcwd()
             }
         
         # Change to repository root
