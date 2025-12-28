@@ -29,6 +29,10 @@ from .wandb_integration import wandb_tracker
 from .task_manager import az_task_manager
 
 
+# Engine directory (for file paths)
+engine_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 # FastAPI app
 app = FastAPI(
     title="Togyzkumalak Engine",
@@ -150,11 +154,16 @@ async def create_game(request: NewGameRequest):
     state["ai_elo"] = elo_system.get_ai_elo(request.ai_level)
     state["player_elo"] = elo_system.get_or_create_player(request.player_id).current_elo
     
+    # Add model info
+    model_info = ai_engine.get_model_info(request.ai_level)
+    state["ai_model"] = model_info
+    
     # If human is black, AI makes first move
     if request.player_color == "black":
         board = game_manager.get_board(game.game_id)
         ai_move, thinking_time = ai_engine.get_move(board, request.ai_level)
         success, state = game_manager.make_move(game.game_id, ai_move, thinking_time)
+        state["ai_model"] = model_info
     
     return convert_numpy(state)
 
@@ -550,6 +559,85 @@ async def stop_alphazero_training(task_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"status": "stopping"}
+
+
+@app.get("/api/training/alphazero/metrics")
+async def get_alphazero_metrics():
+    """Get AlphaZero training metrics and checkpoints."""
+    try:
+        metrics_file = os.path.join(engine_dir, "models", "alphazero", "training_metrics.json")
+        if not os.path.exists(metrics_file):
+            return {"metrics": [], "config": {}, "summary": {"status": "no_training"}, "checkpoints": []}
+        
+        with open(metrics_file, 'r') as f:
+            data = json.load(f)
+        
+        metrics = data.get("metrics", [])
+        config = data.get("config", {})
+        
+        # Find available checkpoints
+        checkpoints = []
+        alphazero_dir = os.path.join(engine_dir, "models", "alphazero")
+        
+        for m in metrics:
+            iter_num = m.get("iteration", 0)
+            checkpoint_file = f"checkpoint_{iter_num}.pth.tar"
+            checkpoint_path = os.path.join(alphazero_dir, checkpoint_file)
+            
+            if os.path.exists(checkpoint_path):
+                checkpoints.append({
+                    "iteration": iter_num,
+                    "filename": checkpoint_file,
+                    "policy_loss": m.get("policy_loss", 0),
+                    "value_loss": m.get("value_loss", 0),
+                    "win_rate": m.get("win_rate", 0),
+                    "accepted": m.get("accepted", False)
+                })
+        
+        # Sort by policy_loss (best first)
+        checkpoints_sorted = sorted(checkpoints, key=lambda x: x["policy_loss"])
+        best_checkpoint = checkpoints_sorted[0] if checkpoints_sorted else None
+        
+        summary = {
+            "status": "completed" if metrics else "no_metrics",
+            "total_iterations": len(metrics),
+            "latest_policy_loss": metrics[-1].get("policy_loss", 0) if metrics else 0,
+            "latest_value_loss": metrics[-1].get("value_loss", 0) if metrics else 0,
+            "latest_win_rate": metrics[-1].get("win_rate", 0) if metrics else 0,
+            "total_examples": metrics[-1].get("total_examples", 0) if metrics else 0,
+            "best_checkpoint": best_checkpoint
+        }
+        
+        return {"metrics": metrics, "config": config, "summary": summary, "checkpoints": checkpoints_sorted[:10]}
+    except Exception as e:
+        return {"error": str(e), "metrics": [], "config": {}, "checkpoints": []}
+
+
+@app.post("/api/training/models/alphazero/{checkpoint_name}/load")
+async def load_alphazero_checkpoint(checkpoint_name: str):
+    """Load a specific AlphaZero checkpoint."""
+    try:
+        checkpoint_file = checkpoint_name if checkpoint_name.endswith('.pth.tar') else f"{checkpoint_name}.pth.tar"
+        checkpoint_path = os.path.join(engine_dir, "models", "alphazero", checkpoint_file)
+        
+        if not os.path.exists(checkpoint_path):
+            raise HTTPException(status_code=404, detail=f"Checkpoint not found: {checkpoint_file}")
+        
+        success = training_manager.load_model(checkpoint_path)
+        if success:
+            return {"status": "success", "loaded": checkpoint_file}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to load checkpoint")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ai/model-info")
+async def get_ai_model_info(level: int = 5):
+    """Get info about the currently active AI model."""
+    return ai_engine.get_model_info(level)
 
 
 @app.post("/api/training/start")

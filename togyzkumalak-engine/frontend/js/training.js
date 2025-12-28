@@ -414,14 +414,148 @@ class TrainingController {
         btnStop?.addEventListener('click', () => this.stopAlphaZero());
         
         this.initAlphaZeroCharts();
+        this.loadAlphaZeroMetrics();  // Load last training metrics
+    }
+    
+    /**
+     * Load and display AlphaZero training metrics from last training
+     */
+    async loadAlphaZeroMetrics() {
+        try {
+            const response = await fetch('/api/training/alphazero/metrics');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const summary = data.summary || {};
+            const checkpoints = data.checkpoints || [];
+            const metrics = data.metrics || [];
+            
+            // Update metrics display
+            const policyLoss = summary.latest_policy_loss || 0;
+            const valueLoss = summary.latest_value_loss || 0;
+            const winRate = (summary.latest_win_rate || 0) * 100;
+            const totalExamples = summary.total_examples || 0;
+            
+            const policyEl = document.getElementById('lastPolicyLoss');
+            const valueEl = document.getElementById('lastValueLoss');
+            const winEl = document.getElementById('lastWinRate');
+            const examplesEl = document.getElementById('totalExamples');
+            
+            if (policyEl) {
+                policyEl.textContent = policyLoss.toFixed(3);
+                policyEl.className = 'metric-value ' + (policyLoss < 1.0 ? 'good' : policyLoss < 1.5 ? 'warning' : 'bad');
+            }
+            if (valueEl) {
+                valueEl.textContent = valueLoss.toFixed(3);
+                valueEl.className = 'metric-value ' + (valueLoss < 0.1 ? 'good' : valueLoss < 0.2 ? 'warning' : 'bad');
+            }
+            if (winEl) {
+                winEl.textContent = winRate.toFixed(0) + '%';
+                winEl.className = 'metric-value ' + (winRate > 55 ? 'good' : winRate > 50 ? 'warning' : 'bad');
+            }
+            if (examplesEl) {
+                examplesEl.textContent = this.formatNumber(totalExamples);
+            }
+            
+            // Show best checkpoint info
+            if (summary.best_checkpoint) {
+                const best = summary.best_checkpoint;
+                const bestInfoEl = document.getElementById('bestCheckpointInfo');
+                if (bestInfoEl) {
+                    bestInfoEl.innerHTML = `
+                        <strong>🏆 Лучший:</strong> iter ${best.iteration} 
+                        (loss: ${best.policy_loss.toFixed(3)})
+                        <button class="btn btn-small btn-secondary" 
+                                onclick="trainingController.loadAlphaZeroCheckpoint('${best.filename}')">
+                            Загрузить
+                        </button>
+                    `;
+                }
+            }
+            
+            // Show checkpoints list
+            this.renderCheckpointsList(checkpoints);
+            
+            // Update charts with full metrics
+            if (metrics.length > 0 && this.azLossChart) {
+                this.updateAlphaZeroChartsWithMetrics(metrics);
+            }
+            
+        } catch (e) {
+            console.error('Error loading AlphaZero metrics:', e);
+        }
+    }
+    
+    /**
+     * Render list of best checkpoints
+     */
+    renderCheckpointsList(checkpoints) {
+        const container = document.getElementById('azCheckpointsList');
+        if (!container || !checkpoints.length) return;
+        
+        container.innerHTML = checkpoints.slice(0, 5).map((cp, i) => `
+            <div class="checkpoint-item ${i === 0 ? 'best' : ''}">
+                <span class="cp-rank">#${i + 1}</span>
+                <span class="cp-iter">iter ${cp.iteration}</span>
+                <span class="cp-loss">${cp.policy_loss.toFixed(3)}</span>
+                <button class="btn btn-tiny" onclick="trainingController.loadAlphaZeroCheckpoint('${cp.filename}')">
+                    ⬇️
+                </button>
+            </div>
+        `).join('');
+    }
+    
+    /**
+     * Update charts with full training metrics
+     */
+    updateAlphaZeroChartsWithMetrics(metrics) {
+        if (!this.azLossChart || !this.azEloChart) return;
+        
+        // Loss chart
+        this.azLossChart.data.labels = metrics.map(m => m.iteration);
+        this.azLossChart.data.datasets[0].data = metrics.map(m => m.policy_loss);
+        if (this.azLossChart.data.datasets[1]) {
+            this.azLossChart.data.datasets[1].data = metrics.map(m => m.value_loss);
+        }
+        this.azLossChart.update('none');
+        
+        // Win rate chart (as proxy for ELO improvement)
+        this.azEloChart.data.labels = metrics.map(m => m.iteration);
+        this.azEloChart.data.datasets[0].data = metrics.map(m => (m.win_rate || 0) * 100);
+        this.azEloChart.update('none');
+    }
+    
+    /**
+     * Load specific AlphaZero checkpoint
+     */
+    async loadAlphaZeroCheckpoint(filename) {
+        try {
+            const modelName = filename.replace('.pth.tar', '');
+            const response = await fetch(`/api/training/models/alphazero/${modelName}/load`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                alert(`✅ Загружен чекпоинт: ${filename}`);
+                this.loadModels();
+            } else {
+                throw new Error('Failed to load checkpoint');
+            }
+        } catch (e) {
+            console.error('Error loading checkpoint:', e);
+            alert('Ошибка загрузки чекпоинта: ' + e.message);
+        }
     }
 
     async startAlphaZero() {
+        const useBootstrap = document.getElementById('azUseBootstrap')?.checked ?? true;
+        
         const config = {
             numIters: parseInt(document.getElementById('azIters').value),
             numEps: parseInt(document.getElementById('azEps').value),
             numMCTSSims: parseInt(document.getElementById('azSims').value),
-            cpuct: parseFloat(document.getElementById('azCpuct').value)
+            cpuct: parseFloat(document.getElementById('azCpuct').value),
+            useBootstrap: useBootstrap
         };
 
         try {
@@ -685,12 +819,14 @@ class TrainingController {
             }
 
             modelsList.innerHTML = data.models.map(model => `
-                <div class="model-card">
+                <div class="model-card ${model.type === 'alphazero' ? 'alphazero-model' : ''}">
                     <div class="model-header">
                         <span class="model-name">📦 ${model.name}</span>
+                        <span class="model-badge ${model.type}">${model.type === 'alphazero' ? 'AlphaZero' : 'Gym'}</span>
                         <span class="model-size">${model.size_mb} MB</span>
                     </div>
                     <div class="model-info">
+                        <span class="model-arch">${model.architecture || ''}</span>
                         <span class="model-date">${new Date(model.created).toLocaleString('ru-RU')}</span>
                     </div>
                     <div class="model-actions">
@@ -704,33 +840,72 @@ class TrainingController {
                 </div>
             `).join('');
 
-            // Also populate base model selector for training
+            // Also populate base model selector for training (only Gym models)
             if (baseModelSelect) {
                 const currentValue = baseModelSelect.value;
+                const gymModels = data.models.filter(m => m.type !== 'alphazero');
                 baseModelSelect.innerHTML = '<option value="">🆕 Новая модель (с нуля)</option>' +
-                    data.models.map(model => `<option value="${model.name}">📦 ${model.name}</option>`).join('');
+                    gymModels.map(model => `<option value="${model.name}">🧠 ${model.name}</option>`).join('');
                 // Restore previous selection if it still exists
-                if (currentValue && data.models.find(m => m.name === currentValue)) {
+                if (currentValue && gymModels.find(m => m.name === currentValue)) {
                     baseModelSelect.value = currentValue;
                 }
             }
+            
+            // Update active model info for Self-Play
+            this.updateSelfPlayModelInfo();
 
         } catch (error) {
             console.error('Error loading models:', error);
         }
     }
+    
+    /**
+     * Update the Self-Play section to show which model is active
+     */
+    async updateSelfPlayModelInfo() {
+        try {
+            const response = await fetch('/api/ai/model-info?level=5');
+            if (!response.ok) return;
+            
+            const modelInfo = await response.json();
+            const activeModelEl = document.getElementById('selfPlayActiveModel');
+            const warningEl = document.getElementById('selfPlayArchWarning');
+            
+            if (activeModelEl) {
+                const typeIcon = modelInfo.type === 'alphazero' ? '🦾' : '🧠';
+                activeModelEl.textContent = `${typeIcon} ${modelInfo.name || 'default'}`;
+            }
+            
+            // Show warning if AlphaZero model is loaded
+            if (warningEl) {
+                if (modelInfo.type === 'alphazero') {
+                    warningEl.style.display = 'block';
+                } else {
+                    warningEl.style.display = 'none';
+                }
+            }
+        } catch (e) {
+            console.error('Error updating Self-Play model info:', e);
+        }
+    }
 
     async loadModel(modelName) {
         try {
-            const response = await fetch(`/api/training/models/${modelName}/load`, {
+            const useMcts = document.getElementById('azUseMcts')?.checked || false;
+            const response = await fetch(`/api/training/models/${modelName}/load?use_mcts=${useMcts}`, {
                 method: 'POST'
             });
 
             if (!response.ok) {
-                throw new Error('Failed to load model');
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to load model');
             }
 
             const result = await response.json();
+            
+            // Update Self-Play model info
+            this.updateSelfPlayModelInfo();
             
             // Update hidden size input if returned from server
             if (result.hidden_size) {
@@ -741,7 +916,13 @@ class TrainingController {
                 }
             }
 
-            alert(`Модель "${modelName}" успешно загружена!\n\nТеперь она будет использоваться для игры на уровнях 4-5.`);
+            let message = `Модель "${modelName}" успешно загружена!\n\nТип: ${result.type === 'alphazero' ? 'AlphaZero' : 'Gym'}`;
+            if (result.type === 'alphazero') {
+                message += `\nMCTS: ${result.use_mcts ? 'ВКЛЮЧЕН' : 'ВЫКЛЮЧЕН'}`;
+            }
+            message += `\n\nТеперь она будет использоваться для игры на уровнях 4-5.`;
+            
+            alert(message);
             
             // Update active model info in Gemini Battle if available
             if (window.updateGeminiActiveModel) {

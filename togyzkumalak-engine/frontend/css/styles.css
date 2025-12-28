@@ -1511,6 +1511,10 @@ body::after {
     transition: var(--transition-fast);
 }
 
+.model-card.alphazero-model {
+    border-left: 4px solid var(--accent-gold);
+}
+
 .model-card:hover,
 .session-card:hover {
     border-color: var(--accent-primary);
@@ -1531,6 +1535,26 @@ body::after {
     font-size: 14px;
 }
 
+.model-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.model-badge.gym {
+    background: rgba(0, 242, 255, 0.1);
+    color: var(--accent-primary);
+    border: 1px solid rgba(0, 242, 255, 0.3);
+}
+
+.model-badge.alphazero {
+    background: rgba(255, 204, 0, 0.1);
+    color: var(--accent-gold);
+    border: 1px solid rgba(255, 204, 0, 0.3);
+}
+
 .model-size {
     font-size: 12px;
     color: var(--text-muted);
@@ -1538,9 +1562,28 @@ body::after {
 
 .model-info,
 .session-time {
+    display: flex;
+    justify-content: space-between;
     font-size: 11px;
     color: var(--text-muted);
     margin-bottom: 8px;
+}
+
+.model-arch {
+    font-family: 'Courier New', Courier, monospace;
+    opacity: 0.7;
+}
+
+.alphazero-settings {
+    margin: 15px 0;
+    padding: 12px;
+    background: rgba(255, 204, 0, 0.03);
+    border: 1px dashed rgba(255, 204, 0, 0.2);
+    border-radius: 8px;
+}
+
+.alphazero-settings .checkbox-label {
+    margin-bottom: 4px;
 }
 
 .session-status {
@@ -1649,6 +1692,47 @@ body::after {
 .battle-config-panel {
     grid-column: 1;
     grid-row: 1;
+}
+
+/* Arena Mode Selector */
+.arena-mode-selector {
+    margin-bottom: 20px;
+}
+
+.arena-mode-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.arena-mode-btn {
+    flex: 1;
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.arena-mode-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.arena-mode-btn.active {
+    background: rgba(0, 242, 255, 0.1);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    box-shadow: 0 0 10px rgba(0, 242, 255, 0.2);
+}
+
+.vs-local-option.hidden,
+.vs-gemini-option.hidden {
+    display: none;
 }
 
 .battle-progress-panel {
@@ -2383,6 +2467,96 @@ body::after {
 .az-charts-container .chart-box { background: rgba(15, 23, 42, 0.6); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); }
 .az-charts-container h3 { font-size: 12px; margin-bottom: 10px; }
 
+/* Input hints */
+.input-hint { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+/* AlphaZero Metrics Summary */
+.az-last-metrics { 
+    margin: 20px 0; 
+    padding: 16px; 
+    background: rgba(15, 23, 42, 0.4); 
+    border-radius: 12px; 
+    border: 1px solid var(--border-color); 
+}
+.az-last-metrics h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-secondary); }
+.metrics-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.metric-box { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    padding: 12px; 
+    background: rgba(0, 0, 0, 0.2); 
+    border-radius: 8px; 
+    text-align: center;
+}
+.metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+.metric-value { font-size: 20px; font-weight: 700; color: var(--accent-primary); }
+.metric-value.good { color: #22c55e; }
+.metric-value.warning { color: #eab308; }
+.metric-value.bad { color: #ef4444; }
+.metric-target { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+
+/* Best checkpoint info */
+.best-checkpoint-info {
+    margin-top: 12px;
+    padding: 10px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 8px;
+    font-size: 13px;
+}
+.best-checkpoint-info:empty { display: none; }
+
+/* Checkpoints list */
+.checkpoints-section { margin-top: 16px; }
+.checkpoints-section h4 { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.checkpoints-list { display: flex; flex-direction: column; gap: 4px; }
+.checkpoint-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 6px;
+    font-size: 12px;
+}
+.checkpoint-item.best {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.cp-rank { font-weight: 700; color: var(--accent-primary); width: 24px; }
+.cp-iter { color: var(--text-secondary); }
+.cp-loss { 
+    margin-left: auto; 
+    font-family: monospace; 
+    color: var(--text-primary);
+    font-weight: 600;
+}
+.btn-tiny { 
+    padding: 2px 6px; 
+    font-size: 10px; 
+    background: rgba(0, 242, 255, 0.1);
+    border: 1px solid var(--accent-primary);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Active model indicator */
+.active-model-indicator { 
+    background: rgba(0, 242, 255, 0.05); 
+    border: 1px solid rgba(0, 242, 255, 0.2); 
+    padding: 12px; 
+    border-radius: 8px; 
+}
+.config-warning { 
+    color: #f59e0b; 
+    font-size: 12px; 
+    margin-top: 8px; 
+    padding: 8px; 
+    background: rgba(245, 158, 11, 0.1); 
+    border-radius: 4px; 
+}
+
 /* Gemini Level Button */
 .level-btn.level-gemini { background: linear-gradient(135deg, #4285f4 0%, #34a853 50%, #fbbc05 75%, #ea4335 100%); border: 2px solid #4285f4; }
 .level-btn.level-gemini:hover { transform: scale(1.08); box-shadow: 0 0 20px rgba(66, 133, 244, 0.5); }
@@ -2548,4 +2722,174 @@ body::after {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+}
+
+/* ============================================
+   FULLSCREEN PANEL MODAL
+   ============================================ */
+
+.fullscreen-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.fullscreen-modal.hidden {
+    display: none;
+}
+
+.fullscreen-modal-content {
+    width: 95vw;
+    height: 90vh;
+    max-width: 1400px;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.98) 100%);
+    border: 1px solid rgba(0, 242, 255, 0.3);
+    border-radius: 16px;
+    box-shadow: 0 0 60px rgba(0, 242, 255, 0.2), 0 25px 50px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.fullscreen-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: rgba(0, 242, 255, 0.05);
+    border-bottom: 1px solid rgba(0, 242, 255, 0.2);
+    flex-shrink: 0;
+}
+
+.fullscreen-modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+.fullscreen-modal-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: rgba(255, 0, 85, 0.2);
+    color: #ff0055;
+    font-size: 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fullscreen-modal-close:hover {
+    background: rgba(255, 0, 85, 0.4);
+    transform: scale(1.1);
+}
+
+.fullscreen-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 24px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-primary) rgba(15, 23, 42, 0.5);
+}
+
+.fullscreen-modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.fullscreen-modal-body::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 4px;
+}
+
+.fullscreen-modal-body::-webkit-scrollbar-thumb {
+    background: var(--accent-primary);
+    border-radius: 4px;
+}
+
+/* Expand button for panels */
+.panel-expand-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(0, 242, 255, 0.3);
+    background: rgba(0, 242, 255, 0.1);
+    color: var(--accent-primary);
+    font-size: 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    opacity: 0.6;
+}
+
+.panel-expand-btn:hover {
+    background: rgba(0, 242, 255, 0.2);
+    border-color: var(--accent-primary);
+    transform: scale(1.1);
+    opacity: 1;
+}
+
+.panel {
+    position: relative;
+}
+
+/* Fullscreen modal inner styles - reset some constraints */
+.fullscreen-modal-body .panel {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    max-height: none;
+    overflow: visible;
+}
+
+.fullscreen-modal-body .model-card,
+.fullscreen-modal-body .session-card,
+.fullscreen-modal-body .checkpoint-item,
+.fullscreen-modal-body .replay-item {
+    background: rgba(30, 41, 59, 0.6);
+}
+
+.fullscreen-modal-body .config-grid,
+.fullscreen-modal-body .alphazero-config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.fullscreen-modal-body .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+/* Better readability in fullscreen */
+.fullscreen-modal-body h3,
+.fullscreen-modal-body h4 {
+    color: var(--accent-primary);
+    margin-top: 20px;
+    margin-bottom: 12px;
+}
+
+.fullscreen-modal-body .btn {
+    margin: 4px;
 }

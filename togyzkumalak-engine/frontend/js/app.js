@@ -228,6 +228,9 @@ class TogyzkumalakApp {
             this.gameId = response.game_id;
             this.gameState = response;
             
+            // Store AI model info
+            this.currentAiModel = response.ai_model || null;
+            
             // Configure board
             this.classicBoard.setHumanColor(this.playerColor);
             this.loadConfidenceSetting();
@@ -236,14 +239,8 @@ class TogyzkumalakApp {
             this.elements.setupPanel.classList.add('hidden');
             this.elements.gamePanel.classList.remove('hidden');
             
-            // Update player labels
-            if (this.playerColor === 'white') {
-                document.querySelector('.player-white .player-label').textContent = '⚪ АҚ (You)';
-                document.querySelector('.player-black .player-label').textContent = '⚫ ҚАРА (AI)';
-            } else {
-                document.querySelector('.player-white .player-label').textContent = '⚪ АҚ (AI)';
-                document.querySelector('.player-black .player-label').textContent = '⚫ ҚАРА (You)';
-            }
+            // Update player labels with model info
+            this.updatePlayerLabels();
             
             // Update ELO displays
             this.elements.aiElo.textContent = `ELO: ${response.ai_elo || 1500}`;
@@ -265,6 +262,46 @@ class TogyzkumalakApp {
         } finally {
             this.elements.btnStartGame.disabled = false;
             this.elements.btnStartGame.textContent = '▶️ Start Game';
+        }
+    }
+    
+    /**
+     * Update player labels with model info
+     */
+    updatePlayerLabels() {
+        const modelInfo = this.currentAiModel || {};
+        const modelName = modelInfo.name || 'default';
+        const modelType = modelInfo.type || 'default';
+        const useMcts = modelInfo.use_mcts || false;
+        
+        // Format AI label
+        let aiLabel;
+        if (modelType === 'alphazero') {
+            aiLabel = `🦾 ${modelName}${useMcts ? ' +MCTS' : ''}`;
+        } else if (modelType === 'gym') {
+            aiLabel = `🧠 ${modelName}`;
+        } else {
+            aiLabel = `🤖 AI Lv${this.aiLevel}`;
+        }
+        
+        // Truncate long names
+        if (aiLabel.length > 25) {
+            aiLabel = aiLabel.substring(0, 22) + '...';
+        }
+        
+        if (this.playerColor === 'white') {
+            document.querySelector('.player-white .player-label').textContent = '⚪ АҚ (You)';
+            document.querySelector('.player-black .player-label').textContent = `⚫ ${aiLabel}`;
+        } else {
+            document.querySelector('.player-white .player-label').textContent = `⚪ ${aiLabel}`;
+            document.querySelector('.player-black .player-label').textContent = '⚫ ҚАРА (You)';
+        }
+        
+        // Update model info display if element exists
+        const modelInfoEl = document.getElementById('currentModelInfo');
+        if (modelInfoEl) {
+            modelInfoEl.textContent = aiLabel;
+            modelInfoEl.title = `Model: ${modelName}\nType: ${modelType}\nMCTS: ${useMcts ? 'On' : 'Off'}`;
         }
     }
 
@@ -502,16 +539,32 @@ class TogyzkumalakApp {
         const isWinner = state.winner === this.playerColor;
         const isDraw = state.winner === 'draw';
         
+        // Get model info
+        const modelInfo = state.ai_model || this.currentAiModel || {};
+        const modelName = modelInfo.name || 'default';
+        const modelType = modelInfo.type || 'default';
+        const useMcts = modelInfo.use_mcts || false;
+        
+        // Format model display name
+        let modelDisplay = modelName;
+        if (modelType === 'alphazero') {
+            modelDisplay = `🦾 ${modelName}${useMcts ? ' (MCTS)' : ''}`;
+        } else if (modelType === 'gym') {
+            modelDisplay = `🧠 ${modelName}`;
+        } else {
+            modelDisplay = `🤖 Level ${this.aiLevel}`;
+        }
+        
         // Update modal
         if (isDraw) {
             this.elements.gameOverTitle.textContent = '🤝 Draw!';
             this.elements.winnerText.textContent = 'The game ended in a draw.';
         } else if (isWinner) {
             this.elements.gameOverTitle.textContent = '🎉 Victory!';
-            this.elements.winnerText.textContent = 'Congratulations! You win!';
+            this.elements.winnerText.textContent = `Congratulations! You beat ${modelDisplay}!`;
         } else {
             this.elements.gameOverTitle.textContent = '😔 Defeat';
-            this.elements.winnerText.textContent = 'The AI wins this time.';
+            this.elements.winnerText.textContent = `${modelDisplay} wins this time.`;
         }
         
         // Score
@@ -703,4 +756,115 @@ class TogyzkumalakApp {
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new TogyzkumalakApp();
+    
+    // Initialize panel expand buttons
+    initPanelExpandButtons();
 });
+
+/**
+ * ============================================
+ * FULLSCREEN PANEL FUNCTIONALITY
+ * ============================================
+ */
+
+/**
+ * Initialize expand buttons for all panels
+ */
+function initPanelExpandButtons() {
+    // Select all panels that should have expand functionality
+    const panels = document.querySelectorAll('.panel');
+    
+    panels.forEach((panel, index) => {
+        // Get panel title for modal header
+        const titleEl = panel.querySelector('h2, h3');
+        const title = titleEl ? titleEl.textContent : `Panel ${index + 1}`;
+        
+        // Create expand button
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'panel-expand-btn';
+        expandBtn.innerHTML = '⛶';
+        expandBtn.title = 'Развернуть на весь экран';
+        expandBtn.setAttribute('data-panel-title', title);
+        
+        expandBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFullscreenModal(panel, title);
+        });
+        
+        panel.appendChild(expandBtn);
+    });
+}
+
+/**
+ * Open fullscreen modal with panel content
+ */
+function openFullscreenModal(panel, title) {
+    const modal = document.getElementById('fullscreenModal');
+    const modalTitle = document.getElementById('fullscreenModalTitle');
+    const modalBody = document.getElementById('fullscreenModalBody');
+    
+    if (!modal || !modalBody) return;
+    
+    // Set title
+    modalTitle.textContent = title;
+    
+    // Clone panel content (excluding the expand button itself)
+    const panelClone = panel.cloneNode(true);
+    
+    // Remove expand button from clone
+    const clonedExpandBtn = panelClone.querySelector('.panel-expand-btn');
+    if (clonedExpandBtn) {
+        clonedExpandBtn.remove();
+    }
+    
+    // Clear and set content
+    modalBody.innerHTML = '';
+    modalBody.appendChild(panelClone);
+    
+    // Show modal
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    
+    // Close on Escape key
+    document.addEventListener('keydown', handleEscapeKey);
+    
+    // Close on backdrop click
+    modal.addEventListener('click', handleBackdropClick);
+}
+
+/**
+ * Close fullscreen modal
+ */
+function closeFullscreenModal() {
+    const modal = document.getElementById('fullscreenModal');
+    if (!modal) return;
+    
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+    
+    // Remove event listeners
+    document.removeEventListener('keydown', handleEscapeKey);
+    modal.removeEventListener('click', handleBackdropClick);
+}
+
+/**
+ * Handle Escape key to close modal
+ */
+function handleEscapeKey(e) {
+    if (e.key === 'Escape') {
+        closeFullscreenModal();
+    }
+}
+
+/**
+ * Handle backdrop click to close modal
+ */
+function handleBackdropClick(e) {
+    if (e.target.id === 'fullscreenModal') {
+        closeFullscreenModal();
+    }
+}
+
+// Expose to global scope for inline onclick handlers
+window.openFullscreenModal = openFullscreenModal;
+window.closeFullscreenModal = closeFullscreenModal;

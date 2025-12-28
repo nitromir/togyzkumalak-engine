@@ -134,6 +134,30 @@ class AIEngine:
         except Exception as e:
             print(f"[WARNING] Could not auto-load human model: {e}")
     
+    def get_model_info(self, level: int = 5) -> Dict:
+        """Get information about the currently active model for a given level."""
+        model = self.models.get(level)
+        model_type = "default"
+        architecture = "PolicyNetwork"
+        
+        if model:
+            # Check if it's an AlphaZero model
+            if hasattr(model, 'net') and hasattr(model.net, 'policy_fc'):
+                model_type = "alphazero"
+                architecture = "AlphaZeroNetwork"
+            elif hasattr(model, 'network'):
+                model_type = "gym"
+                architecture = "PolicyNetwork"
+        
+        return {
+            "name": self.current_model_name,
+            "level": level,
+            "type": model_type,
+            "architecture": architecture,
+            "use_mcts": self.use_mcts and model_type == "alphazero",
+            "has_alphazero": self.alphazero_model is not None
+        }
+    
     def get_move(
         self,
         board: TogyzkumalakBoard,
@@ -542,18 +566,30 @@ class AIEngine:
         obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
         
         with torch.no_grad():
-            # Get intermediate activations before softmax for logits
-            # Since our network has softmax built-in, we need to extract before that
-            x = obs_tensor
-            for i, layer in enumerate(model.network):
-                if isinstance(layer, nn.Softmax):
-                    # This is the layer before softmax - raw logits
-                    raw_logits = x.squeeze().cpu().numpy().tolist()
-                    action_probs = layer(x).squeeze().cpu().numpy().tolist()
-                    break
-                x = layer(x)
+            # Check if this is an AlphaZero model (has 'net' attribute instead of 'network')
+            if hasattr(model, 'net') and hasattr(model.net, 'policy_fc'):
+                # AlphaZero dual-head model
+                pi, v = model.net(obs_tensor)
+                action_probs = torch.exp(pi).squeeze().cpu().numpy().tolist()
+                raw_logits = pi.squeeze().cpu().numpy().tolist()  # Log-probs
+                value = float(v.squeeze().cpu().numpy())
+                return raw_logits, action_probs, value
+            elif hasattr(model, 'network'):
+                # Standard PolicyNetwork with sequential layers
+                x = obs_tensor
+                for i, layer in enumerate(model.network):
+                    if isinstance(layer, nn.Softmax):
+                        # This is the layer before softmax - raw logits
+                        raw_logits = x.squeeze().cpu().numpy().tolist()
+                        action_probs = layer(x).squeeze().cpu().numpy().tolist()
+                        break
+                    x = layer(x)
+                else:
+                    # Fallback if no softmax found
+                    action_probs = model(obs_tensor).squeeze().cpu().numpy().tolist()
+                    raw_logits = [0.0] * 9
             else:
-                # Fallback if no softmax found
+                # Generic model - just use forward pass
                 action_probs = model(obs_tensor).squeeze().cpu().numpy().tolist()
                 raw_logits = [0.0] * 9
         

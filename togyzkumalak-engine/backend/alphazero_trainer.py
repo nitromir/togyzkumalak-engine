@@ -85,6 +85,12 @@ class AlphaZeroConfig:
     
     # Checkpoints
     checkpoint_dir: str = "models/alphazero"
+    
+    # Bootstrap - Use human game data for initial training
+    use_bootstrap: bool = True        # Whether to bootstrap from human data
+    bootstrap_file: str = "training_data/transitions_compact.jsonl"
+    bootstrap_epochs: int = 10        # Epochs for initial bootstrap training
+    bootstrap_max_samples: int = 50000  # Max samples to use from human data
 
 
 # =============================================================================
@@ -673,6 +679,105 @@ class AlphaZeroCoach:
             if r != 0:
                 return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
     
+    def _bootstrap_from_human_data(self) -> int:
+        """
+        Bootstrap the network from human game data before self-play.
+        
+        Returns:
+            Number of examples used for bootstrap
+        """
+        bootstrap_file = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            self.config.bootstrap_file
+        )
+        
+        if not os.path.exists(bootstrap_file):
+            log.warning(f"Bootstrap file not found: {bootstrap_file}")
+            return 0
+        
+        log.info(f"[Bootstrap] Loading human data from {bootstrap_file}")
+        
+        try:
+            examples = []
+            with open(bootstrap_file, 'r') as f:
+                for line in f:
+                    if len(examples) >= self.config.bootstrap_max_samples:
+                        break
+                    
+                    try:
+                        data = json.loads(line.strip())
+                    except json.JSONDecodeError:
+                        continue
+                    
+                    # Support multiple formats:
+                    # Compact: {"s": [...], "a": int, "r": float, "d": int, "p": int}
+                    # Standard: {"state": [...], "action": int, "reward": float}
+                    # Observation: {"observation": [...], "action": int}
+                    
+                    state = data.get('s', data.get('state', data.get('observation', [])))
+                    action = data.get('a', data.get('action', 0))
+                    reward = data.get('r', data.get('reward', data.get('final_reward', 0)))
+                    
+                    if not state or len(state) < 18:
+                        continue
+                    
+                    # Create board array (23 elements)
+                    # Denormalize: values in file are normalized (0-1), need original (0-81 for pits)
+                    if len(state) == 20:
+                        # Compact format: 18 pits (normalized) + 2 kazans (normalized)
+                        board = np.zeros(23, dtype=np.float32)
+                        for i in range(18):
+                            board[i] = state[i] * 81.0  # Denormalize pits
+                        board[20] = state[18] * 162.0  # White kazan
+                        board[21] = state[19] * 162.0  # Black kazan
+                    elif len(state) == 128:
+                        # Full observation format
+                        board = np.zeros(23, dtype=np.float32)
+                        for i in range(18):
+                            board[i] = state[i] * 81.0
+                        board[20] = state[18] * 162.0
+                        board[21] = state[19] * 162.0
+                    elif len(state) >= 22:
+                        board = np.array(state[:23] if len(state) >= 23 else state + [0]*(23-len(state)), dtype=np.float32)
+                    else:
+                        continue
+                    
+                    # Create policy vector (one-hot for the action taken)
+                    pi = np.zeros(9, dtype=np.float32)
+                    if 0 <= action < 9:
+                        pi[action] = 1.0
+                    
+                    # Value from reward
+                    v = float(reward) if abs(reward) <= 1 else (1.0 if reward > 0 else -1.0)
+                    
+                    examples.append((board, pi, v))
+            
+            if not examples:
+                log.warning("[Bootstrap] No valid examples loaded")
+                return 0
+            
+            log.info(f"[Bootstrap] Loaded {len(examples)} examples, training for {self.config.bootstrap_epochs} epochs...")
+            
+            # Train on bootstrap data
+            for epoch in range(self.config.bootstrap_epochs):
+                train_metrics = self.nnet.train(examples)
+                if epoch % 2 == 0:
+                    log.info(f"  Bootstrap epoch {epoch+1}/{self.config.bootstrap_epochs}, "
+                            f"policy_loss: {train_metrics.get('policy_loss', 0):.4f}, "
+                            f"value_loss: {train_metrics.get('value_loss', 0):.4f}")
+            
+            # Save bootstrapped model
+            self.nnet.save_checkpoint(self.config.checkpoint_dir, 'bootstrapped.pth.tar')
+            log.info(f"[Bootstrap] Complete! Model saved to bootstrapped.pth.tar")
+            
+            return len(examples)
+            
+        except Exception as e:
+            log.error(f"[Bootstrap] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return 0
+    
     def learn(self, callback=None) -> Dict[str, Any]:
         """
         Main training loop.
@@ -684,6 +789,12 @@ class AlphaZeroCoach:
             Final training metrics
         """
         self.status = "running"
+        
+        # Bootstrap from human data if enabled
+        if self.config.use_bootstrap:
+            bootstrap_count = self._bootstrap_from_human_data()
+            if bootstrap_count > 0:
+                log.info(f"Bootstrapped from {bootstrap_count} human examples")
         
         for i in range(1, self.config.num_iterations + 1):
             if self.stop_requested:
@@ -903,7 +1014,8 @@ class AlphaZeroTaskManagerV2:
             cpuct=params.get('cpuct', 1.0),
             batch_size=params.get('batch_size', 32),
             hidden_size=params.get('hidden_size', 256),
-            checkpoint_dir=self.checkpoint_dir
+            checkpoint_dir=self.checkpoint_dir,
+            use_bootstrap=params.get('use_bootstrap', True)
         )
         
         task = AlphaZeroTrainingTask(task_id, config)

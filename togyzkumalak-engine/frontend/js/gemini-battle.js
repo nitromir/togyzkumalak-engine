@@ -1,12 +1,13 @@
 /**
- * Gemini Battle Module
+ * VS Arena Module
  * 
- * Handles the UI for Model vs Gemini battles.
+ * Handles the UI for Model vs Gemini AND Model vs Model battles.
  * Features:
  * - Start/stop battle sessions
  * - Real-time progress tracking
  * - ELO chart visualization
  * - Game summaries display
+ * - Model vs Local Model mode
  */
 
 (function() {
@@ -19,6 +20,7 @@
     let currentSessionId = null;
     let pollInterval = null;
     let eloChart = null;
+    let arenaMode = 'vs-gemini';  // 'vs-gemini' or 'vs-local'
     
     // =========================================================================
     // DOM Elements
@@ -31,6 +33,13 @@
         timeout: document.getElementById('battleTimeout'),
         saveReplays: document.getElementById('battleSaveReplays'),
         generateSummaries: document.getElementById('battleGenerateSummaries'),
+        
+        // Arena mode
+        arenaModeButtons: document.querySelectorAll('.arena-mode-btn'),
+        model2Section: document.getElementById('model2Section'),
+        model2Select: document.getElementById('battleModel2Select'),
+        vsGeminiOptions: document.querySelectorAll('.vs-gemini-option'),
+        vsLocalOptions: document.querySelectorAll('.vs-local-option'),
         
         // Buttons
         btnStart: document.getElementById('btnStartBattle'),
@@ -73,28 +82,32 @@
             const response = await fetch('/api/training/models');
             if (response.ok) {
                 const data = await response.json();
-                if (elements.modelSelect) {
-                    const currentVal = elements.modelSelect.value;
+                
+                // Helper to populate a select
+                const populateSelect = (selectEl, currentVal) => {
+                    if (!selectEl) return;
                     
-                    // Clear and add default
-                    elements.modelSelect.innerHTML = '<option value="default">🌐 Стандартная (Level 5)</option>';
+                    selectEl.innerHTML = '<option value="default">🌐 Стандартная (Level 5)</option>';
                     
-                    // Add saved models
                     data.models.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model.name;
-                        option.textContent = `📦 ${model.name}`;
-                        elements.modelSelect.appendChild(option);
+                        const typeIcon = model.type === 'alphazero' ? '🦾' : '🧠';
+                        option.textContent = `${typeIcon} ${model.name}`;
+                        selectEl.appendChild(option);
                     });
                     
-                    // Re-select if still exists
-                    if (currentVal && Array.from(elements.modelSelect.options).some(o => o.value === currentVal)) {
-                        elements.modelSelect.value = currentVal;
+                    if (currentVal && Array.from(selectEl.options).some(o => o.value === currentVal)) {
+                        selectEl.value = currentVal;
                     }
-                }
+                };
+                
+                // Populate both model selects
+                populateSelect(elements.modelSelect, elements.modelSelect?.value);
+                populateSelect(elements.model2Select, elements.model2Select?.value);
             }
         } catch (e) {
-            console.error('Error loading models for Gemini Battle:', e);
+            console.error('Error loading models for VS Arena:', e);
         }
     }
 
@@ -632,10 +645,64 @@
     // Initialization
     // =========================================================================
     
+    /**
+     * Switch arena mode between vs-gemini and vs-local
+     */
+    function switchArenaMode(mode) {
+        arenaMode = mode;
+        
+        // Update buttons
+        elements.arenaModeButtons.forEach(btn => {
+            if (btn.dataset.mode === mode) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        // Show/hide relevant options
+        if (mode === 'vs-gemini') {
+            elements.vsGeminiOptions.forEach(el => el.classList.remove('hidden'));
+            elements.vsLocalOptions.forEach(el => el.classList.add('hidden'));
+            if (elements.model2Section) elements.model2Section.classList.add('hidden');
+        } else {
+            elements.vsGeminiOptions.forEach(el => el.classList.add('hidden'));
+            elements.vsLocalOptions.forEach(el => el.classList.remove('hidden'));
+            if (elements.model2Section) elements.model2Section.classList.remove('hidden');
+        }
+        
+        console.log(`[VS Arena] Switched to mode: ${mode}`);
+    }
+    
+    /**
+     * Populate model 2 dropdown
+     */
+    async function loadModel2Options() {
+        if (!elements.model2Select) return;
+        
+        try {
+            const response = await fetch('/api/training/models');
+            if (response.ok) {
+                const data = await response.json();
+                elements.model2Select.innerHTML = '<option value="default">🌐 Стандартная (Level 5)</option>';
+                
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    const typeIcon = model.type === 'alphazero' ? '🦾' : '🧠';
+                    option.textContent = `${typeIcon} ${model.name}`;
+                    elements.model2Select.appendChild(option);
+                });
+            }
+        } catch (e) {
+            console.error('Error loading model 2 options:', e);
+        }
+    }
+
     function init() {
         // Check if elements exist
         if (!elements.btnStart) {
-            console.warn('Gemini Battle elements not found');
+            console.warn('VS Arena elements not found');
             return;
         }
         
@@ -644,6 +711,11 @@
         elements.btnStop.addEventListener('click', handleStopBattle);
         elements.btnExport?.addEventListener('click', handleExportData);
         elements.modelSelect?.addEventListener('change', handleModelChange);
+        
+        // Arena mode buttons
+        elements.arenaModeButtons.forEach(btn => {
+            btn.addEventListener('click', () => switchArenaMode(btn.dataset.mode));
+        });
         
         // Load existing sessions when tab is shown
         const geminiBattleTab = document.querySelector('[data-mode="gemini-battle"]');

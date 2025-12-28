@@ -24,7 +24,7 @@
                 <button class="mode-tab active" data-mode="play">🎯 Играть</button>
                 <button class="mode-tab" data-mode="replays">📼 Реплеи</button>
                 <button class="mode-tab" data-mode="training">🧠 Тренировка</button>
-                <button class="mode-tab" data-mode="gemini-battle">🤖 Gemini Battle</button>
+                <button class="mode-tab" data-mode="gemini-battle">⚔️ VS Arena</button>
                 <button class="mode-tab" data-mode="analytics">📊 Аналитика</button>
             </div>
             
@@ -409,10 +409,11 @@
             
             <!-- Training Configuration Panel -->
             <div class="panel training-config-panel">
-                <h2>⚙️ Self-Play Тренировка</h2>
+                <h2>⚙️ Self-Play Тренировка (PolicyNetwork)</h2>
                 
-                <div class="config-section">
-                    <p class="config-info">ℹ️ Используется модель, загруженная в списке "Сохранённые Модели" выше.</p>
+                <div class="config-section active-model-indicator">
+                    <p class="config-info">ℹ️ <strong>Активная модель:</strong> <span id="selfPlayActiveModel">policy_net (default)</span></p>
+                    <p class="config-warning" id="selfPlayArchWarning" style="display:none;">⚠️ AlphaZero модели несовместимы с Self-Play! Используйте AlphaZero тренировку ниже.</p>
                 </div>
                 
                 <div class="config-section">
@@ -506,20 +507,39 @@
                 <div class="alphazero-config-grid">
                     <div class="config-item">
                         <label for="azIters">Итерации:</label>
-                        <input type="number" id="azIters" value="10" min="1" max="100" class="input-field">
+                        <input type="number" id="azIters" value="50" min="1" max="500" class="input-field">
+                        <small class="input-hint">Рекомендуем: 50-100</small>
                     </div>
                     <div class="config-item">
                         <label for="azEps">Игр/итер:</label>
-                        <input type="number" id="azEps" value="10" min="1" max="100" class="input-field">
+                        <input type="number" id="azEps" value="20" min="1" max="100" class="input-field">
+                        <small class="input-hint">Рекомендуем: 20-50</small>
                     </div>
                     <div class="config-item">
                         <label for="azSims">MCTS Симуляции:</label>
-                        <input type="number" id="azSims" value="25" min="10" max="800" class="input-field">
+                        <input type="number" id="azSims" value="50" min="10" max="800" class="input-field">
+                        <small class="input-hint">Рекомендуем: 50-100</small>
                     </div>
                     <div class="config-item">
                         <label for="azCpuct">Exploration (cpuct):</label>
                         <input type="number" id="azCpuct" value="1.0" step="0.1" min="0.1" max="5.0" class="input-field">
                     </div>
+                </div>
+
+                <div class="alphazero-settings">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="azUseBootstrap" checked>
+                        <span>📚 Bootstrap с человеческими данными (рекомендуется!)</span>
+                    </label>
+                    <small class="config-info-small">Использует 246K переходов из турнирных игр для начальной тренировки</small>
+                </div>
+                
+                <div class="alphazero-settings">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="azUseMcts" checked>
+                        <span>Использовать MCTS для игры (Level 5)</span>
+                    </label>
+                    <small class="config-info-small">Только для моделей типа AlphaZero</small>
                 </div>
 
                 <div class="alphazero-actions">
@@ -529,6 +549,42 @@
                     <button id="btnStopAlphaZero" class="btn btn-danger hidden">
                         ⏹️ Остановить
                     </button>
+                </div>
+
+                <!-- Last Training Metrics Summary -->
+                <div id="azLastMetrics" class="az-last-metrics">
+                    <h3>📊 Последняя тренировка</h3>
+                    <div class="metrics-summary-grid">
+                        <div class="metric-box">
+                            <span class="metric-label">Policy Loss</span>
+                            <span class="metric-value" id="lastPolicyLoss">—</span>
+                            <span class="metric-target">Цель: &lt; 1.0</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="metric-label">Value Loss</span>
+                            <span class="metric-value" id="lastValueLoss">—</span>
+                            <span class="metric-target">Цель: &lt; 0.1</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="metric-label">Win Rate</span>
+                            <span class="metric-value" id="lastWinRate">—</span>
+                            <span class="metric-target">Цель: &gt; 55%</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="metric-label">Примеров</span>
+                            <span class="metric-value" id="totalExamples">—</span>
+                            <span class="metric-target">Больше = лучше</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Best checkpoint recommendation -->
+                    <div id="bestCheckpointInfo" class="best-checkpoint-info"></div>
+                    
+                    <!-- Checkpoints list -->
+                    <div class="checkpoints-section">
+                        <h4>🏆 Лучшие чекпоинты (по Policy Loss)</h4>
+                        <div id="azCheckpointsList" class="checkpoints-list"></div>
+                    </div>
                 </div>
 
                 <div id="azProgressSection" class="az-progress-section hidden">
@@ -566,30 +622,51 @@
         <main class="main-content hidden" id="geminiBattleMode">
             <!-- Battle Configuration Panel -->
             <div class="panel battle-config-panel">
-                <h2>⚔️ Настройки Батла vs Gemini</h2>
+                <h2>⚔️ VS Arena - Соревнования моделей</h2>
                 
+                <!-- Arena Mode Selection -->
+                <div class="config-section arena-mode-selector">
+                    <label class="label">Режим соревнования:</label>
+                    <div class="arena-mode-buttons">
+                        <button class="arena-mode-btn active" data-mode="vs-gemini">
+                            🤖 vs Gemini
+                        </button>
+                        <button class="arena-mode-btn" data-mode="vs-local">
+                            🧠 vs Локальная модель
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Model 1 Selection (always visible) -->
                 <div class="config-section">
                     <div id="geminiActiveModelInfo" class="active-model-info">
-                        <label for="battleModelSelect" class="label">Выбрать модель:</label>
+                        <label for="battleModelSelect" class="label">Модель 1 (Player 1):</label>
                         <select id="battleModelSelect" class="input-field model-selector">
                             <option value="default">🌐 Стандартная (Level 5)</option>
                         </select>
                     </div>
-                    <small class="config-info-small">Выбранная модель будет играть против Gemini</small>
+                </div>
+                
+                <!-- Model 2 Selection (for local vs local) -->
+                <div class="config-section vs-local-option hidden" id="model2Section">
+                    <label for="battleModel2Select" class="label">Модель 2 (Player 2):</label>
+                    <select id="battleModel2Select" class="input-field model-selector">
+                        <option value="default">🌐 Стандартная (Level 5)</option>
+                    </select>
                 </div>
                 
                 <div class="config-section">
                     <label for="battleNumGames">Количество игр:</label>
                     <input type="number" id="battleNumGames" min="1" max="100" value="10" class="input-field">
-                    <small>Модель играет за белых и за чёрных поочерёдно</small>
+                    <small>Модели играют за белых и за чёрных поочерёдно</small>
                 </div>
                 
                 <div class="config-section">
-                    <label for="battleModelLevel">Уровень модели (1-5):</label>
+                    <label for="battleModelLevel">Уровень модели 1 (1-5):</label>
                     <input type="number" id="battleModelLevel" min="1" max="5" value="5" class="input-field">
                 </div>
                 
-                <div class="config-section">
+                <div class="config-section vs-gemini-option">
                     <label for="battleTimeout">Таймаут Gemini (сек):</label>
                     <input type="number" id="battleTimeout" min="10" max="120" value="30" class="input-field">
                 </div>
@@ -601,7 +678,7 @@
                     </label>
                 </div>
                 
-                <div class="config-section">
+                <div class="config-section vs-gemini-option">
                     <label class="checkbox-label">
                         <input type="checkbox" id="battleGenerateSummaries" checked>
                         <span>Генерировать резюме игр (для LLM)</span>
@@ -610,9 +687,9 @@
                 
                 <div class="battle-actions">
                     <button id="btnStartBattle" class="btn btn-primary btn-large">
-                        ⚔️ Начать Батл
+                        ⚔️ Начать Соревнование
                     </button>
-                    <button id="btnExportGeminiData" class="btn btn-secondary">
+                    <button id="btnExportGeminiData" class="btn btn-secondary vs-gemini-option">
                         📤 Экспорт для обучения
                     </button>
                 </div>
@@ -920,6 +997,19 @@
                     </ul>
                     <p class="faq-note">При перезапуске сервера загружается последняя сохранённая модель автоматически!</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Panel Modal -->
+    <div id="fullscreenModal" class="fullscreen-modal hidden">
+        <div class="fullscreen-modal-content">
+            <div class="fullscreen-modal-header">
+                <h2 id="fullscreenModalTitle">Panel</h2>
+                <button class="fullscreen-modal-close" onclick="closeFullscreenModal()">✕</button>
+            </div>
+            <div class="fullscreen-modal-body" id="fullscreenModalBody">
+                <!-- Content will be injected here -->
             </div>
         </div>
     </div>
