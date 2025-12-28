@@ -1,0 +1,9 @@
+═══════════════════════════════════════════════════════════════
+  ОДНА КОМАНДА ДЛЯ ЗАПУСКА СЕРВЕРА
+═══════════════════════════════════════════════════════════════
+
+Скопируй и вставь ЭТУ ОДНУ КОМАНДУ в свою SSH сессию:
+
+cd /workspace/togyzkumalak/togyzkumalak-engine && source /venv/main/bin/activate 2>/dev/null || true && if ! ps aux | grep -v grep | grep -q "python run.py"; then echo "🚀 Starting server..." && nohup python run.py > server.log 2>&1 & sleep 5 && echo "✅ Server started! Log:" && tail -20 server.log; else echo "✅ Server already running:" && ps aux | grep -v grep | grep "python run.py"; fi && echo "" && echo "🌐 Testing server..." && curl -s http://localhost:8000/api/health && echo "" && echo "✅ Done! Open http://localhost:8000 in browser"
+
+═══════════════════════════════════════════════════════════════
