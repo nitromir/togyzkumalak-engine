@@ -454,11 +454,14 @@ class NNetWrapper:
         # Ensure board has correct shape (23 elements)
         original_size = len(board)
         if original_size != 23:
-            log.warning(f"Board has wrong size: {original_size}, expected 23. Board: {board[:10]}...")
+            log.error(f"PREDICT: Board has wrong size: {original_size}, expected 23. Board shape: {board.shape}, first 10: {board[:min(10, original_size)]}")
+            import traceback
+            log.error(f"PREDICT: Call stack:\n{''.join(traceback.format_stack()[-5:-1])}")
+            
             if original_size < 23:
                 if original_size == 8:
                     # This might be a partial board (first 8 pits), reconstruct full board
-                    log.warning(f"Detected 8-element board, reconstructing to 23 elements")
+                    log.error(f"PREDICT: Detected 8-element board! This should not happen. Reconstructing...")
                     board = np.concatenate([
                         board,  # First 8 pits
                         np.zeros(10, dtype=np.float32),  # Remaining 10 pits
