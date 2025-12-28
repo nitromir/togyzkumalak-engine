@@ -60,6 +60,8 @@ class AIEngine:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.current_model_name: str = "default"
         self.gemini_player = None  # Lazy-loaded Gemini player
+        self.alphazero_model = None  # AlphaZero network for MCTS-based play
+        self.use_mcts = False  # Whether to use MCTS with AlphaZero model
         self._load_models()
     
     def _load_models(self):
@@ -244,6 +246,10 @@ class AIEngine:
         if not model:
             return self._heuristic_move(board, legal_moves)
         
+        # Check if we should use AlphaZero with MCTS (level 5 with alphazero model)
+        if level == 5 and self.alphazero_model is not None and self.use_mcts:
+            return self._alphazero_mcts_move(board, legal_moves)
+        
         # Get observation
         obs = board.to_observation()
         obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
@@ -275,6 +281,72 @@ class AIEngine:
             return int(np.random.choice(9, p=masked_probs))
         else:
             return int(np.argmax(masked_probs))
+    
+    def _alphazero_mcts_move(
+        self,
+        board: TogyzkumalakBoard,
+        legal_moves: List[int]
+    ) -> int:
+        """AlphaZero move selection with MCTS."""
+        try:
+            from .alphazero_trainer import MCTS, TogyzkumalakGame, NNetWrapper, AlphaZeroConfig
+            
+            # Create game and config for MCTS
+            game = TogyzkumalakGame()
+            config = AlphaZeroConfig(num_mcts_sims=25)  # Reduced for real-time play
+            
+            # Create wrapper for existing model
+            class QuickNNetWrapper:
+                def __init__(self, model, game, device):
+                    self.model = model
+                    self.game = game
+                    self.device = device
+                
+                def predict(self, board):
+                    obs = self.game.boardToObservation(board)
+                    obs_tensor = torch.FloatTensor(obs).to(self.device)
+                    with torch.no_grad():
+                        pi, v = self.model(obs_tensor)
+                        pi = torch.exp(pi)
+                    return pi.cpu().numpy(), float(v.cpu().numpy())
+            
+            nnet = QuickNNetWrapper(self.alphazero_model, game, self.device)
+            mcts = MCTS(game, nnet, config)
+            
+            # Convert board to AlphaZero format
+            az_board = np.array(board.fields, dtype=np.float32)
+            player = 1 if board.current_player == "white" else -1
+            canonical = game.getCanonicalForm(az_board, player)
+            
+            # Get action probabilities from MCTS
+            action_probs = mcts.getActionProb(canonical, temp=0)  # Deterministic
+            
+            # Select best legal move
+            best_move = -1
+            best_prob = -1
+            for move in legal_moves:
+                if action_probs[move] > best_prob:
+                    best_prob = action_probs[move]
+                    best_move = move
+            
+            return best_move if best_move >= 0 else random.choice(legal_moves)
+            
+        except Exception as e:
+            print(f"[WARNING] AlphaZero MCTS failed: {e}, using policy directly")
+            # Fallback to policy-only
+            model = self.models.get(5)
+            if model:
+                obs = board.to_observation()
+                obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+                with torch.no_grad():
+                    action_probs = model(obs_tensor).squeeze().cpu().numpy()
+                mask = np.zeros(9)
+                for move in legal_moves:
+                    mask[move] = 1
+                masked_probs = action_probs * mask
+                if masked_probs.sum() > 0:
+                    return int(np.argmax(masked_probs))
+            return random.choice(legal_moves)
     
     def _gemini_move(
         self,

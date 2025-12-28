@@ -312,73 +312,170 @@ class GymTrainingManager:
             raise
     
     def load_model(self, model_path: str) -> bool:
-        """Load a saved model - auto-detects architecture from state dict."""
+        """Load a saved model - auto-detects architecture (Gym or AlphaZero)."""
         try:
             # Determine device
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             
             checkpoint = torch.load(model_path, map_location=device)
             
-            # Handle both formats: direct state_dict or {'model_state_dict': ...}
-            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-                state_dict = checkpoint['model_state_dict']
-                accuracy = checkpoint.get('final_accuracy', 'N/A')
-                print(f"[OK] Loading model with accuracy: {accuracy}%")
-            else:
-                state_dict = checkpoint
-            
-            # Detect architecture from state dict
-            layer_keys = [k for k in state_dict.keys() if 'weight' in k]
-            num_layers = len(layer_keys)
-            
-            # Get dimensions from the first layer
-            first_layer_key = layer_keys[0]
-            hidden_size = state_dict[first_layer_key].shape[0]
-            input_size = state_dict[first_layer_key].shape[1]
-            
             from .ai_engine import ai_engine
             
-            # Dynamically create matching network if needed
-            if num_layers == 4:
-                # 4-layer architecture (usually from ai_engine.PolicyNetwork)
-                from .ai_engine import PolicyNetwork as AIPolicy
-                target_model = AIPolicy(input_size=input_size, hidden_size=hidden_size, output_size=9)
-            elif num_layers == 3:
-                # 3-layer architecture (usually from gym_training.PolicyNetwork)
-                target_model = PolicyNetwork(input_size=input_size, hidden_size=hidden_size, output_size=9)
+            # Check if this is an AlphaZero model (has 'state_dict' key and policy/value heads)
+            is_alphazero = (
+                isinstance(checkpoint, dict) and 
+                'state_dict' in checkpoint and
+                any('policy_fc' in k or 'value_fc' in k for k in checkpoint.get('state_dict', {}).keys())
+            )
+            
+            if is_alphazero:
+                # Load AlphaZero model
+                return self._load_alphazero_model(model_path, checkpoint, device, ai_engine)
             else:
-                # Fallback for any other number of layers
-                target_model = PolicyNetwork(input_size=input_size, hidden_size=hidden_size, output_size=9)
-            
-            # Apply to ai_engine level 5 (Expert/Self-Play/Training level)
-            ai_engine.models[5] = target_model
-            ai_engine.current_model_name = Path(model_path).stem
-            
-            target_model.load_state_dict(state_dict)
-            
-            # Also update self.policy_net reference
-            self.policy_net = target_model
-            
-            print(f"[OK] Model loaded (hidden_size={hidden_size}, layers={num_layers})")
-            
-            return True
+                # Load standard Gym model
+                return self._load_gym_model(model_path, checkpoint, device, ai_engine)
+                
         except Exception as e:
             print(f"Error loading model: {e}")
             import traceback
             traceback.print_exc()
             return False
     
+    def _load_alphazero_model(self, model_path: str, checkpoint: dict, device, ai_engine) -> bool:
+        """Load an AlphaZero dual-head model."""
+        from .alphazero_trainer import AlphaZeroNetwork, TogyzkumalakGame, NNetWrapper, AlphaZeroConfig
+        
+        state_dict = checkpoint['state_dict']
+        config_data = checkpoint.get('config', {})
+        
+        # Get hidden_size from config or detect from weights
+        hidden_size = config_data.get('hidden_size', 256)
+        if 'fc1.weight' in state_dict:
+            hidden_size = state_dict['fc1.weight'].shape[0]
+        
+        # Create AlphaZero network
+        alphazero_net = AlphaZeroNetwork(
+            input_size=128,
+            hidden_size=hidden_size,
+            action_size=9
+        ).to(device)
+        
+        alphazero_net.load_state_dict(state_dict)
+        alphazero_net.eval()
+        
+        # Create a wrapper that provides policy-only interface for game play
+        class AlphaZeroPolicyWrapper(nn.Module):
+            """Wrapper to use AlphaZero network as a policy-only model for gameplay."""
+            def __init__(self, alphazero_net, game):
+                super().__init__()
+                self.net = alphazero_net
+                self.game = game
+            
+            def forward(self, x):
+                """Return only policy probabilities for compatibility with existing AI."""
+                # x is board observation (128-dim)
+                with torch.no_grad():
+                    pi, _ = self.net(x)
+                    return torch.exp(pi)  # Convert log-prob to prob
+        
+        game = TogyzkumalakGame()
+        wrapper = AlphaZeroPolicyWrapper(alphazero_net, game)
+        
+        # Apply to ai_engine level 5 (Expert level)
+        ai_engine.models[5] = wrapper
+        ai_engine.current_model_name = Path(model_path).stem
+        ai_engine.alphazero_model = alphazero_net  # Store reference for MCTS usage
+        
+        print(f"[OK] AlphaZero model loaded (hidden_size={hidden_size})")
+        return True
+    
+    def _load_gym_model(self, model_path: str, checkpoint, device, ai_engine) -> bool:
+        """Load a standard Gym training model."""
+        # Handle both formats: direct state_dict or {'model_state_dict': ...}
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            state_dict = checkpoint['model_state_dict']
+            accuracy = checkpoint.get('final_accuracy', 'N/A')
+            print(f"[OK] Loading model with accuracy: {accuracy}%")
+        else:
+            state_dict = checkpoint
+        
+        # Detect architecture from state dict
+        layer_keys = [k for k in state_dict.keys() if 'weight' in k]
+        num_layers = len(layer_keys)
+        
+        # Get dimensions from the first layer
+        first_layer_key = layer_keys[0]
+        hidden_size = state_dict[first_layer_key].shape[0]
+        input_size = state_dict[first_layer_key].shape[1]
+        
+        # Dynamically create matching network
+        if num_layers == 4:
+            # 4-layer architecture (usually from ai_engine.PolicyNetwork)
+            from .ai_engine import PolicyNetwork as AIPolicy
+            target_model = AIPolicy(input_size=input_size, hidden_size=hidden_size, output_size=9)
+        elif num_layers == 3:
+            # 3-layer architecture (usually from gym_training.PolicyNetwork)
+            target_model = PolicyNetwork(input_size=input_size, hidden_size=hidden_size, output_size=9)
+        else:
+            # Fallback for any other number of layers
+            target_model = PolicyNetwork(input_size=input_size, hidden_size=hidden_size, output_size=9)
+        
+        # Apply to ai_engine level 5 (Expert/Self-Play/Training level)
+        ai_engine.models[5] = target_model
+        ai_engine.current_model_name = Path(model_path).stem
+        
+        target_model.load_state_dict(state_dict)
+        
+        # Also update self.policy_net reference
+        self.policy_net = target_model
+        
+        print(f"[OK] Gym model loaded (hidden_size={hidden_size}, layers={num_layers})")
+        return True
+    
     def list_models(self) -> List[Dict]:
-        """List all saved models."""
+        """List all saved models including AlphaZero models."""
         models = []
+        
+        # 1. Standard gym training models (*.pt)
         for model_file in self.models_dir.glob("*.pt"):
             stat = model_file.stat()
             models.append({
                 "name": model_file.stem,
                 "path": str(model_file),
                 "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                "created": datetime.fromtimestamp(stat.st_ctime).isoformat()
+                "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "type": "gym",
+                "architecture": "PolicyNetwork"
             })
+        
+        # 2. AlphaZero models (*.pth.tar in models/alphazero/)
+        alphazero_dir = self.models_dir / "alphazero"
+        if alphazero_dir.exists():
+            for model_file in alphazero_dir.glob("*.pth.tar"):
+                # Skip temp files
+                if model_file.stem == "temp":
+                    continue
+                stat = model_file.stat()
+                
+                # Determine model name
+                name = model_file.stem
+                if name == "best":
+                    display_name = "alphazero_best"
+                elif name.startswith("checkpoint_"):
+                    iter_num = name.replace("checkpoint_", "")
+                    display_name = f"alphazero_iter{iter_num}"
+                else:
+                    display_name = f"alphazero_{name}"
+                
+                models.append({
+                    "name": display_name,
+                    "path": str(model_file),
+                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                    "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "type": "alphazero",
+                    "architecture": "AlphaZeroNetwork"
+                })
+        
         return sorted(models, key=lambda x: x["created"], reverse=True)
 
 

@@ -1,0 +1,71 @@
+{
+  "config": {
+    "num_iterations": 5,
+    "num_episodes": 5,
+    "num_mcts_sims": 25,
+    "batch_size": 32,
+    "hidden_size": 256
+  },
+  "metrics": [
+    {
+      "iteration": 1,
+      "policy_loss": 1.9692225971221924,
+      "value_loss": 0.07807280468195676,
+      "new_wins": 8,
+      "old_wins": 9,
+      "draws": 3,
+      "win_rate": 0.47058823529411764,
+      "accepted": false,
+      "total_examples": 817,
+      "timestamp": "2025-12-28T00:44:57.896702"
+    },
+    {
+      "iteration": 2,
+      "policy_loss": 1.9642109588700898,
+      "value_loss": 0.11108178795904529,
+      "new_wins": 11,
+      "old_wins": 6,
+      "draws": 3,
+      "win_rate": 0.6470588235294118,
+      "accepted": true,
+      "total_examples": 1596,
+      "timestamp": "2025-12-28T00:46:59.166943"
+    },
+    {
+      "iteration": 3,
+      "policy_loss": 1.8821391024167025,
+      "value_loss": 0.12159242307342871,
+      "new_wins": 12,
+      "old_wins": 8,
+      "draws": 0,
+      "win_rate": 0.6,
+      "accepted": true,
+      "total_examples": 2541,
+      "timestamp": "2025-12-28T00:49:00.761357"
+    },
+    {
+      "iteration": 4,
+      "policy_loss": 1.7981591250896454,
+      "value_loss": 0.11874201074801385,
+      "new_wins": 12,
+      "old_wins": 8,
+      "draws": 0,
+      "win_rate": 0.6,
+      "accepted": true,
+      "total_examples": 3208,
+      "timestamp": "2025-12-28T00:50:58.714332"
+    },
+    {
+      "iteration": 5,
+      "policy_loss": 1.5529225059655996,
+      "value_loss": 0.15062246243254496,
+      "new_wins": 10,
+      "old_wins": 8,
+      "draws": 2,
+      "win_rate": 0.5555555555555556,
+      "accepted": true,
+      "total_examples": 4185,
+      "timestamp": "2025-12-28T00:53:10.249471"
+    }
+  ]
+}

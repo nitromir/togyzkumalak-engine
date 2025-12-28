@@ -616,23 +616,25 @@ async def list_models():
 
 
 @app.post("/api/training/models/{model_name}/load")
-async def load_model(model_name: str):
+async def load_model(model_name: str, use_mcts: bool = False):
     """Load a saved model for use in gameplay."""
     try:
         models = training_manager.list_models()
-        model_path = None
+        model_info = None
         
         for model in models:
             if model["name"] == model_name:
-                model_path = model["path"]
+                model_info = model
                 break
         
-        if not model_path:
+        if not model_info:
             raise HTTPException(status_code=404, detail="Model not found")
         
-        success = training_manager.load_model(model_path)
+        success = training_manager.load_model(model_info["path"])
         
         if success:
+            from .ai_engine import ai_engine
+            
             # Get hidden_size from the loaded model
             hidden_size = 64
             if training_manager.policy_net is not None:
@@ -640,11 +642,20 @@ async def load_model(model_name: str):
                     hidden_size = next(training_manager.policy_net.parameters()).shape[0]
                 except:
                     pass
+            
+            # Set MCTS mode for AlphaZero models
+            model_type = model_info.get("type", "gym")
+            if model_type == "alphazero" and use_mcts:
+                ai_engine.use_mcts = True
+            else:
+                ai_engine.use_mcts = False
                     
             return {
                 "status": "loaded", 
                 "model": model_name,
-                "hidden_size": hidden_size
+                "hidden_size": hidden_size,
+                "type": model_type,
+                "use_mcts": ai_engine.use_mcts
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to load model")
@@ -684,7 +695,35 @@ async def get_active_model():
     """Get the name of the currently active model."""
     try:
         from .ai_engine import ai_engine
-        return {"model": ai_engine.current_model_name}
+        return {
+            "model": ai_engine.current_model_name,
+            "use_mcts": ai_engine.use_mcts,
+            "has_alphazero": ai_engine.alphazero_model is not None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/training/models/mcts")
+async def toggle_mcts(enabled: bool = True):
+    """Toggle MCTS mode for AlphaZero models."""
+    try:
+        from .ai_engine import ai_engine
+        
+        if enabled and ai_engine.alphazero_model is None:
+            raise HTTPException(
+                status_code=400, 
+                detail="No AlphaZero model loaded. Load an AlphaZero model first."
+            )
+        
+        ai_engine.use_mcts = enabled
+        return {
+            "status": "ok",
+            "use_mcts": ai_engine.use_mcts,
+            "model": ai_engine.current_model_name
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
