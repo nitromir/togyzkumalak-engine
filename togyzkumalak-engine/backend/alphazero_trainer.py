@@ -305,22 +305,38 @@ class TogyzkumalakGame:
     
     def boardToObservation(self, board: np.ndarray) -> np.ndarray:
         """Convert board to neural network input (128-dim)."""
+        # Validate board size first
+        if len(board) != 23:
+            log.error(f"boardToObservation: Board has wrong size: {len(board)}, expected 23. Board: {board}")
+            if len(board) < 23:
+                if len(board) == 8:
+                    log.error(f"boardToObservation: CRITICAL - 8-element board detected! This is the root cause.")
+                board = np.pad(board, (0, 23 - len(board)), mode='constant', constant_values=0)
+            else:
+                board = board[:23]
+        
         obs = np.zeros(128, dtype=np.float32)
         
-        for i in range(18):
+        # Ensure we have at least 23 elements
+        board_len = min(len(board), 23)
+        
+        for i in range(min(18, board_len)):
             val = board[i] if board[i] != self.TUZDUK else 0
             obs[i] = val / 81.0
         
-        obs[18] = board[20] / 162.0
-        obs[19] = board[21] / 162.0
+        if board_len > 20:
+            obs[18] = board[20] / 162.0
+        if board_len > 21:
+            obs[19] = board[21] / 162.0
         
-        if board[18] > 0:
+        if board_len > 18 and board[18] > 0:
             obs[20 + int(board[18]) - 1] = 1.0
-        if board[19] > 0:
+        if board_len > 19 and board[19] > 0:
             obs[29 + int(board[19]) - 1] = 1.0
         
-        obs[38] = 1.0 if board[22] == 0 else 0.0
-        obs[39] = 1.0 if board[22] == 1 else 0.0
+        if board_len > 22:
+            obs[38] = 1.0 if board[22] == 0 else 0.0
+            obs[39] = 1.0 if board[22] == 1 else 0.0
         
         return obs
 
