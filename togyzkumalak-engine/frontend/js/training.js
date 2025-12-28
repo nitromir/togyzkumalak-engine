@@ -1486,6 +1486,83 @@ class TrainingController {
             alert('Ошибка обновления: ' + error.message);
         }
     }
+    
+    /**
+     * Show training logs modal
+     */
+    showTrainingLogs() {
+        const modal = document.getElementById('trainingLogsModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            this.loadTrainingLogs();
+        }
+    }
+    
+    /**
+     * Load training logs from server
+     */
+    async loadTrainingLogs() {
+        const contentEl = document.getElementById('trainingLogsContent');
+        if (!contentEl) return;
+        
+        contentEl.textContent = 'Загрузка логов...';
+        
+        try {
+            // Get current task ID
+            const taskId = this.azTaskId || 'current';
+            
+            const response = await fetch(`/api/training/alphazero/logs?task_id=${taskId}&lines=300`);
+            const data = await response.json();
+            
+            let logsText = '='.repeat(80) + '\n';
+            logsText += '  ЛОГИ ОБУЧЕНИЯ ALPHAZERO\n';
+            logsText += '='.repeat(80) + '\n\n';
+            
+            // Task status
+            if (data.task_status) {
+                logsText += 'СТАТУС ЗАДАЧИ:\n';
+                logsText += `  Task ID: ${taskId}\n`;
+                logsText += `  Статус: ${data.task_status.status || 'unknown'}\n`;
+                logsText += `  Итерация: ${data.task_status.current_iteration || 0} / ${data.task_status.total_iterations || 0}\n`;
+                logsText += `  Игр: ${data.task_status.games_completed || 0} / ${data.task_status.total_games || 0}\n`;
+                logsText += `  Примеров: ${data.task_status.examples_collected || 0}\n`;
+                logsText += '\n';
+            }
+            
+            // Errors
+            if (data.errors && data.errors.length > 0) {
+                logsText += 'ОШИБКИ (server_error.log):\n';
+                logsText += '-'.repeat(80) + '\n';
+                for (const line of data.errors) {
+                    logsText += line + '\n';
+                }
+                logsText += '\n';
+            }
+            
+            // Output
+            if (data.output && data.output.length > 0) {
+                logsText += 'ВЫВОД (server.log):\n';
+                logsText += '-'.repeat(80) + '\n';
+                for (const line of data.output) {
+                    logsText += line + '\n';
+                }
+                logsText += '\n';
+            }
+            
+            if (data.errors.length === 0 && data.output.length === 0) {
+                logsText += 'Логи пока пусты. Обучение может еще не начаться или логи не записываются.\n';
+            }
+            
+            logsText += '='.repeat(80) + '\n';
+            logsText += `Обновлено: ${new Date().toLocaleString('ru-RU')}\n`;
+            
+            contentEl.textContent = logsText;
+            
+        } catch (error) {
+            contentEl.textContent = `Ошибка загрузки логов: ${error.message}\n\nПроверь консоль браузера (F12) для деталей.`;
+            console.error('Error loading logs:', error);
+        }
+    }
 }
 
 // Initialize training controller
