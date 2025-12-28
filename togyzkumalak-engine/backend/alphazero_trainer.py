@@ -423,7 +423,27 @@ class NNetWrapper:
     
     def predict(self, board: np.ndarray) -> Tuple[np.ndarray, float]:
         """Predict policy and value for board."""
+        # Ensure board has correct shape (23 elements)
+        if len(board) < 23:
+            log.warning(f"Board has wrong size: {len(board)}, expected 23. Padding or fixing...")
+            if len(board) == 8:
+                # This might be a partial board, reconstruct
+                board = np.concatenate([board, np.zeros(23 - len(board), dtype=np.float32)])
+            elif len(board) < 23:
+                board = np.pad(board, (0, 23 - len(board)), mode='constant', constant_values=0)
+            else:
+                board = board[:23]
+        
         obs = self.game.boardToObservation(board)
+        
+        # Ensure observation has correct size (128)
+        if len(obs) != 128:
+            log.error(f"Observation has wrong size: {len(obs)}, expected 128")
+            if len(obs) < 128:
+                obs = np.pad(obs, (0, 128 - len(obs)), mode='constant', constant_values=0)
+            else:
+                obs = obs[:128]
+        
         obs_tensor = torch.FloatTensor(obs).to(self.device)
         
         self.nnet.eval()
@@ -435,7 +455,23 @@ class NNetWrapper:
     
     def predict_batch(self, boards: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """Batch prediction for multiple boards - much faster on GPU."""
-        observations = [self.game.boardToObservation(b) for b in boards]
+        # Fix board sizes
+        fixed_boards = []
+        for b in boards:
+            if len(b) < 23:
+                if len(b) == 8:
+                    b = np.concatenate([b, np.zeros(23 - len(b), dtype=np.float32)])
+                else:
+                    b = np.pad(b, (0, 23 - len(b)), mode='constant', constant_values=0) if len(b) < 23 else b[:23]
+            fixed_boards.append(b)
+        
+        observations = []
+        for b in fixed_boards:
+            obs = self.game.boardToObservation(b)
+            if len(obs) != 128:
+                obs = np.pad(obs, (0, 128 - len(obs)), mode='constant', constant_values=0) if len(obs) < 128 else obs[:128]
+            observations.append(obs)
+        
         obs_tensor = torch.FloatTensor(np.array(observations)).to(self.device)
         
         self.nnet.eval()
