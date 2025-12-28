@@ -1,0 +1,45 @@
+{
+    "name": "16x RTX 3090 Optimal Config",
+    "description": "Optimized for 16x RTX 3090 (564 TFLOPS, 384GB VRAM total)",
+    "hardware": {
+        "gpus": 16,
+        "gpu_model": "RTX 3090",
+        "vram_per_gpu_gb": 24,
+        "total_vram_gb": 384,
+        "total_tflops": 564,
+        "cpu": "AMD EPYC 7543 32-Core",
+        "ram_gb": 434
+    },
+    "training_config": {
+        "numIters": 250,
+        "numEps": 200,
+        "numMCTSSims": 200,
+        "cpuct": 1.0,
+        "batch_size": 4096,
+        "hidden_size": 512,
+        "epochs": 10,
+        "learning_rate": 0.001,
+        "use_bootstrap": true,
+        "use_multiprocessing": true,
+        "num_parallel_games": 64,
+        "save_every_n_iters": 10,
+        "arena_compare": 60,
+        "max_queue_length": 500000,
+        "num_iters_for_history": 30
+    },
+    "estimated": {
+        "time_per_iteration_min": 2.5,
+        "total_time_1hr_iters": 200,
+        "total_time_2hr_iters": 450,
+        "examples_per_iter": 10000,
+        "gpu_memory_usage_gb": 18
+    },
+    "tips": [
+        "With 16 GPUs, self-play runs 64 games in parallel",
+        "Batch size 4096 fully utilizes all GPUs during training",
+        "Hidden size 512 for stronger network capacity",
+        "200 MCTS simulations for quality move selection",
+        "Save checkpoints every 10 iters (~25min) for safety",
+        "Run sync_checkpoints.ps1 locally to auto-download models"
+    ]
+}

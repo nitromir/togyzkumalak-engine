@@ -1304,6 +1304,8 @@ def get_optimal_config(num_gpus: int, time_budget_hours: float = 1.0) -> Dict:
     """
     Calculate optimal training config for given GPU count and time budget.
     
+    Optimized for RTX 3090/4090 class GPUs (24GB VRAM each).
+    
     Args:
         num_gpus: Number of available GPUs
         time_budget_hours: Available training time in hours
@@ -1311,50 +1313,96 @@ def get_optimal_config(num_gpus: int, time_budget_hours: float = 1.0) -> Dict:
     Returns:
         Recommended configuration dictionary
     """
-    # Base estimates (per iteration, per GPU)
-    # RTX 4090: ~24GB VRAM, ~82 TFLOPS
+    # Base estimates (per iteration, single GPU)
+    # RTX 3090: ~35 TFLOPS FP32, 24GB VRAM
+    # RTX 4090: ~82 TFLOPS FP32, 24GB VRAM
     base_batch_size = 256
     base_episodes = 100
     base_mcts_sims = 100
-    base_iter_time_min = 3  # Minutes per iteration on single GPU
+    base_iter_time_min = 3.5  # Minutes per iteration on single GPU
     
-    # Scale with GPUs
+    # Scale with GPUs (sublinear due to sync overhead)
+    # Efficiency: 1 GPU=100%, 4 GPU=90%, 8 GPU=80%, 16 GPU=70%
+    efficiency = max(0.5, 1.0 - (num_gpus - 1) * 0.02)
+    
     effective_batch_size = base_batch_size * num_gpus
-    parallel_games = min(16, num_gpus * 4)  # 4 parallel games per GPU
+    parallel_games = min(128, num_gpus * 4)  # 4 parallel games per GPU, max 128
     
     # Estimate iterations possible in time budget
     time_budget_min = time_budget_hours * 60
-    iter_time_with_parallel = base_iter_time_min / math.sqrt(num_gpus)  # Sublinear scaling
+    speedup = num_gpus * efficiency
+    iter_time_with_parallel = base_iter_time_min / speedup
     estimated_iterations = int(time_budget_min / iter_time_with_parallel)
     
-    # Adjust for quality vs quantity tradeoff
-    if num_gpus >= 8:
-        # With many GPUs, prioritize quality
+    # Configuration tiers based on GPU count
+    if num_gpus >= 16:
+        # Monster setup (16+ GPUs) - максимальное качество
+        mcts_sims = 200
+        episodes = 200
+        iterations = min(estimated_iterations, 400)
+        hidden_size = 512
+        arena_games = 60
+        epochs = 10
+        save_interval = 10
+    elif num_gpus >= 8:
+        # Large setup (8-15 GPUs) - высокое качество
         mcts_sims = 200
         episodes = 150
         iterations = min(estimated_iterations, 300)
+        hidden_size = 512
+        arena_games = 50
+        epochs = 10
+        save_interval = 10
     elif num_gpus >= 4:
+        # Medium setup (4-7 GPUs)
         mcts_sims = 150
         episodes = 120
         iterations = min(estimated_iterations, 200)
-    else:
-        mcts_sims = base_mcts_sims
-        episodes = base_episodes
+        hidden_size = 384
+        arena_games = 40
+        epochs = 10
+        save_interval = 5
+    elif num_gpus >= 2:
+        # Small setup (2-3 GPUs)
+        mcts_sims = 100
+        episodes = 100
         iterations = min(estimated_iterations, 150)
+        hidden_size = 256
+        arena_games = 30
+        epochs = 8
+        save_interval = 5
+    else:
+        # Single GPU
+        mcts_sims = 50
+        episodes = 50
+        iterations = min(estimated_iterations, 100)
+        hidden_size = 256
+        arena_games = 20
+        epochs = 5
+        save_interval = 5
+    
+    # Estimated metrics
+    examples_per_iter = episodes * 50  # ~50 moves per game average
+    total_examples = iterations * examples_per_iter
     
     return {
         'numIters': iterations,
         'numEps': episodes,
         'numMCTSSims': mcts_sims,
+        'cpuct': 1.0,
         'batch_size': effective_batch_size,
-        'epochs': 10,
-        'hidden_size': 512 if num_gpus >= 4 else 256,
+        'epochs': epochs,
+        'hidden_size': hidden_size,
+        'arena_compare': arena_games,
         'use_bootstrap': True,
         'use_multiprocessing': True,
         'num_parallel_games': parallel_games,
-        'save_every_n_iters': max(1, iterations // 20),  # ~20 checkpoints
-        'estimated_time_min': iterations * iter_time_with_parallel,
-        'gpus': num_gpus
+        'save_every_n_iters': save_interval,
+        'estimated_time_min': round(iterations * iter_time_with_parallel, 1),
+        'estimated_examples': total_examples,
+        'gpus': num_gpus,
+        'efficiency': f"{efficiency*100:.0f}%",
+        'speedup': f"{speedup:.1f}x"
     }
 
 
