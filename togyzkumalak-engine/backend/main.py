@@ -2053,6 +2053,29 @@ async def update_and_restart():
         # Change to repository root
         os.chdir(repo_root)
         
+        # Check for uncommitted changes first
+        status_result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        has_changes = bool(status_result.stdout.strip())
+        if has_changes:
+            # Reset any local changes to avoid conflicts
+            subprocess.run(
+                ["git", "checkout", "."],
+                capture_output=True,
+                timeout=10
+            )
+            # Also try to clean untracked files in deploy directory
+            subprocess.run(
+                ["git", "clean", "-fd", "togyzkumalak-engine/deploy/"],
+                capture_output=True,
+                timeout=10
+            )
+        
         # Pull latest changes
         result = subprocess.run(
             ["git", "pull", "origin", "master"],
@@ -2062,11 +2085,26 @@ async def update_and_restart():
         )
         
         if result.returncode != 0:
-            return {
-                "success": False,
-                "error": f"Git pull failed: {result.stderr}",
-                "stdout": result.stdout
-            }
+            # Try hard reset if pull fails
+            subprocess.run(
+                ["git", "reset", "--hard", "origin/master"],
+                capture_output=True,
+                timeout=10
+            )
+            # Try pull again
+            result = subprocess.run(
+                ["git", "pull", "origin", "master"],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode != 0:
+                return {
+                    "success": False,
+                    "error": f"Git pull failed: {result.stderr}",
+                    "stdout": result.stdout
+                }
         
         # Check if there were any changes
         has_changes = "Already up to date" not in result.stdout
