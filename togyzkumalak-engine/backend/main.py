@@ -2035,31 +2035,48 @@ async def update_and_restart():
     """
     try:
         # Get the repository root directory - try multiple possible paths
-        possible_paths = [
-            os.path.dirname(os.path.dirname(engine_dir)),  # /workspace/togyzkumalak
-            os.path.dirname(engine_dir),  # /workspace/togyzkumalak/togyzkumalak-engine -> /workspace/togyzkumalak
-            engine_dir,  # /workspace/togyzkumalak/togyzkumalak-engine
-            '/workspace/togyzkumalak',  # Direct path
-            os.path.dirname(os.path.dirname(os.path.dirname(engine_dir))),  # One level up
-        ]
-        
+        # Start from engine_dir and walk up the directory tree
+        current_path = engine_dir
         repo_root = None
         git_dir = None
+        max_levels = 5  # Don't go too far up
         
-        for path in possible_paths:
-            if path and os.path.exists(path):
-                test_git = os.path.join(path, ".git")
+        for level in range(max_levels):
+            if current_path and os.path.exists(current_path):
+                test_git = os.path.join(current_path, ".git")
                 if os.path.exists(test_git):
-                    repo_root = path
+                    repo_root = current_path
                     git_dir = test_git
                     break
+            # Go up one level
+            parent = os.path.dirname(current_path)
+            if parent == current_path:  # Reached root
+                break
+            current_path = parent
+        
+        # Also try some known paths
+        known_paths = [
+            '/workspace/togyzkumalak',
+            '/root/togyzkumalak',
+            os.path.join(os.path.expanduser('~'), 'togyzkumalak'),
+        ]
+        
+        if not repo_root:
+            for path in known_paths:
+                if path and os.path.exists(path):
+                    test_git = os.path.join(path, ".git")
+                    if os.path.exists(test_git):
+                        repo_root = path
+                        git_dir = test_git
+                        break
         
         if not repo_root or not os.path.exists(git_dir):
             return {
                 "success": False,
-                "error": f"Git repository not found. Tried paths: {possible_paths[:3]}",
+                "error": f"Git repository not found. Searched from: {engine_dir}",
                 "engine_dir": engine_dir,
-                "current_dir": os.getcwd()
+                "current_dir": os.getcwd(),
+                "hint": "Make sure you're in a git repository. Run 'find /workspace -name .git -type d 2>/dev/null' to locate it."
             }
         
         # Change to repository root
