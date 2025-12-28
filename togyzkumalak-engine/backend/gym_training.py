@@ -313,23 +313,11 @@ class GymTrainingManager:
     
     def load_model(self, model_path: str) -> bool:
         """Load a saved model - auto-detects architecture from state dict."""
-        # #region agent log
-        import json as _json; _log_path = r"c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log"
-        def _dbg(hyp, msg, data): open(_log_path, 'a').write(_json.dumps({"hypothesisId": hyp, "location": "gym_training.py:load_model", "message": msg, "data": data, "timestamp": __import__('time').time()}) + '\n')
-        # #endregion
         try:
-            # #region agent log
-            _dbg("H1", "Entry: model_path", {"path": model_path, "exists": __import__('os').path.exists(model_path)})
-            # #endregion
-            
             # Determine device
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             
             checkpoint = torch.load(model_path, map_location=device)
-            
-            # #region agent log
-            _dbg("H2", "Checkpoint loaded", {"type": str(type(checkpoint)), "keys": list(checkpoint.keys()) if isinstance(checkpoint, dict) else "not_dict"})
-            # #endregion
             
             # Handle both formats: direct state_dict or {'model_state_dict': ...}
             if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
@@ -348,10 +336,6 @@ class GymTrainingManager:
             hidden_size = state_dict[first_layer_key].shape[0]
             input_size = state_dict[first_layer_key].shape[1]
             
-            # #region agent log
-            _dbg("ARCH_DETECT", "Detected architecture", {"hidden_size": hidden_size, "input_size": input_size, "num_layers": num_layers, "layer_keys": layer_keys})
-            # #endregion
-            
             from .ai_engine import ai_engine
             
             # Dynamically create matching network if needed
@@ -364,19 +348,11 @@ class GymTrainingManager:
                 target_model = PolicyNetwork(input_size=input_size, hidden_size=hidden_size, output_size=9)
             else:
                 # Fallback for any other number of layers
-                # #region agent log
-                _dbg("ARCH_GENERIC", "Generic architecture creation", {"layers": num_layers, "hidden": hidden_size})
-                # #endregion
-                # For now, use gym_training.PolicyNetwork as template
                 target_model = PolicyNetwork(input_size=input_size, hidden_size=hidden_size, output_size=9)
             
             # Apply to ai_engine level 5 (Expert/Self-Play/Training level)
             ai_engine.models[5] = target_model
             ai_engine.current_model_name = Path(model_path).stem
-            
-            # #region agent log
-            _dbg("H4_FIX", "State dict keys comparison", {"state_keys": list(state_dict.keys())[:10], "target_keys": list(target_model.state_dict().keys())[:10]})
-            # #endregion
             
             target_model.load_state_dict(state_dict)
             
@@ -385,15 +361,8 @@ class GymTrainingManager:
             
             print(f"[OK] Model loaded (hidden_size={hidden_size}, layers={num_layers})")
             
-            # #region agent log
-            _dbg("SUCCESS", "Model loaded successfully", {"path": model_path, "hidden_size": hidden_size})
-            # #endregion
-            
             return True
         except Exception as e:
-            # #region agent log
-            _dbg("ERROR", "Exception occurred", {"error": str(e), "error_type": str(type(e).__name__)})
-            # #endregion
             print(f"Error loading model: {e}")
             import traceback
             traceback.print_exc()

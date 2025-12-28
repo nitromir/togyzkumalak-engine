@@ -431,6 +431,8 @@ class NNetWrapper:
 # =============================================================================
 
 EPS = 1e-8
+MAX_SEARCH_DEPTH = 500  # Prevent stack overflow in long games
+
 
 class MCTS:
     """Monte Carlo Tree Search for AlphaZero."""
@@ -472,8 +474,12 @@ class MCTS:
         probs = [x / counts_sum if counts_sum > 0 else 1.0/len(counts) for x in counts]
         return np.array(probs)
     
-    def search(self, canonicalBoard: np.ndarray) -> float:
+    def search(self, canonicalBoard: np.ndarray, depth: int = 0) -> float:
         """One iteration of MCTS."""
+        # Prevent stack overflow in very long games
+        if depth > MAX_SEARCH_DEPTH:
+            return 0
+        
         s = self.game.stringRepresentation(canonicalBoard)
         
         # Check if terminal
@@ -519,7 +525,7 @@ class MCTS:
         next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
         next_s = self.game.getCanonicalForm(next_s, next_player)
         
-        v = self.search(next_s)
+        v = self.search(next_s, depth + 1)
         
         # Backpropagate
         if (s, a) in self.Qsa:
@@ -551,7 +557,14 @@ class Arena:
         curPlayer = 1
         board = self.game.getInitBoard()
         
+        move_count = 0
+        max_moves = 500  # Safety limit to prevent infinite games
+        
         while self.game.getGameEnded(board, curPlayer) == 0:
+            move_count += 1
+            if move_count > max_moves:
+                break  # Prevent infinite loop
+            
             canonical = self.game.getCanonicalForm(board, curPlayer)
             action = players[curPlayer + 1](canonical)
             
@@ -561,6 +574,10 @@ class Arena:
                 action = np.argmax(valids)
             
             board, curPlayer = self.game.getNextState(board, curPlayer, action)
+        
+        # Return draw if game exceeded max moves
+        if move_count > max_moves:
+            return 0
         
         return curPlayer * self.game.getGameEnded(board, curPlayer)
     
@@ -630,9 +647,15 @@ class AlphaZeroCoach:
         board = self.game.getInitBoard()
         curPlayer = 1
         episodeStep = 0
+        max_steps = 500  # Safety limit to prevent infinite episodes
         
         while True:
             episodeStep += 1
+            
+            # Prevent infinite episodes
+            if episodeStep > max_steps:
+                return [(x[0], x[2], 0) for x in trainExamples]  # Return draw
+            
             canonicalBoard = self.game.getCanonicalForm(board, curPlayer)
             temp = int(episodeStep < self.config.temp_threshold)
             
