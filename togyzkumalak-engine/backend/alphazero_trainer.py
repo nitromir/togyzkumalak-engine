@@ -621,6 +621,15 @@ class MCTS:
         if depth > MAX_SEARCH_DEPTH:
             return 0
         
+        # Validate board size before using
+        if len(canonicalBoard) != 23:
+            log.error(f"MCTS.search: canonicalBoard has wrong size: {len(canonicalBoard)}, expected 23")
+            # Try to fix it
+            if len(canonicalBoard) < 23:
+                canonicalBoard = np.pad(canonicalBoard, (0, 23 - len(canonicalBoard)), mode='constant', constant_values=0)
+            else:
+                canonicalBoard = canonicalBoard[:23]
+        
         s = self.game.stringRepresentation(canonicalBoard)
         
         if s not in self.Es:
@@ -629,6 +638,11 @@ class MCTS:
             return -self.Es[s]
         
         if s not in self.Ps:
+            # Validate again before predict
+            if len(canonicalBoard) != 23:
+                log.error(f"MCTS.search: canonicalBoard still wrong size before predict: {len(canonicalBoard)}")
+                canonicalBoard = np.pad(canonicalBoard, (0, 23 - len(canonicalBoard)), mode='constant', constant_values=0)[:23]
+            
             self.Ps[s], v = self.nnet.predict(canonicalBoard)
             valids = self.game.getValidMoves(canonicalBoard, 1)
             self.Ps[s] = self.Ps[s] * valids
