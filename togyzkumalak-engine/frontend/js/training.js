@@ -745,8 +745,9 @@ class TrainingController {
     async startAlphaZero() {
         const useBootstrap = document.getElementById('azUseBootstrap')?.checked ?? true;
         
+        const numIters = parseInt(document.getElementById('azIters').value) || 100;
         const config = {
-            numIters: parseInt(document.getElementById('azIters').value) || 100,
+            numIters: numIters,
             numEps: parseInt(document.getElementById('azEps').value) || 100,
             numMCTSSims: parseInt(document.getElementById('azSims').value) || 100,
             cpuct: parseFloat(document.getElementById('azCpuct').value) || 1.0,
@@ -755,7 +756,7 @@ class TrainingController {
             epochs: parseInt(document.getElementById('azEpochs')?.value) || 10,
             use_bootstrap: useBootstrap,
             use_multiprocessing: document.getElementById('azParallel')?.checked ?? true,
-            save_every_n_iters: Math.max(1, Math.floor(config?.numIters / 20) || 5)
+            save_every_n_iters: Math.max(1, Math.floor(numIters / 20) || 5)
         };
 
         try {
