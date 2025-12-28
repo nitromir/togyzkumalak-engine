@@ -2178,6 +2178,68 @@ async def update_and_restart():
         }
 
 
+@app.get("/api/training/alphazero/logs")
+async def get_alphazero_logs(task_id: Optional[str] = None, lines: int = 200):
+    """
+    Get training logs for AlphaZero.
+    
+    Args:
+        task_id: Optional task ID to filter logs
+        lines: Number of lines to return (default: 200)
+    
+    Returns:
+        Training logs from server_error.log and server.log
+    """
+    try:
+        logs = {
+            "errors": [],
+            "output": [],
+            "status": "ok"
+        }
+        
+        # Get error logs
+        error_log_path = os.path.join(engine_dir, "server_error.log")
+        if os.path.exists(error_log_path):
+            with open(error_log_path, 'r') as f:
+                error_lines = f.readlines()
+                # Filter for AlphaZero related lines
+                relevant_errors = [
+                    line.rstrip() for line in error_lines[-lines:]
+                    if any(keyword in line.lower() for keyword in 
+                          ['alphazero', 'training', 'error', 'iteration', 'episode', 'mcts', 'warning'])
+                ]
+                logs["errors"] = relevant_errors[-lines:]
+        
+        # Get output logs
+        server_log_path = os.path.join(engine_dir, "server.log")
+        if os.path.exists(server_log_path):
+            with open(server_log_path, 'r') as f:
+                output_lines = f.readlines()
+                # Filter for AlphaZero related lines
+                relevant_output = [
+                    line.rstrip() for line in output_lines[-lines:]
+                    if any(keyword in line.lower() for keyword in 
+                          ['alphazero', 'training', 'iteration', 'self-play', 'episode', 'mcts'])
+                ]
+                logs["output"] = relevant_output[-lines:]
+        
+        # Get current task status if task_id provided
+        if task_id:
+            status = az_task_manager.get_status(task_id)
+            if status:
+                logs["task_status"] = status
+        
+        return logs
+        
+    except Exception as e:
+        return {
+            "errors": [],
+            "output": [],
+            "status": "error",
+            "error": str(e)
+        }
+
+
 @app.get("/api/system/git-status")
 async def get_git_status():
     """Get current git status and last commit info."""

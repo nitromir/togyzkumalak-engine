@@ -360,6 +360,32 @@
             </div>
         </main>
 
+        <!-- Training Logs Modal -->
+        <div id="trainingLogsModal" class="modal hidden">
+            <div class="modal-content" style="max-width: 90%; max-height: 90vh;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📋 Логи обучения AlphaZero</h2>
+                    <button id="btnCloseTrainingLogs" class="btn btn-secondary">Закрыть</button>
+                </div>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button id="btnRefreshLogs" class="btn btn-primary">🔄 Обновить</button>
+                    <button id="btnCopyLogs" class="btn btn-secondary">📋 Копировать</button>
+                </div>
+                <div id="trainingLogsContent" style="
+                    background: #1e1e1e;
+                    color: #d4d4d4;
+                    padding: 15px;
+                    border-radius: 8px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 12px;
+                    max-height: 70vh;
+                    overflow-y: auto;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                ">Загрузка логов...</div>
+            </div>
+        </div>
+
         <!-- Game Over Modal -->
         <!-- Optimal Config Modal -->
         <div id="optimalConfigModal" class="modal hidden">
@@ -761,6 +787,12 @@
 
                 <!-- Training Progress (shown during training) -->
                 <div id="azProgressSection" class="az-progress-section hidden">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3>📊 Прогресс обучения</h3>
+                        <button id="btnShowTrainingLogs" class="btn btn-secondary">
+                            📋 Показать логи
+                        </button>
+                    </div>
                     <div class="progress-bar-container">
                         <div class="progress-bar" id="azProgressBar"></div>
                     </div>

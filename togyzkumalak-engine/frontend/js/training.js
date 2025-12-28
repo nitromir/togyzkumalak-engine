@@ -415,6 +415,39 @@ class TrainingController {
         btnStop?.addEventListener('click', () => this.stopAlphaZero());
         btnOptimal?.addEventListener('click', () => this.loadOptimalConfig());
         
+        // Training logs button
+        const btnShowLogs = document.getElementById('btnShowTrainingLogs');
+        btnShowLogs?.addEventListener('click', () => this.showTrainingLogs());
+        
+        // Logs modal handlers
+        const btnCloseLogs = document.getElementById('btnCloseTrainingLogs');
+        const btnRefreshLogs = document.getElementById('btnRefreshLogs');
+        const btnCopyLogs = document.getElementById('btnCopyLogs');
+        const logsModal = document.getElementById('trainingLogsModal');
+        
+        btnCloseLogs?.addEventListener('click', () => {
+            if (logsModal) logsModal.classList.add('hidden');
+        });
+        
+        btnRefreshLogs?.addEventListener('click', () => this.loadTrainingLogs());
+        
+        btnCopyLogs?.addEventListener('click', () => {
+            const content = document.getElementById('trainingLogsContent');
+            if (content) {
+                navigator.clipboard.writeText(content.textContent).then(() => {
+                    alert('Логи скопированы в буфер обмена!');
+                }).catch(() => {
+                    alert('Не удалось скопировать логи');
+                });
+            }
+        });
+        
+        logsModal?.addEventListener('click', (e) => {
+            if (e.target === logsModal) {
+                logsModal.classList.add('hidden');
+            }
+        });
+        
         // Optimal config modal handlers
         const btnApplyOptimal = document.getElementById('btnApplyOptimalConfig');
         const btnCancelOptimal = document.getElementById('btnCancelOptimalConfig');
