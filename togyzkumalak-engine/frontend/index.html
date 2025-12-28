@@ -703,6 +703,21 @@
                         ⏹️ Остановить
                     </button>
                 </div>
+                
+                <!-- System Update Button -->
+                <div class="system-update-section" style="margin-top: 20px; padding: 15px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 10px; justify-content: space-between;">
+                        <div>
+                            <strong>🔄 Обновление системы</strong>
+                            <div id="gitStatusInfo" style="font-size: 0.9em; color: var(--text-secondary); margin-top: 5px;">
+                                Проверка статуса...
+                            </div>
+                        </div>
+                        <button id="btnUpdateAndRestart" class="btn btn-primary">
+                            📥 Обновить с GitHub и перезапустить
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Last Training Metrics Summary -->
                 <div id="azLastMetrics" class="az-last-metrics">

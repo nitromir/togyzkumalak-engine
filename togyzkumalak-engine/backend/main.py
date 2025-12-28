@@ -8,6 +8,9 @@ import asyncio
 import datetime
 import json
 import os
+import subprocess
+import sys
+import signal
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
@@ -2016,6 +2019,168 @@ if os.path.exists(js_dir):
     app.mount("/js", StaticFiles(directory=js_dir), name="js")
 if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+
+# =============================================================================
+# System Management
+# =============================================================================
+
+@app.post("/api/system/update-and-restart")
+async def update_and_restart():
+    """
+    Update code from GitHub and restart the server.
+    This endpoint:
+    1. Pulls latest changes from GitHub
+    2. Restarts the server process
+    """
+    try:
+        # Get the repository root directory
+        repo_root = os.path.dirname(os.path.dirname(engine_dir))
+        git_dir = os.path.join(repo_root, ".git")
+        
+        if not os.path.exists(git_dir):
+            # Try alternative path (if engine_dir is already at repo root)
+            repo_root = engine_dir
+            git_dir = os.path.join(repo_root, ".git")
+        
+        if not os.path.exists(git_dir):
+            return {
+                "success": False,
+                "error": "Git repository not found. Make sure you're in a git repository.",
+                "repo_root": repo_root
+            }
+        
+        # Change to repository root
+        os.chdir(repo_root)
+        
+        # Pull latest changes
+        result = subprocess.run(
+            ["git", "pull", "origin", "master"],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            return {
+                "success": False,
+                "error": f"Git pull failed: {result.stderr}",
+                "stdout": result.stdout
+            }
+        
+        # Check if there were any changes
+        has_changes = "Already up to date" not in result.stdout
+        
+        # Schedule restart (give time for response to be sent)
+        async def delayed_restart():
+            await asyncio.sleep(2)  # Wait 2 seconds for response
+            # Restart by exiting and letting process manager restart
+            # On Vast.ai, the onstart script will restart it
+            try:
+                if hasattr(signal, 'SIGTERM'):
+                    os.kill(os.getpid(), signal.SIGTERM)
+                else:
+                    # Windows fallback
+                    sys.exit(0)
+            except:
+                sys.exit(0)
+        
+        if has_changes:
+            asyncio.create_task(delayed_restart())
+            return {
+                "success": True,
+                "message": "Code updated successfully. Server will restart in 2 seconds...",
+                "git_output": result.stdout,
+                "restarting": True
+            }
+        else:
+            return {
+                "success": True,
+                "message": "Already up to date. No restart needed.",
+                "git_output": result.stdout,
+                "restarting": False
+            }
+            
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Git pull timed out after 60 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Update failed: {str(e)}"
+        }
+
+
+@app.get("/api/system/git-status")
+async def get_git_status():
+    """Get current git status and last commit info."""
+    try:
+        repo_root = os.path.dirname(os.path.dirname(engine_dir))
+        git_dir = os.path.join(repo_root, ".git")
+        
+        if not os.path.exists(git_dir):
+            repo_root = engine_dir
+            git_dir = os.path.join(repo_root, ".git")
+        
+        if not os.path.exists(git_dir):
+            return {
+                "is_git_repo": False,
+                "error": "Not a git repository"
+            }
+        
+        os.chdir(repo_root)
+        
+        # Get current branch
+        branch_result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True
+        )
+        branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "unknown"
+        
+        # Get last commit
+        commit_result = subprocess.run(
+            ["git", "log", "-1", "--pretty=format:%H|%an|%ae|%ad|%s", "--date=iso"],
+            capture_output=True,
+            text=True
+        )
+        
+        last_commit = None
+        if commit_result.returncode == 0 and commit_result.stdout:
+            parts = commit_result.stdout.split("|")
+            if len(parts) >= 5:
+                last_commit = {
+                    "hash": parts[0][:8],
+                    "author": parts[1],
+                    "email": parts[2],
+                    "date": parts[3],
+                    "message": parts[4]
+                }
+        
+        # Check if behind remote
+        subprocess.run(["git", "fetch", "origin"], capture_output=True)
+        behind_result = subprocess.run(
+            ["git", "rev-list", "--count", f"HEAD..origin/{branch}"],
+            capture_output=True,
+            text=True
+        )
+        commits_behind = int(behind_result.stdout.strip()) if behind_result.returncode == 0 else 0
+        
+        return {
+            "is_git_repo": True,
+            "branch": branch,
+            "last_commit": last_commit,
+            "commits_behind": commits_behind,
+            "needs_update": commits_behind > 0
+        }
+        
+    except Exception as e:
+        return {
+            "is_git_repo": False,
+            "error": str(e)
+        }
 
 
 # =============================================================================

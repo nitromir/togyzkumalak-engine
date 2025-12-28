@@ -447,6 +447,11 @@ class TrainingController {
         this.initAlphaZeroCharts();
         this.loadAlphaZeroMetrics();  // Load last training metrics
         this.loadGpuInfo();  // Load GPU information
+        
+        // System update button
+        const btnUpdate = document.getElementById('btnUpdateAndRestart');
+        btnUpdate?.addEventListener('click', () => this.updateAndRestart());
+        this.loadGitStatus();  // Load git status on init
     }
     
     /**
@@ -1281,6 +1286,132 @@ class TrainingController {
 
         } catch (error) {
             console.error('Error loading sessions:', error);
+        }
+    }
+    
+    /**
+     * Load git status and display update info
+     */
+    async loadGitStatus() {
+        try {
+            const response = await fetch('/api/system/git-status');
+            const data = await response.json();
+            
+            const statusInfo = document.getElementById('gitStatusInfo');
+            if (!statusInfo) return;
+            
+            if (!data.is_git_repo) {
+                statusInfo.innerHTML = `<span style="color: var(--text-secondary);">Не git репозиторий</span>`;
+                return;
+            }
+            
+            const lastCommit = data.last_commit;
+            const commitsBehind = data.commits_behind || 0;
+            
+            let statusHtml = '';
+            if (lastCommit) {
+                statusHtml += `<div style="margin-bottom: 5px;">`;
+                statusHtml += `<strong>Последний коммит:</strong> ${lastCommit.hash} - ${lastCommit.message}<br>`;
+                statusHtml += `<small>${new Date(lastCommit.date).toLocaleString('ru-RU')}</small>`;
+                statusHtml += `</div>`;
+            }
+            
+            if (commitsBehind > 0) {
+                statusHtml += `<div style="color: #ffa500; font-weight: bold;">⚠️ Доступно ${commitsBehind} обновлений на GitHub</div>`;
+            } else {
+                statusHtml += `<div style="color: #4caf50;">✅ Код актуален</div>`;
+            }
+            
+            statusInfo.innerHTML = statusHtml;
+            
+        } catch (error) {
+            console.error('Error loading git status:', error);
+            const statusInfo = document.getElementById('gitStatusInfo');
+            if (statusInfo) {
+                statusInfo.innerHTML = `<span style="color: #f44336;">Ошибка проверки статуса</span>`;
+            }
+        }
+    }
+    
+    /**
+     * Update code from GitHub and restart server
+     */
+    async updateAndRestart() {
+        const btn = document.getElementById('btnUpdateAndRestart');
+        const statusInfo = document.getElementById('gitStatusInfo');
+        
+        if (!confirm('Обновить код с GitHub и перезапустить сервер?\n\nСервер будет недоступен на несколько секунд.')) {
+            return;
+        }
+        
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '⏳ Обновление...';
+            }
+            
+            if (statusInfo) {
+                statusInfo.innerHTML = '<span style="color: #ffa500;">⏳ Выполняется git pull...</span>';
+            }
+            
+            const response = await fetch('/api/system/update-and-restart', {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                if (statusInfo) {
+                    statusInfo.innerHTML = `<span style="color: #4caf50;">✅ ${data.message}</span>`;
+                }
+                
+                if (data.restarting) {
+                    // Show countdown and reload page
+                    let countdown = 5;
+                    const countdownInterval = setInterval(() => {
+                        if (statusInfo) {
+                            statusInfo.innerHTML = `<span style="color: #ffa500;">🔄 Перезапуск через ${countdown} сек...</span>`;
+                        }
+                        countdown--;
+                        if (countdown < 0) {
+                            clearInterval(countdownInterval);
+                            // Reload page after restart
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        }
+                    }, 1000);
+                } else {
+                    // No restart needed, just reload status
+                    setTimeout(() => {
+                        this.loadGitStatus();
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = '📥 Обновить с GitHub и перезапустить';
+                        }
+                    }, 2000);
+                }
+            } else {
+                if (statusInfo) {
+                    statusInfo.innerHTML = `<span style="color: #f44336;">❌ Ошибка: ${data.error}</span>`;
+                }
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '📥 Обновить с GitHub и перезапустить';
+                }
+                alert('Ошибка обновления: ' + data.error);
+            }
+            
+        } catch (error) {
+            console.error('Error updating:', error);
+            if (statusInfo) {
+                statusInfo.innerHTML = `<span style="color: #f44336;">❌ Ошибка: ${error.message}</span>`;
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '📥 Обновить с GitHub и перезапустить';
+            }
+            alert('Ошибка обновления: ' + error.message);
         }
     }
 }
