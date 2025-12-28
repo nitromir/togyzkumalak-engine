@@ -257,17 +257,41 @@ class TogyzkumalakGame:
     
     def getCanonicalForm(self, board: np.ndarray, player: int) -> np.ndarray:
         """Returns board from player's perspective."""
+        # Ensure board has correct size (23 elements)
+        if len(board) != 23:
+            log.warning(f"getCanonicalForm: Board has wrong size: {len(board)}, expected 23. Fixing...")
+            if len(board) < 23:
+                if len(board) == 8:
+                    # Reconstruct full board from 8 elements
+                    board = np.concatenate([
+                        board,  # First 8 pits
+                        np.zeros(10, dtype=np.float32),  # Remaining 10 pits
+                        np.zeros(5, dtype=np.float32)  # Tuzduk, kazan, player
+                    ])
+                else:
+                    board = np.pad(board, (0, 23 - len(board)), mode='constant', constant_values=0)
+            else:
+                board = board[:23]
+        
         if player == 1:
             return board.copy()
         
-        canonical = np.zeros_like(board)
-        canonical[0:9] = board[9:18]
-        canonical[9:18] = board[0:9]
-        canonical[18] = board[19]
-        canonical[19] = board[18]
-        canonical[20] = board[21]
-        canonical[21] = board[20]
-        canonical[22] = 1 - board[22]
+        # Always create canonical with size 23
+        canonical = np.zeros(23, dtype=np.float32)
+        
+        # Ensure board has at least 23 elements before slicing
+        if len(board) >= 23:
+            canonical[0:9] = board[9:18]
+            canonical[9:18] = board[0:9]
+            canonical[18] = board[19] if len(board) > 19 else 0
+            canonical[19] = board[18] if len(board) > 18 else 0
+            canonical[20] = board[21] if len(board) > 21 else 0
+            canonical[21] = board[20] if len(board) > 20 else 0
+            canonical[22] = 1 - board[22] if len(board) > 22 else 1
+        else:
+            # Fallback: just copy and pad
+            canonical[:len(board)] = board
+            canonical[22] = 1 - board[22] if len(board) > 22 else 1
         
         return canonical
     
