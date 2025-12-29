@@ -1411,33 +1411,30 @@ class AlphaZeroCoach:
             log.info(f"[Bootstrap] Loaded {len(examples)} examples, training for {self.config.bootstrap_epochs} epochs...")
             
             start_time = time.time()
-            for epoch in range(self.config.bootstrap_epochs):
-                if self.stop_requested: break
-                
-                train_metrics = self.nnet.train(examples)
-                
-                # Update status for UI
-                if callback:
-                    metrics = {
-                        'iteration': 0,
-                        'policy_loss': train_metrics.get('policy_loss', 0),
-                        'value_loss': train_metrics.get('value_loss', 0),
-                        'win_rate': 0,
-                        'total_examples': len(examples),
-                        'stage': f'Bootstrap Epoch {epoch+1}/{self.config.bootstrap_epochs}'
-                    }
-                    callback({
-                        'status': 'running',
-                        'progress': (epoch + 1) / self.config.bootstrap_epochs * 5, # First 5% for bootstrap
-                        'iteration': 0,
-                        'metrics': metrics,
-                        'elapsed_time': time.time() - start_time
-                    })
+            # The nnet.train already has an internal loop for config.epochs
+            # We just need to call it once to perform the bootstrap training
+            train_metrics = self.nnet.train(examples)
+            
+            # Update status for UI
+            if callback:
+                metrics = {
+                    'iteration': 0,
+                    'policy_loss': train_metrics.get('policy_loss', 0),
+                    'value_loss': train_metrics.get('value_loss', 0),
+                    'win_rate': 0,
+                    'total_examples': len(examples),
+                    'stage': 'Bootstrap Complete'
+                }
+                callback({
+                    'status': 'running',
+                    'progress': 5,
+                    'iteration': 0,
+                    'metrics': metrics,
+                    'elapsed_time': time.time() - start_time
+                })
 
-                if epoch % 2 == 0:
-                    log.info(f"  Bootstrap epoch {epoch+1}/{self.config.bootstrap_epochs}, "
-                            f"policy_loss: {train_metrics.get('policy_loss', 0):.4f}, "
-                            f"value_loss: {train_metrics.get('value_loss', 0):.4f}")
+            log.info(f"  Bootstrap complete, policy_loss: {train_metrics.get('policy_loss', 0):.4f}, "
+                    f"value_loss: {train_metrics.get('value_loss', 0):.4f}")
             
             self.nnet.save_checkpoint(
                 self.config.checkpoint_dir, 
