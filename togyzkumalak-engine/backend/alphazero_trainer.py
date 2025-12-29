@@ -107,21 +107,21 @@ class AlphaZeroConfig:
     num_mcts_sims: int = 30           # MCTS simulations per move (was 100, reduced for speed)
     
     # Neural Network
-    batch_size: int = 256             # Batch size (scale with GPU memory)
+    batch_size: int = 1024            # Increased default for modern GPUs
     epochs: int = 10                  # Training epochs per iteration
     learning_rate: float = 0.001
     hidden_size: int = 256            # Hidden layer size
     
     # MCTS
     cpuct: float = 1.0                # Exploration constant
-    temp_threshold: int = 30          # Move count threshold for temperature (was 15, increased for exploration)
+    temp_threshold: int = 30          # Move count threshold for temperature
     
     # Arena
-    arena_compare: int = 20           # Games to compare models (was 40, reduced for speed)
+    arena_compare: int = 20           # Games to compare models
     update_threshold: float = 0.55    # Win rate needed to accept new model
     
     # Memory
-    max_queue_length: int = 200000    # Max training examples
+    max_queue_length: int = 500000    # Increased for 48-core setups
     num_iters_for_history: int = 20   # Keep last N iterations of examples
     
     # Checkpoints
@@ -1259,8 +1259,14 @@ class AlphaZeroCoach:
         }
         
         # Determine how many episodes each worker should handle
-        num_workers = min(self.num_parallel_games, num_episodes)
-        episodes_per_worker = (num_episodes + num_workers - 1) // num_workers
+        if self.config.num_workers > 0:
+            num_workers = self.config.num_workers
+        else:
+            # 10 workers per GPU is good for 48-core setups
+            num_workers = min(os.cpu_count() - 2, NUM_GPUS * 10)
+            
+        num_workers = max(1, min(num_workers, num_episodes))
+        episodes_per_worker = math.ceil(num_episodes / num_workers)
         
         log.info(f"🎮 Distributing {num_episodes} games across {num_workers} processes on {NUM_GPUS} GPUs...")
         
