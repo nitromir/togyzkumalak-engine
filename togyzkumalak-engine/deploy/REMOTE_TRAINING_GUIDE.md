@@ -145,25 +145,38 @@ from IPython.display import display, Javascript
 def play_alarm():
     display(Javascript("var c=new AudioContext();var o=c.createOscillator();o.type='sine';o.frequency.setValueAtTime(880,c.currentTime);o.connect(c.destination);o.start();setTimeout(function(){o.stop();},2000);"))
 
-print("🚨 СТОРОЖ ЗАПУЩЕН. Не закрывай вкладку!")
+print("🛡️ ТЕРПЕЛИВЫЙ СТОРОЖ ЗАПУЩЕН")
+TASK_ID = "az_1766974466"
+
+consecutive_errors = 0
 
 while True:
     try:
-        r = requests.get('http://localhost:8000/api/training/alphazero/sessions', timeout=10)
-        if r.json():
-            s = r.json()[-1]
-            status = s.get('status')
-            now = datetime.now().strftime('%H:%M:%S')
-            print(f"\r✅ {now} | Iter: {s.get('iteration')} | Игр: {s.get('games_played')} | {status}...", end="")
+        # Увеличили таймаут до 30 секунд
+        r = requests.get(f'http://localhost:8000/api/training/alphazero/sessions/{TASK_ID}', timeout=30)
+        s = r.json()
+        status = s.get('status')
+        now = datetime.now().strftime('%H:%M:%S')
+        
+        print(f"\r✅ {now} | Iter: {s.get('iteration')} | Игр: {s.get('games_played')} | {status} | Ошибок: {consecutive_errors}", end="")
+        
+        consecutive_errors = 0 # Сбрасываем счетчик если всё ок
+        
+        if status == 'failed':
+            print("\n❌ СТАТУС 'FAILED'!")
+            play_alarm()
+            break
             
-            if status == 'failed':
-                print("\n❌ ОБУЧЕНИЕ УПАЛО!")
-                play_alarm()
-                break
-    except:
-        print(f"\n📡 ОШИБКА СВЯЗИ В {datetime.now()}!")
-        play_alarm()
-        break
+    except Exception as e:
+        consecutive_errors += 1
+        print(f"\r⏳ {datetime.now().strftime('%H:%M:%S')} | Лаг сети #{consecutive_errors}...", end="")
+        
+        # Бьем тревогу только если 5 раз подряд не достучались (это уже 2.5 минуты тишины)
+        if consecutive_errors >= 5:
+            print("\n🚨 СЕРВЕР НЕ ОТВЕЧАЕТ БОЛЕЕ 2 МИНУТ!")
+            play_alarm()
+            break
+            
     time.sleep(30)
 ```
 

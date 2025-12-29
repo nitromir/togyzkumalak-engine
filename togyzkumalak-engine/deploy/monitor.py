@@ -6,7 +6,8 @@ Real-time monitoring of AlphaZero training with:
 - Progress bars
 - ASCII loss graphs
 - Checkpoint status
-- GPU utilization
+- REAL-TIME GPU utilization (All 16 GPUs)
+- Real-time training logs
 
 Usage:
     python monitor.py                    # Monitor localhost:8000
@@ -37,6 +38,7 @@ try:
     from rich.layout import Layout
     from rich.live import Live
     from rich.text import Text
+    from rich.columns import Columns
     from rich import box
 except ImportError:
     print("Installing rich library for beautiful CLI...")
@@ -48,15 +50,16 @@ except ImportError:
     from rich.layout import Layout
     from rich.live import Live
     from rich.text import Text
+    from rich.columns import Columns
     from rich import box
 
 console = Console()
 
 
-def create_ascii_graph(values: List[float], width: int = 40, height: int = 8, title: str = "") -> str:
+def create_ascii_graph(values: List[float], width: int = 40, title: str = "") -> str:
     """Create ASCII line graph from values."""
     if not values or len(values) < 2:
-        return "  [No data yet]"
+        return "  [Waiting for more data...]"
     
     # Normalize values
     min_val = min(values)
@@ -71,12 +74,8 @@ def create_ascii_graph(values: List[float], width: int = 40, height: int = 8, ti
         sampled = values + [values[-1]] * (width - len(values))
     
     # Create graph
-    graph_chars = "▁▂▃▄▅▆▇█"
+    graph_chars = " ▂▃▄▅▆▇█"
     lines = []
-    
-    # Title line
-    if title:
-        lines.append(f"  {title}")
     
     # Value labels
     lines.append(f"  {max_val:.3f} ┐")
@@ -91,17 +90,16 @@ def create_ascii_graph(values: List[float], width: int = 40, height: int = 8, ti
     lines.append(graph_line + " │")
     lines.append(f"  {min_val:.3f} ┘")
     lines.append(f"  {'─' * width}")
-    lines.append(f"  iter 1{' ' * (width - 10)}iter {len(values)}")
     
     return "\n".join(lines)
 
 
 def create_progress_bar(current: int, total: int, width: int = 30) -> str:
     """Create ASCII progress bar."""
-    if total == 0:
+    if total <= 0:
         return "[" + "░" * width + "] 0%"
     
-    percent = current / total
+    percent = min(1.0, current / total)
     filled = int(width * percent)
     bar = "█" * filled + "░" * (width - filled)
     return f"[{bar}] {percent*100:.1f}%"
@@ -120,165 +118,184 @@ def format_time(seconds: float) -> str:
 
 
 def get_training_status(base_url: str) -> Dict:
-    """Fetch training status from API."""
+    """Fetch all necessary status info from API."""
     try:
-        # Get active sessions
-        sessions_resp = requests.get(f"{base_url}/api/training/alphazero/sessions", timeout=5)
+        # 1. Sessions status
+        sessions_resp = requests.get(f"{base_url}/api/training/alphazero/sessions", timeout=2)
         sessions = sessions_resp.json().get("sessions", {})
         
-        # Get metrics
-        metrics_resp = requests.get(f"{base_url}/api/training/alphazero/metrics", timeout=5)
+        # 2. Metrics (Loss, Win Rate)
+        metrics_resp = requests.get(f"{base_url}/api/training/alphazero/metrics", timeout=2)
         metrics_data = metrics_resp.json()
         
-        # Get GPU info
-        gpu_resp = requests.get(f"{base_url}/api/training/alphazero/gpu-info", timeout=5)
-        gpu_info = gpu_resp.json()
+        # 3. REAL-TIME GPU Utilization
+        gpu_util_resp = requests.get(f"{base_url}/api/system/gpu-utilization", timeout=2)
+        gpu_util = gpu_util_resp.json()
         
-        # Get checkpoints
-        checkpoints_resp = requests.get(f"{base_url}/api/training/alphazero/checkpoints", timeout=5)
-        checkpoints = checkpoints_resp.json().get("checkpoints", [])
+        # 4. Logs
+        logs_resp = requests.get(f"{base_url}/api/training/alphazero/logs?lines=20", timeout=2)
+        logs_data = logs_resp.json()
         
         # Find active task
         active_task = None
         for task_id, task in sessions.items():
             if isinstance(task, dict) and task.get("status") in ["running", "pending"]:
                 active_task = task
+                active_task["id"] = task_id
                 break
         
         return {
             "active_task": active_task,
             "metrics": metrics_data.get("metrics", []),
-            "summary": metrics_data.get("summary", {}),
-            "config": metrics_data.get("config", {}),
-            "gpu_info": gpu_info,
-            "checkpoints": checkpoints[:10],
+            "gpu_util": gpu_util.get("gpus", []),
+            "logs": logs_data.get("output", [])[-15:],
             "connected": True
         }
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         return {"connected": False, "error": str(e)}
 
 
-def generate_dashboard(status: Dict, start_time: datetime) -> Panel:
-    """Generate the main dashboard panel."""
+def generate_dashboard(status: Dict, start_time: datetime) -> Layout:
+    """Generate the multi-pane layout dashboard."""
+    layout = Layout()
+    
+    # Split main layout
+    layout.split_column(
+        Layout(name="header", size=3),
+        Layout(name="main"),
+        Layout(name="footer", size=3)
+    )
+    
+    # Split main into left (Status/Metrics) and right (GPU/Logs)
+    layout["main"].split_row(
+        Layout(name="left"),
+        Layout(name="right")
+    )
+    
+    # Header
+    layout["header"].update(
+        Panel(
+            Text("🚀 Togyzkumalak AlphaZero - 16x GPU Super-Training Monitor", justify="center", style="bold cyan"),
+            box=box.ROUNDED, border_style="cyan"
+        )
+    )
+    
+    # Footer
+    uptime = datetime.now() - start_time
+    layout["footer"].update(
+        Panel(
+            Text(f"Uptime: {format_time(uptime.total_seconds())} | Refresh: 3s | Ctrl+C to Exit", justify="center", style="dim"),
+            box=box.ROUNDED, border_style="dim"
+        )
+    )
     
     if not status.get("connected"):
-        return Panel(
-            f"[red]❌ Cannot connect to server[/red]\n\nError: {status.get('error', 'Unknown')}\n\nMake sure the server is running.",
-            title="🦾 AlphaZero Monitor",
-            border_style="red"
+        layout["main"].update(
+            Panel(f"[red]❌ Connection Error:[/red] {status.get('error')}", title="Error", border_style="red")
         )
-    
+        return layout
+
     task = status.get("active_task")
     metrics = status.get("metrics", [])
-    summary = status.get("summary", {})
-    gpu_info = status.get("gpu_info", {})
-    checkpoints = status.get("checkpoints", [])
+    gpu_list = status.get("gpu_util", [])
+    logs = status.get("logs", [])
+
+    # === LEFT PANE: Progress & Metrics ===
+    left_content = []
     
-    # Build content
-    lines = []
-    
-    # === Header ===
     if task:
-        current_iter = task.get("current_iteration", 0)
-        total_iter = task.get("total_iterations", 100)
-        progress = task.get("progress", 0)
-        task_status = task.get("status", "unknown")
-        elapsed = task.get("elapsed_time", 0)
+        curr = task.get("current_iteration", 0)
+        total = task.get("total_iterations", 100)
+        tid = task.get("id", "N/A")
+        left_content.append(f"[bold yellow]Task ID:[/bold yellow] {tid}")
+        left_content.append(f"[bold]Iteration:[/bold] {curr} / {total}")
+        left_content.append(create_progress_bar(curr, total, 30))
+        left_content.append("")
         
-        # Status indicator
-        status_emoji = {"running": "🔄", "completed": "✅", "stopped": "⏹️", "error": "❌"}.get(task_status, "❓")
-        
-        lines.append(f"[bold cyan]Status:[/bold cyan] {status_emoji} {task_status.upper()}")
-        lines.append("")
-        
-        # Progress bar
-        progress_bar = create_progress_bar(current_iter, total_iter, 40)
-        lines.append(f"[bold]Iteration:[/bold] {current_iter} / {total_iter}")
-        lines.append(f"  {progress_bar}")
-        lines.append("")
-        
-        # Time
-        if elapsed > 0:
-            eta = (elapsed / max(current_iter, 1)) * (total_iter - current_iter) if current_iter > 0 else 0
-            lines.append(f"[bold]Time:[/bold] {format_time(elapsed)} elapsed | ETA: ~{format_time(eta)}")
-        lines.append("")
-    else:
-        lines.append("[yellow]No active training session[/yellow]")
-        lines.append("Start training from the web UI or API")
-        lines.append("")
-    
-    # === GPU Info ===
-    lines.append("[bold magenta]━━━ GPU Status ━━━[/bold magenta]")
-    if gpu_info.get("cuda_available"):
-        gpus = gpu_info.get("gpus", [])
-        lines.append(f"[green]✓ CUDA {gpu_info.get('cuda_version', '?')} - {len(gpus)} GPU(s)[/green]")
-        for gpu in gpus[:4]:  # Show max 4
-            lines.append(f"  • {gpu.get('name', '?')} ({gpu.get('memory_total_gb', '?')} GB)")
-    else:
-        lines.append("[yellow]⚠ CPU Mode (No CUDA)[/yellow]")
-    lines.append("")
-    
-    # === Metrics ===
-    lines.append("[bold magenta]━━━ Training Metrics ━━━[/bold magenta]")
-    
-    if metrics:
-        last = metrics[-1]
-        policy_loss = last.get("policy_loss", 0)
-        value_loss = last.get("value_loss", 0)
-        win_rate = last.get("win_rate", 0) * 100
-        
-        # Color coding
-        pl_color = "green" if policy_loss < 1.0 else "yellow" if policy_loss < 1.5 else "red"
-        vl_color = "green" if value_loss < 0.1 else "yellow" if value_loss < 0.2 else "red"
-        wr_color = "green" if win_rate > 55 else "yellow" if win_rate > 50 else "red"
-        
-        lines.append(f"  📉 Policy Loss: [{pl_color}]{policy_loss:.4f}[/{pl_color}]  (target: < 1.0)")
-        lines.append(f"  📊 Value Loss:  [{vl_color}]{value_loss:.4f}[/{vl_color}]  (target: < 0.1)")
-        lines.append(f"  🏆 Win Rate:    [{wr_color}]{win_rate:.1f}%[/{wr_color}]   (target: > 55%)")
-        lines.append(f"  📦 Examples:    {last.get('total_examples', 0):,}")
-        lines.append("")
-        
-        # Mini graphs
-        if len(metrics) >= 3:
-            lines.append("[bold magenta]━━━ Loss Trend ━━━[/bold magenta]")
-            policy_values = [m.get("policy_loss", 0) for m in metrics]
-            lines.append(create_ascii_graph(policy_values, width=40, title="Policy Loss"))
-            lines.append("")
-    else:
-        lines.append("  [dim]No metrics yet - waiting for first iteration...[/dim]")
-        lines.append("")
-    
-    # === Checkpoints ===
-    lines.append("[bold magenta]━━━ Latest Checkpoints ━━━[/bold magenta]")
-    if checkpoints:
-        for i, cp in enumerate(checkpoints[:5]):
-            name = cp.get("name", "?")
-            size = cp.get("size_mb", 0)
-            cp_metrics = cp.get("metrics", {})
-            loss = cp_metrics.get("policy_loss", "?")
-            accepted = cp_metrics.get("accepted", False)
+        # Metrics
+        if metrics:
+            last = metrics[-1]
+            p_loss = last.get("policy_loss", 0)
+            v_loss = last.get("value_loss", 0)
+            win_r = last.get("win_rate", 0) * 100
             
-            marker = "⭐" if i == 0 else "  "
-            status_mark = "✓" if accepted else "✗"
-            loss_str = f"{loss:.3f}" if isinstance(loss, float) else str(loss)
+            left_content.append(f"[bold cyan]Metrics (Last Iter):[/bold cyan]")
+            left_content.append(f"  • Policy Loss: [green]{p_loss:.4f}[/green]")
+            left_content.append(f"  • Value Loss:  [green]{v_loss:.4f}[/green]")
+            left_content.append(f"  • Win Rate:    [bold yellow]{win_r:.1f}%[/bold yellow]")
+            left_content.append("")
             
-            lines.append(f"  {marker} [{status_mark}] {name} ({size:.1f}MB) loss:{loss_str}")
+            # Mini Graph
+            if len(metrics) > 2:
+                left_content.append("[bold cyan]Policy Loss Trend:[/bold cyan]")
+                p_values = [m.get("policy_loss", 0) for m in metrics]
+                left_content.append(create_ascii_graph(p_values, width=30))
+        else:
+            left_content.append("[dim]Waiting for first iteration metrics...[/dim]")
     else:
-        lines.append("  [dim]No checkpoints yet[/dim]")
-    lines.append("")
-    
-    # === Footer ===
-    uptime = datetime.now() - start_time
-    lines.append(f"[dim]Monitor uptime: {format_time(uptime.total_seconds())} | Press Ctrl+C to exit[/dim]")
-    
-    content = "\n".join(lines)
-    
-    return Panel(
-        content,
-        title="🦾 [bold cyan]AlphaZero Training Monitor[/bold cyan]",
-        border_style="cyan",
-        box=box.DOUBLE
+        left_content.append("[bold red]⚠ NO ACTIVE TRAINING TASK[/bold red]")
+        left_content.append("Check the web UI to start training.")
+
+    layout["left"].update(Panel("\n".join(left_content), title="📊 Training Status", border_style="green"))
+
+    # === RIGHT PANE: GPU & Logs ===
+    # Split right into GPU (top) and Logs (bottom)
+    layout["right"].split_column(
+        Layout(name="gpu"),
+        Layout(name="logs")
     )
+
+    # GPU Utilization
+    gpu_table = Table(box=None, padding=(0, 1), show_header=False)
+    gpu_table.add_column("ID", justify="right", style="cyan")
+    gpu_table.add_column("Bar", width=15)
+    gpu_table.add_column("Load", justify="right")
+    gpu_table.add_column("Mem", justify="right")
+
+    if gpu_list:
+        # Group GPUs into columns if there are many
+        for g in gpu_list:
+            idx = g.get("index", 0)
+            util = g.get("utilization", 0)
+            used = g.get("memory_used_mib", 0)
+            total = g.get("memory_total_mib", 0)
+            
+            # Color based on load
+            color = "green" if util < 30 else "yellow" if util < 70 else "bold red"
+            
+            # Small bar for GPU
+            bar_width = 10
+            filled = int(bar_width * (util / 100))
+            bar = f"[{color}]" + "█" * filled + "[/]" + "░" * (bar_width - filled)
+            
+            gpu_table.add_row(
+                f"G{idx}",
+                bar,
+                f"[{color}]{util}%[/{color}]",
+                f"{used/1024:.1f}/{total/1024:.0f}G"
+            )
+        gpu_panel_content = gpu_table
+    else:
+        gpu_panel_content = Text("No GPU information available", style="dim")
+
+    layout["gpu"].update(Panel(gpu_panel_content, title="🔥 GPU Real-Time Load", border_style="magenta"))
+
+    # Logs
+    log_text = Text()
+    if logs:
+        for line in logs:
+            if "ERROR" in line or "fail" in line.lower():
+                log_text.append(line + "\n", style="bold red")
+            elif "iter" in line.lower() or "save" in line.lower():
+                log_text.append(line + "\n", style="bold green")
+            else:
+                log_text.append(line + "\n", style="dim")
+    else:
+        log_text.append("Waiting for logs...", style="dim")
+
+    layout["logs"].update(Panel(log_text, title="📜 Training Output (Last 15 lines)", border_style="yellow"))
+
+    return layout
 
 
 def main():
@@ -303,10 +320,10 @@ def main():
                 time.sleep(args.interval)
                 
     except KeyboardInterrupt:
-        console.print("\n[yellow]Monitor stopped.[/yellow]")
+        pass
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
-        raise
+        time.sleep(5)
 
 
 if __name__ == "__main__":

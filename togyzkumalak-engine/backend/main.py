@@ -774,6 +774,42 @@ async def get_gpu_info():
         }
 
 
+@app.get("/api/system/gpu-utilization")
+async def get_gpu_utilization():
+    """Get real-time GPU utilization and memory using nvidia-smi."""
+    try:
+        import subprocess
+        
+        # Call nvidia-smi to get utilization and memory usage
+        # index, utilization.gpu [%], memory.used [MiB], memory.total [MiB], name
+        cmd = ["nvidia-smi", "--query-gpu=index,utilization.gpu,memory.used,memory.total,name", "--format=csv,noheader,nounits"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        
+        gpus = []
+        for line in result.stdout.strip().split('\n'):
+            if not line: continue
+            parts = [p.strip() for p in line.split(',')]
+            if len(parts) >= 5:
+                gpus.append({
+                    "index": int(parts[0]),
+                    "utilization": int(parts[1]),
+                    "memory_used_mib": int(parts[2]),
+                    "memory_total_mib": int(parts[3]),
+                    "name": parts[4]
+                })
+        
+        return {
+            "status": "ok",
+            "gpus": gpus,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
 @app.get("/api/ai/model-info")
 async def get_ai_model_info(level: int = 5):
     """Get info about the currently active AI model."""
