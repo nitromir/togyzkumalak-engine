@@ -1673,8 +1673,18 @@ class TrainingController {
                 }
                 logsText += '\n';
             }
+
+            // Training Log (New)
+            if (data.training && data.training.length > 0) {
+                logsText += 'ПРОЦЕСС ОБУЧЕНИЯ (alphazero_training.log):\n';
+                logsText += '-'.repeat(80) + '\n';
+                for (const line of data.training) {
+                    logsText += line + '\n';
+                }
+                logsText += '\n';
+            }
             
-            if (data.errors.length === 0 && data.output.length === 0) {
+            if (data.errors.length === 0 && data.output.length === 0 && (!data.training || data.training.length === 0)) {
                 logsText += 'Логи пока пусты. Обучение может еще не начаться или логи не записываются.\n';
             }
             
