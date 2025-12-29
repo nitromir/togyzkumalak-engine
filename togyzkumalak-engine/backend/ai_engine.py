@@ -62,6 +62,7 @@ class AIEngine:
         self.gemini_player = None  # Lazy-loaded Gemini player
         self.alphazero_model = None  # AlphaZero network for MCTS-based play
         self.use_mcts = False  # Whether to use MCTS with AlphaZero model
+        self.mcts_cache = {}  # Cache for MCTS objects per level
         self._load_models()
     
     def _load_models(self):
@@ -268,7 +269,7 @@ class AIEngine:
         """Level 3-5: Neural network-based move selection."""
         # Use AlphaZero MCTS for any neural level if model is loaded and MCTS is enabled
         if self.alphazero_model is not None and self.use_mcts:
-            return self._alphazero_mcts_move(board, legal_moves)
+            return self._alphazero_mcts_move(board, legal_moves, level)
             
         model = self.models.get(level)
         if not model:
@@ -309,35 +310,48 @@ class AIEngine:
     def _alphazero_mcts_move(
         self,
         board: TogyzkumalakBoard,
-        legal_moves: List[int]
+        legal_moves: List[int],
+        level: int = 5
     ) -> int:
         """AlphaZero move selection with MCTS."""
         try:
-            from .alphazero_trainer import MCTS, TogyzkumalakGame, NNetWrapper, AlphaZeroConfig
+            from .alphazero_trainer import MCTS, TogyzkumalakGame, AlphaZeroConfig
             
-            # Create game and config for MCTS
-            game = TogyzkumalakGame()
-            # Expert level simulation count for AlphaZero
-            num_sims = 100 if torch.cuda.is_available() else 40
-            config = AlphaZeroConfig(num_mcts_sims=num_sims)  
-            
-            # Create wrapper for existing model
-            class QuickNNetWrapper:
-                def __init__(self, model, game, device):
-                    self.model = model
-                    self.game = game
-                    self.device = device
+            # Use cached MCTS or create new one
+            if level not in self.mcts_cache:
+                game = TogyzkumalakGame()
                 
-                def predict(self, board):
-                    obs = self.game.boardToObservation(board)
-                    obs_tensor = torch.FloatTensor(obs).to(self.device)
-                    with torch.no_grad():
-                        pi, v = self.model(obs_tensor)
-                        pi = torch.exp(pi)
-                    return pi.cpu().numpy(), float(v.cpu().numpy())
+                # Scale simulations by level and GPU availability
+                if level == 3:
+                    num_sims = 50 if torch.cuda.is_available() else 20
+                elif level == 4:
+                    num_sims = 150 if torch.cuda.is_available() else 50
+                else:  # Level 5
+                    num_sims = 400 if torch.cuda.is_available() else 100
+                
+                print(f"[AI] Initializing MCTS for Level {level} with {num_sims} simulations")
+                config = AlphaZeroConfig(num_mcts_sims=num_sims)  
+                
+                # Create wrapper for existing model
+                class QuickNNetWrapper:
+                    def __init__(self, model, game, device):
+                        self.model = model
+                        self.game = game
+                        self.device = device
+                    
+                    def predict(self, board):
+                        obs = self.game.boardToObservation(board)
+                        obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+                        with torch.no_grad():
+                            pi, v = self.model(obs_tensor)
+                            pi = torch.exp(pi)
+                        return pi.squeeze().cpu().numpy(), float(v.squeeze().cpu().numpy())
+                
+                nnet = QuickNNetWrapper(self.alphazero_model, game, self.device)
+                self.mcts_cache[level] = MCTS(game, nnet, config)
             
-            nnet = QuickNNetWrapper(self.alphazero_model, game, self.device)
-            mcts = MCTS(game, nnet, config)
+            mcts = self.mcts_cache[level]
+            game = mcts.game
             
             # Convert board to AlphaZero format
             az_board = np.array(board.fields, dtype=np.float32)
@@ -345,7 +359,9 @@ class AIEngine:
             canonical = game.getCanonicalForm(az_board, player)
             
             # Get action probabilities from MCTS
-            action_probs = mcts.getActionProb(canonical, temp=0)  # Deterministic
+            # Use small temperature for some variety in Level 3-4, 0 for Level 5
+            temp = 0.5 if level < 5 else 0
+            action_probs = mcts.getActionProb(canonical, temp=temp)
             
             # Select best legal move
             best_move = -1
@@ -359,8 +375,10 @@ class AIEngine:
             
         except Exception as e:
             print(f"[WARNING] AlphaZero MCTS failed: {e}, using policy directly")
+            import traceback
+            traceback.print_exc()
             # Fallback to policy-only
-            model = self.models.get(5)
+            model = self.models.get(level) or self.models.get(5)
             if model:
                 obs = board.to_observation()
                 obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
@@ -464,6 +482,30 @@ class AIEngine:
                 print(f"[ERROR] Gemini probabilities failed: {e}")
                 legal_moves = board.get_legal_moves()
                 return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
+
+        # Use AlphaZero MCTS probabilities if enabled and model is loaded
+        if self.alphazero_model is not None and self.use_mcts:
+            try:
+                # We need to ensure MCTS is initialized for this level
+                # _alphazero_mcts_move handles this
+                from .alphazero_trainer import TogyzkumalakGame
+                
+                # Convert board to AlphaZero format
+                game = TogyzkumalakGame()
+                az_board = np.array(board.fields, dtype=np.float32)
+                player = 1 if board.current_player == "white" else -1
+                canonical = game.getCanonicalForm(az_board, player)
+                
+                # Ensure MCTS exists for this level (or use level 5 sims for better analysis)
+                self._alphazero_mcts_move(board, board.get_legal_moves(), level)
+                mcts = self.mcts_cache[level]
+                
+                # Get probabilities from MCTS (temp=1 for full distribution)
+                action_probs = mcts.getActionProb(canonical, temp=1.0)
+                
+                return {i: float(action_probs[i]) for i in range(9)}
+            except Exception as e:
+                print(f"[WARNING] AlphaZero MCTS probabilities failed: {e}")
 
         model = self.models.get(level)
         if not model:

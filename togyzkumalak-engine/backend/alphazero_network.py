@@ -50,7 +50,7 @@ class TogyzkumalakAlphaZeroNet(NNetWrapper):
             config = AlphaZeroConfig()
         
         super().__init__(game, config)
-        
+                
         # Force CPU device
         self.device = device
         print(f"[AlphaZero Network] Using device: {self.device}")

@@ -624,7 +624,7 @@ async def get_alphazero_metrics():
 
 
 @app.post("/api/training/models/alphazero/{checkpoint_name}/load")
-async def load_alphazero_checkpoint(checkpoint_name: str):
+async def load_alphazero_checkpoint(checkpoint_name: str, use_mcts: bool = True):
     """Load a specific AlphaZero checkpoint."""
     try:
         checkpoint_file = checkpoint_name if checkpoint_name.endswith('.pth.tar') else f"{checkpoint_name}.pth.tar"
@@ -635,7 +635,13 @@ async def load_alphazero_checkpoint(checkpoint_name: str):
         
         success = training_manager.load_model(checkpoint_path)
         if success:
-            return {"status": "success", "loaded": checkpoint_file}
+            from .ai_engine import ai_engine
+            ai_engine.use_mcts = use_mcts
+            return {
+                "status": "success", 
+                "loaded": checkpoint_file,
+                "use_mcts": ai_engine.use_mcts
+            }
         else:
             raise HTTPException(status_code=500, detail="Failed to load checkpoint")
     except HTTPException:

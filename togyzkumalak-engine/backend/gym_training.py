@@ -389,6 +389,7 @@ class GymTrainingManager:
             
         ai_engine.current_model_name = Path(model_path).stem
         ai_engine.alphazero_model = alphazero_net  # Store reference for MCTS usage
+        ai_engine.mcts_cache = {}  # Clear cache to force recreation with new model
         
         print(f"[OK] AlphaZero model loaded to all levels (hidden_size={hidden_size})")
         return True
