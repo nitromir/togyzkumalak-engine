@@ -31,9 +31,15 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import copy
 
-# Configure logging
+# Configure logging with file handler for UI visibility
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+
+# Add file handler for training logs (UI reads this)
+_log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'alphazero_training.log')
+_file_handler = logging.FileHandler(_log_file, mode='w')
+_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+log.addHandler(_file_handler)
 
 # =============================================================================
 # Device Configuration - Auto-detect GPU
@@ -819,6 +825,82 @@ class MCTS:
 
 
 # =============================================================================
+# Parallel Self-Play Worker
+# =============================================================================
+
+def execute_episode_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+    """Worker function for parallel self-play with explicit GPU assignment."""
+    nnet_state, config_dict, worker_id = args
+    
+    # Assign to GPU based on worker ID
+    num_gpus = torch.cuda.device_count()
+    gpu_id = worker_id % max(1, num_gpus)
+    device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
+    
+    # Recreate game and network
+    game = TogyzkumalakGame()
+    config = AlphaZeroConfig(**config_dict)
+    
+    # Create network on specific GPU
+    from alphazero_trainer import AlphaZeroNetwork # Re-import inside worker
+    nnet_model = AlphaZeroNetwork(
+        input_size=128,
+        hidden_size=config.hidden_size,
+        action_size=game.getActionSize()
+    ).to(device)
+    
+    # Load weights
+    clean_state = {k.replace("module.", ""): v for k, v in nnet_state.items()}
+    nnet_model.load_state_dict(clean_state)
+    nnet_model.eval()
+    
+    class WorkerNNet:
+        def __init__(self, net, dev, g):
+            self.net = net
+            self.dev = dev
+            self.game = g
+        def predict(self, board):
+            obs = self.game.boardToObservation(board)
+            obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.dev)
+            with torch.no_grad():
+                pi, v = self.net(obs_tensor)
+                pi = torch.exp(pi)
+            return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
+
+    mcts = MCTS(game, WorkerNNet(nnet_model, device, game), config)
+    
+    trainExamples = []
+    board = game.getInitBoard()
+    curPlayer = 1
+    episodeStep = 0
+    max_steps = 500
+    
+    while True:
+        episodeStep += 1
+        if episodeStep > max_steps: break
+        
+        canonical = game.getCanonicalForm(board, curPlayer)
+        temp = int(episodeStep < config.temp_threshold)
+        
+        try:
+            pi = mcts.getActionProb(canonical, temp=temp)
+        except Exception:
+            return [] # Failed game
+            
+        sym = game.getSymmetries(canonical, pi)
+        for b, p in sym:
+            trainExamples.append([b, curPlayer, p, None])
+        
+        action = np.random.choice(len(pi), p=pi)
+        board, curPlayer = game.getNextState(board, curPlayer, action)
+        
+        r = game.getGameEnded(board, curPlayer)
+        if r != 0:
+            return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
+    
+    return []
+
+# =============================================================================
 # Fast Self-Play (NO ProcessPoolExecutor - single process, batch inference)
 # =============================================================================
 
@@ -1165,49 +1247,66 @@ class AlphaZeroCoach:
     
     def executeEpisodesParallel(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         """
-        Execute multiple episodes using BATCH self-play (fast single-process).
-        
-        This is 10-100x faster than ProcessPoolExecutor because:
-        1. No CUDA context creation overhead per game
-        2. Single network inference handles all games
-        3. GPU batch parallelism is fully utilized
+        Execute multiple episodes in parallel.
+        Uses ProcessPoolExecutor for multi-GPU distribution if enabled.
         """
+        if not self.config.use_multiprocessing or self.num_parallel_games <= 1:
+            # Fallback to single-process batching
+            return self._executeEpisodesBatch(num_episodes)
+
         all_examples = []
         
-        # Run games in batches of parallel games
-        batch_size = min(self.num_parallel_games, num_episodes, 16)  # Max 16 parallel games
+        # Prepare data for workers
+        nnet_state = {k: v.cpu() for k, v in self.nnet.nnet_base.state_dict().items()}
+        config_dict = {
+            'num_mcts_sims': self.config.num_mcts_sims,
+            'cpuct': self.config.cpuct,
+            'temp_threshold': self.config.temp_threshold,
+            'hidden_size': self.config.hidden_size,
+        }
+        
+        # Determine workers (typically one per GPU or two)
+        workers = min(self.num_parallel_games, num_episodes)
+        
+        log.info(f"🎮 Distributing {num_episodes} games across {workers} workers on {NUM_GPUS} GPUs...")
+        
+        try:
+            mp.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass
+
+        completed = 0
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            args = [(nnet_state, config_dict, i) for i in range(num_episodes)]
+            futures = [executor.submit(execute_episode_worker, arg) for arg in args]
+            
+            for future in futures:
+                try:
+                    result = future.result(timeout=600) # 10 min timeout
+                    if result:
+                        all_examples.extend(result)
+                        completed += 1
+                    
+                    if completed % 10 == 0:
+                        log.info(f"  ✅ Progress: {completed}/{num_episodes} games finished")
+                except Exception as e:
+                    log.error(f"  ❌ Game failed: {e}")
+        
+        log.info(f"🏁 Parallel self-play complete: {len(all_examples)} examples collected")
+        return all_examples
+
+    def _executeEpisodesBatch(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+        """Batch execution fallback (single process)."""
+        all_examples = []
+        batch_size = min(16, num_episodes)
         num_batches = (num_episodes + batch_size - 1) // batch_size
         
-        log.info(f"🎮 Running {num_episodes} games in {num_batches} batches of {batch_size} parallel games")
-        log.info(f"   Using FAST batch self-play (single process, GPU batched inference)")
-        
-        total_completed = 0
-        start_time = time.time()
-        
-        for batch_idx in range(num_batches):
-            games_this_batch = min(batch_size, num_episodes - total_completed)
+        for i in range(num_batches):
+            n = min(batch_size, num_episodes - i * batch_size)
+            psp = ParallelSelfPlay(self.game, self.nnet, self.config, num_games=n)
+            all_examples.extend(psp.run_all_games())
+            log.info(f"  ✅ Batch {i+1}/{num_batches} complete")
             
-            # Create parallel self-play manager
-            parallel_sp = ParallelSelfPlay(
-                self.game, 
-                self.nnet, 
-                self.config, 
-                num_games=games_this_batch
-            )
-            
-            # Run all games in this batch
-            batch_examples = parallel_sp.run_all_games()
-            all_examples.extend(batch_examples)
-            
-            total_completed += games_this_batch
-            elapsed = time.time() - start_time
-            games_per_sec = total_completed / max(elapsed, 0.1)
-            
-            log.info(f'  ✅ Batch {batch_idx+1}/{num_batches}: {games_this_batch} games, '
-                    f'{len(batch_examples)} examples ({games_per_sec:.1f} games/sec)')
-        
-        total_time = time.time() - start_time
-        log.info(f"🏁 Self-play complete: {total_completed} games, {len(all_examples)} examples in {total_time:.1f}s")
         return all_examples
     
     def _run_episode(self) -> List[Tuple[np.ndarray, np.ndarray, float]]:
@@ -1789,23 +1888,23 @@ def get_optimal_config(num_gpus: int, time_budget_hours: float = 1.0) -> Dict:
     
     # Configuration tiers - BLITZ optimized
     if num_gpus >= 16:
-        # Monster setup (16+ GPUs) - BLITZ: много быстрых итераций
-        mcts_sims = 30          # Reduced from 200 for SPEED
-        episodes = 64           # Reduced from 200 for SPEED
-        iter_time_min = 5       # Target: 5 min per iteration
-        hidden_size = 256       # Smaller network = faster
-        arena_games = 20        # Reduced from 60
+        # Monster setup (16+ GPUs) - BLITZ: POWERFUL AND FAST
+        mcts_sims = 100         # Increased for quality
+        episodes = 256          # Increased for better data
+        iter_time_min = 8       # Target: 8 min per iteration
+        hidden_size = 256
+        arena_games = 40        # More accurate evaluation
         epochs = 10
-        save_interval = 5
+        save_interval = 2
     elif num_gpus >= 8:
         # Large setup (8-15 GPUs) - BLITZ
-        mcts_sims = 30
-        episodes = 48
-        iter_time_min = 6
+        mcts_sims = 80
+        episodes = 128
+        iter_time_min = 10
         hidden_size = 256
-        arena_games = 16
+        arena_games = 32
         epochs = 10
-        save_interval = 5
+        save_interval = 2
     elif num_gpus >= 4:
         # Medium setup (4-7 GPUs) - BLITZ
         mcts_sims = 25

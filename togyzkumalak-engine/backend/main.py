@@ -2346,6 +2346,14 @@ async def get_alphazero_logs(task_id: Optional[str] = None, lines: int = 200):
                 ]
                 logs["output"] = relevant_output[-lines:]
         
+        # Get AlphaZero specific training log
+        az_log_path = os.path.join(engine_dir, "alphazero_training.log")
+        if os.path.exists(az_log_path):
+            with open(az_log_path, 'r') as f:
+                az_lines = f.readlines()
+                # Include everything from the training log
+                logs["training"] = [line.strip() for line in az_lines[-lines:]]
+        
         # Get current task status if task_id provided
         if task_id:
             status = az_task_manager.get_status(task_id)

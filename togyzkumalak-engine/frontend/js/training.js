@@ -570,6 +570,7 @@ class TrainingController {
         this.initAlphaZeroCharts();
         this.loadAlphaZeroMetrics();  // Load last training metrics
         this.loadGpuInfo();  // Load GPU information
+        this.checkActiveAlphaZeroTasks(); // Check if training is already running
         
         // System update button
         const btnUpdate = document.getElementById('btnUpdateAndRestart');
@@ -609,6 +610,40 @@ class TrainingController {
             
         } catch (e) {
             console.error('Error loading GPU info:', e);
+        }
+    }
+
+    /**
+     * Check if there are any active AlphaZero training tasks running
+     */
+    async checkActiveAlphaZeroTasks() {
+        try {
+            const response = await fetch('/api/training/alphazero/sessions');
+            if (!response.ok) return;
+            
+            const tasks = await response.json();
+            
+            // Find first running task
+            const activeTaskId = Object.keys(tasks).find(id => tasks[id].status === 'running');
+            
+            if (activeTaskId) {
+                console.log('Detected active AlphaZero task:', activeTaskId);
+                this.azTaskId = activeTaskId;
+                
+                // Show progress section
+                const progressSection = document.getElementById('azProgressSection');
+                if (progressSection) progressSection.classList.remove('hidden');
+                
+                const btnStop = document.getElementById('btnStopAlphaZero');
+                if (btnStop) btnStop.classList.remove('hidden');
+                
+                const btnStart = document.getElementById('btnStartAlphaZero');
+                if (btnStart) btnStart.disabled = true;
+                
+                this.startAlphaZeroPolling();
+            }
+        } catch (error) {
+            console.error('Error checking active AlphaZero tasks:', error);
         }
     }
     
