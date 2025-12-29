@@ -3,9 +3,14 @@
 ## ⚡ Быстрый старт (Копипасти и запускай)
 
 ### 1. SSH-туннель (на своём ПК)
+**Новый сервер (от 29.12.2025):**
 ```powershell
-ssh -p ПОРТ root@IP_АДРЕС -L 8000:localhost:8000
+ssh -p 45511 root@171.226.152.139 -L 8000:localhost:8000
 ```
+
+### 🔑 Справочная информация (SSH Keys)
+**Instance Public Key:**
+`ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCKbN+08Z0mz2xspbGhQK8Spc5XgGjQ3CCR9Qx2Z3xD9TSt4Cj/H+c9UFp5lPN6AkwqeoymHBR/qvD0lhtFCj/am+G5bCw6wBSQx7qjw8r5OtaxgwE+GU56rWW28u3DZA3cSuIG6YmJpTFFAOnPYTQVF4/9zkroRw984E3UIfaMi4+wqT8zUTmbx56J0ZzVR4xZsdvPTBO1cHO+zJ6feXJ4ckTApBswklnpUCVRkqF6Qk0RQcF4WGZaTGd4n0PvUvenceYwa7Jf7FPUwupgiYjOO3I4/GZrVRUdQCutlbkzXGgfizx8Cj6WW47ujsr4He4V04/lE2qrQdrHH3E65Ud1 rsa-key-20231218`
 
 ### 2. Обновить код на сервере (в Jupyter)
 ```python
