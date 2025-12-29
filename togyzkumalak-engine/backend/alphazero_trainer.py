@@ -915,11 +915,12 @@ class ParallelSelfPlay:
     3. GPU parallelism is utilized (batch size N uses all CUDA cores)
     """
     
-    def __init__(self, game: TogyzkumalakGame, nnet: 'NNetWrapper', config: AlphaZeroConfig, num_games: int = 8):
+    def __init__(self, game: TogyzkumalakGame, nnet: 'NNetWrapper', config: AlphaZeroConfig, num_games: int = 8, batch_size: int = None):
         self.game = game
         self.nnet = nnet
         self.config = config
         self.num_games = num_games
+        self.batch_size = batch_size if batch_size is not None else min(8, num_games)
         
         # Each game state
         self.boards = [None] * num_games
