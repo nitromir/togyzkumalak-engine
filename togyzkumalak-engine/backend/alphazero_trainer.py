@@ -888,7 +888,8 @@ def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         
         # Use ParallelSelfPlay for maximum GPU utilization within the worker
         from backend.alphazero_trainer import ParallelSelfPlay
-        psp = ParallelSelfPlay(game, wrapper, config, num_games=num_episodes)
+        # Increased games per worker simultaneously to 16 to better utilize RTX 4090
+        psp = ParallelSelfPlay(game, wrapper, config, num_games=num_episodes, batch_size=min(16, num_episodes))
         return psp.run_all_games()
         
     except Exception as e:
