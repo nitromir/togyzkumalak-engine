@@ -1100,7 +1100,7 @@ class AlphaZeroCoach:
             if r != 0:
                 return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
     
-    def _bootstrap_from_human_data(self) -> int:
+    def _bootstrap_from_human_data(self, callback=None) -> int:
         """Bootstrap the network from human game data."""
         bootstrap_file = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
@@ -1163,8 +1163,30 @@ class AlphaZeroCoach:
             
             log.info(f"[Bootstrap] Loaded {len(examples)} examples, training for {self.config.bootstrap_epochs} epochs...")
             
+            start_time = time.time()
             for epoch in range(self.config.bootstrap_epochs):
+                if self.stop_requested: break
+                
                 train_metrics = self.nnet.train(examples)
+                
+                # Update status for UI
+                if callback:
+                    metrics = {
+                        'iteration': 0,
+                        'policy_loss': train_metrics.get('policy_loss', 0),
+                        'value_loss': train_metrics.get('value_loss', 0),
+                        'win_rate': 0,
+                        'total_examples': len(examples),
+                        'stage': f'Bootstrap Epoch {epoch+1}/{self.config.bootstrap_epochs}'
+                    }
+                    callback({
+                        'status': 'running',
+                        'progress': (epoch + 1) / self.config.bootstrap_epochs * 5, # First 5% for bootstrap
+                        'iteration': 0,
+                        'metrics': metrics,
+                        'elapsed_time': time.time() - start_time
+                    })
+
                 if epoch % 2 == 0:
                     log.info(f"  Bootstrap epoch {epoch+1}/{self.config.bootstrap_epochs}, "
                             f"policy_loss: {train_metrics.get('policy_loss', 0):.4f}, "
@@ -1192,7 +1214,7 @@ class AlphaZeroCoach:
         
         # Bootstrap from human data if enabled
         if self.config.use_bootstrap:
-            bootstrap_count = self._bootstrap_from_human_data()
+            bootstrap_count = self._bootstrap_from_human_data(callback=callback)
             if bootstrap_count > 0:
                 log.info(f"Bootstrapped from {bootstrap_count} human examples")
         
