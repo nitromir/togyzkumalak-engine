@@ -89,10 +89,10 @@ class AverageMeter:
 @dataclass
 class AlphaZeroConfig:
     """Configuration for AlphaZero training - Multi-GPU optimized."""
-    # Training
+    # Training - BLITZ MODE defaults for fast iterations
     num_iterations: int = 100         # Number of training iterations
-    num_episodes: int = 100           # Self-play games per iteration
-    num_mcts_sims: int = 100          # MCTS simulations per move
+    num_episodes: int = 64            # Self-play games per iteration (was 100, reduced for speed)
+    num_mcts_sims: int = 30           # MCTS simulations per move (was 100, reduced for speed)
     
     # Neural Network
     batch_size: int = 256             # Batch size (scale with GPU memory)
@@ -102,10 +102,10 @@ class AlphaZeroConfig:
     
     # MCTS
     cpuct: float = 1.0                # Exploration constant
-    temp_threshold: int = 15          # Move count threshold for temperature
+    temp_threshold: int = 30          # Move count threshold for temperature (was 15, increased for exploration)
     
     # Arena
-    arena_compare: int = 40           # Games to compare models
+    arena_compare: int = 20           # Games to compare models (was 40, reduced for speed)
     update_threshold: float = 0.55    # Win rate needed to accept new model
     
     # Memory
@@ -122,10 +122,13 @@ class AlphaZeroConfig:
     bootstrap_epochs: int = 10
     bootstrap_max_samples: int = 50000
     
-    # Parallelization
-    num_parallel_games: int = 0       # 0 = auto (based on CPU cores)
+    # Parallelization - optimized for multi-GPU
+    num_parallel_games: int = 0       # 0 = auto (will be set to NUM_GPUS)
     num_workers: int = 0              # 0 = auto (based on GPUs)
     use_multiprocessing: bool = True  # Enable parallel self-play
+    
+    # Resume training
+    resume_from_checkpoint: bool = True  # Auto-resume from best.pth.tar or bootstrapped.pth.tar
 
 
 # =============================================================================
@@ -996,9 +999,13 @@ class AlphaZeroCoach:
         self.progress = 0.0
         self.stop_requested = False
         
-        # Determine parallelization level
-        self.num_workers = config.num_workers if config.num_workers > 0 else max(1, os.cpu_count() // 2)
-        self.num_parallel_games = config.num_parallel_games if config.num_parallel_games > 0 else min(8, os.cpu_count())
+        # Determine parallelization level - optimize for multi-GPU
+        self.num_workers = config.num_workers if config.num_workers > 0 else max(1, NUM_GPUS)
+        # For multi-GPU: use at least 1 game per GPU, max 4 games per GPU
+        self.num_parallel_games = config.num_parallel_games if config.num_parallel_games > 0 else max(NUM_GPUS, min(NUM_GPUS * 4, 64))
+        
+        log.info(f"🚀 BLITZ MODE: {self.num_parallel_games} parallel games across {NUM_GPUS} GPUs")
+        log.info(f"   MCTS sims: {config.num_mcts_sims}, Episodes: {config.num_episodes}, Arena: {config.arena_compare}")
     
     def executeEpisode(self) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         """Execute one episode of self-play."""
@@ -1032,14 +1039,11 @@ class AlphaZeroCoach:
                 return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
     
     def executeEpisodesParallel(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-        """Execute multiple episodes in parallel using ThreadPoolExecutor."""
+        """Execute multiple episodes in parallel using ProcessPoolExecutor for true multi-GPU."""
         all_examples = []
         
-        # Get network state for workers
-        if isinstance(self.nnet.nnet, DataParallel):
-            nnet_state = self.nnet.nnet.module.state_dict()
-        else:
-            nnet_state = self.nnet.nnet.state_dict()
+        # Get network state for workers (move to CPU for pickling)
+        nnet_state = {k: v.cpu() for k, v in self.nnet.nnet_base.state_dict().items()}
         
         config_dict = {
             'num_mcts_sims': self.config.num_mcts_sims,
@@ -1048,23 +1052,43 @@ class AlphaZeroCoach:
             'hidden_size': self.config.hidden_size,
         }
         
-        # Use ThreadPoolExecutor for parallel self-play
-        # (ProcessPoolExecutor has issues with CUDA tensors)
-        with ThreadPoolExecutor(max_workers=self.num_parallel_games) as executor:
-            futures = []
-            for i in range(num_episodes):
-                # Each thread runs its own episode
-                future = executor.submit(self._run_episode)
-                futures.append(future)
-            
-            for i, future in enumerate(futures):
-                try:
-                    examples = future.result(timeout=300)  # 5 min timeout
-                    all_examples.extend(examples)
-                    log.info(f'  Self-play episode {i+1}/{num_episodes}, examples: {len(examples)}')
-                except Exception as e:
-                    log.error(f'Episode {i+1} failed: {e}')
+        # Use ProcessPoolExecutor for TRUE parallel self-play across GPUs
+        # Each worker gets assigned to a specific GPU
+        log.info(f"🎮 Starting {num_episodes} parallel self-play games across {NUM_GPUS} GPUs...")
         
+        try:
+            # Set start method for CUDA compatibility
+            mp.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass  # Already set
+        
+        completed = 0
+        failed = 0
+        
+        with ProcessPoolExecutor(max_workers=min(self.num_parallel_games, num_episodes)) as executor:
+            # Create args for each episode (worker_id determines GPU)
+            args_list = [(nnet_state, config_dict, i % max(1, NUM_GPUS)) for i in range(num_episodes)]
+            
+            # Submit all jobs
+            futures = {executor.submit(execute_episode_worker, args): i for i, args in enumerate(args_list)}
+            
+            for future in futures:
+                ep_idx = futures[future]
+                try:
+                    examples = future.result(timeout=600)  # 10 min timeout per game
+                    if examples:
+                        all_examples.extend(examples)
+                        completed += 1
+                    else:
+                        failed += 1
+                    
+                    if (completed + failed) % 10 == 0 or (completed + failed) == num_episodes:
+                        log.info(f'  ✅ Progress: {completed}/{num_episodes} completed, {failed} failed, {len(all_examples)} examples')
+                except Exception as e:
+                    failed += 1
+                    log.error(f'Episode {ep_idx+1} failed: {e}')
+        
+        log.info(f"🏁 Self-play complete: {completed} games, {len(all_examples)} training examples")
         return all_examples
     
     def _run_episode(self) -> List[Tuple[np.ndarray, np.ndarray, float]]:
@@ -1207,13 +1231,50 @@ class AlphaZeroCoach:
             traceback.print_exc()
             return 0
     
+    def _try_resume_from_checkpoint(self) -> bool:
+        """Try to resume from existing checkpoint (best.pth.tar or bootstrapped.pth.tar)."""
+        checkpoint_dir = self.config.checkpoint_dir
+        
+        # Priority order: best.pth.tar > bootstrapped.pth.tar > latest checkpoint_N.pth.tar
+        checkpoints_to_try = [
+            os.path.join(checkpoint_dir, 'best.pth.tar'),
+            os.path.join(checkpoint_dir, 'bootstrapped.pth.tar'),
+        ]
+        
+        # Also try to find latest numbered checkpoint
+        if os.path.exists(checkpoint_dir):
+            numbered = [f for f in os.listdir(checkpoint_dir) if f.startswith('checkpoint_') and f.endswith('.pth.tar')]
+            if numbered:
+                # Sort by iteration number
+                numbered.sort(key=lambda x: int(x.replace('checkpoint_', '').replace('.pth.tar', '')), reverse=True)
+                checkpoints_to_try.append(os.path.join(checkpoint_dir, numbered[0]))
+        
+        for checkpoint_path in checkpoints_to_try:
+            if os.path.exists(checkpoint_path):
+                try:
+                    metrics = self.nnet.load_checkpoint(os.path.dirname(checkpoint_path), os.path.basename(checkpoint_path))
+                    log.info(f"✅ RESUMED from checkpoint: {checkpoint_path}")
+                    if metrics:
+                        log.info(f"   Checkpoint metrics: {metrics}")
+                    return True
+                except Exception as e:
+                    log.warning(f"Failed to load {checkpoint_path}: {e}")
+                    continue
+        
+        return False
+    
     def learn(self, callback=None) -> Dict[str, Any]:
         """Main training loop with parallel self-play."""
         self.status = "running"
         start_time = time.time()
         
-        # Bootstrap from human data if enabled
-        if self.config.use_bootstrap:
+        # Try to resume from existing checkpoint first
+        resumed = False
+        if self.config.resume_from_checkpoint:
+            resumed = self._try_resume_from_checkpoint()
+        
+        # Bootstrap from human data if enabled AND we didn't resume
+        if self.config.use_bootstrap and not resumed:
             bootstrap_count = self._bootstrap_from_human_data(callback=callback)
             if bootstrap_count > 0:
                 log.info(f"Bootstrapped from {bootstrap_count} human examples")
@@ -1583,7 +1644,8 @@ def get_optimal_config(num_gpus: int, time_budget_hours: float = 1.0) -> Dict:
     """
     Calculate optimal training config for given GPU count and time budget.
     
-    Optimized for RTX 3090/4090 class GPUs (24GB VRAM each).
+    BLITZ MODE: Optimized for FAST iterations with quality results.
+    RTX 3090/4090 class GPUs (24GB VRAM each).
     
     Args:
         num_gpus: Number of available GPUs
@@ -1592,80 +1654,78 @@ def get_optimal_config(num_gpus: int, time_budget_hours: float = 1.0) -> Dict:
     Returns:
         Recommended configuration dictionary
     """
-    # Base estimates (per iteration, single GPU)
-    # RTX 3090: ~35 TFLOPS FP32, 24GB VRAM
-    # RTX 4090: ~82 TFLOPS FP32, 24GB VRAM
+    # BLITZ MODE estimates - optimized for speed over deep search
+    # Each iteration should complete in 5-10 minutes on multi-GPU
     base_batch_size = 256
-    base_episodes = 100
-    base_mcts_sims = 100
-    base_iter_time_min = 3.5  # Minutes per iteration on single GPU
     
     # Scale with GPUs (sublinear due to sync overhead)
-    # Efficiency: 1 GPU=100%, 4 GPU=90%, 8 GPU=80%, 16 GPU=70%
-    efficiency = max(0.5, 1.0 - (num_gpus - 1) * 0.02)
+    # Efficiency: 1 GPU=100%, 4 GPU=90%, 8 GPU=85%, 16 GPU=80%
+    efficiency = max(0.6, 1.0 - (num_gpus - 1) * 0.015)
     
-    effective_batch_size = base_batch_size * num_gpus
-    parallel_games = min(128, num_gpus * 4)  # 4 parallel games per GPU, max 128
+    effective_batch_size = base_batch_size * max(1, num_gpus // 2)
+    parallel_games = min(64, num_gpus * 4)  # 4 parallel games per GPU, max 64
     
-    # Estimate iterations possible in time budget
+    # BLITZ: Fast iterations, more of them
     time_budget_min = time_budget_hours * 60
-    speedup = num_gpus * efficiency
-    iter_time_with_parallel = base_iter_time_min / speedup
-    estimated_iterations = int(time_budget_min / iter_time_with_parallel)
     
-    # Configuration tiers based on GPU count
+    # Configuration tiers - BLITZ optimized
     if num_gpus >= 16:
-        # Monster setup (16+ GPUs) - максимальное качество
-        mcts_sims = 200
-        episodes = 200
-        iterations = min(estimated_iterations, 400)
-        hidden_size = 512
-        arena_games = 60
-        epochs = 10
-        save_interval = 10
-    elif num_gpus >= 8:
-        # Large setup (8-15 GPUs) - высокое качество
-        mcts_sims = 200
-        episodes = 150
-        iterations = min(estimated_iterations, 300)
-        hidden_size = 512
-        arena_games = 50
-        epochs = 10
-        save_interval = 10
-    elif num_gpus >= 4:
-        # Medium setup (4-7 GPUs)
-        mcts_sims = 150
-        episodes = 120
-        iterations = min(estimated_iterations, 200)
-        hidden_size = 384
-        arena_games = 40
+        # Monster setup (16+ GPUs) - BLITZ: много быстрых итераций
+        mcts_sims = 30          # Reduced from 200 for SPEED
+        episodes = 64           # Reduced from 200 for SPEED
+        iter_time_min = 5       # Target: 5 min per iteration
+        hidden_size = 256       # Smaller network = faster
+        arena_games = 20        # Reduced from 60
         epochs = 10
         save_interval = 5
-    elif num_gpus >= 2:
-        # Small setup (2-3 GPUs)
-        mcts_sims = 100
-        episodes = 100
-        iterations = min(estimated_iterations, 150)
+    elif num_gpus >= 8:
+        # Large setup (8-15 GPUs) - BLITZ
+        mcts_sims = 30
+        episodes = 48
+        iter_time_min = 6
         hidden_size = 256
-        arena_games = 30
+        arena_games = 16
+        epochs = 10
+        save_interval = 5
+    elif num_gpus >= 4:
+        # Medium setup (4-7 GPUs) - BLITZ
+        mcts_sims = 25
+        episodes = 32
+        iter_time_min = 8
+        hidden_size = 256
+        arena_games = 12
+        epochs = 8
+        save_interval = 5
+    elif num_gpus >= 2:
+        # Small setup (2-3 GPUs) - BLITZ
+        mcts_sims = 20
+        episodes = 24
+        iter_time_min = 10
+        hidden_size = 256
+        arena_games = 10
         epochs = 8
         save_interval = 5
     else:
-        # Single GPU
-        mcts_sims = 50
-        episodes = 50
-        iterations = min(estimated_iterations, 100)
+        # Single GPU - BLITZ
+        mcts_sims = 15
+        episodes = 16
+        iter_time_min = 12
         hidden_size = 256
-        arena_games = 20
+        arena_games = 8
         epochs = 5
         save_interval = 5
     
+    # Calculate iterations for time budget
+    estimated_iterations = int(time_budget_min / iter_time_min)
+    
     # Estimated metrics
     examples_per_iter = episodes * 50  # ~50 moves per game average
-    total_examples = iterations * examples_per_iter
+    total_examples = estimated_iterations * examples_per_iter
+    
+    speedup = num_gpus * efficiency
     
     return {
-        'numIters': iterations,
+        'numIters': estimated_iterations,
         'numEps': episodes,
         'numMCTSSims': mcts_sims,
         'cpuct': 1.0,
@@ -1673,15 +1733,18 @@ def get_optimal_config(num_gpus: int, time_budget_hours: float = 1.0) -> Dict:
         'epochs': epochs,
         'hidden_size': hidden_size,
         'arena_compare': arena_games,
+        'temp_threshold': 30,  # More exploration
         'use_bootstrap': True,
         'use_multiprocessing': True,
         'num_parallel_games': parallel_games,
         'save_every_n_iters': save_interval,
-        'estimated_time_min': round(iterations * iter_time_with_parallel, 1),
+        'estimated_time_min': round(estimated_iterations * iter_time_min, 1),
         'estimated_examples': total_examples,
         'gpus': num_gpus,
         'efficiency': f"{efficiency*100:.0f}%",
-        'speedup': f"{speedup:.1f}x"
+        'speedup': f"{speedup:.1f}x",
+        'mode': 'BLITZ',
+        'iter_time_min': iter_time_min
     }
 
 
