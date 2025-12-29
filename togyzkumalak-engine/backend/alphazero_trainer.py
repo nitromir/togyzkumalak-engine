@@ -1192,11 +1192,11 @@ class AlphaZeroCoach:
         self.stop_requested = False
         
         # Determine parallelization level - optimize for multi-GPU
-        self.num_workers = config.num_workers if config.num_workers > 0 else max(1, NUM_GPUS)
-        # For multi-GPU: use at least 1 game per GPU, max 4 games per GPU
-        self.num_parallel_games = config.num_parallel_games if config.num_parallel_games > 0 else max(NUM_GPUS, min(NUM_GPUS * 4, 64))
+        # Increase workers to keep GPUs busy (4 workers per GPU is a good sweet spot for RTX 4090)
+        self.num_workers = config.num_workers if config.num_workers > 0 else max(1, NUM_GPUS * 4)
+        self.num_parallel_games = config.num_parallel_games if config.num_parallel_games > 0 else self.num_workers
         
-        log.info(f"🚀 BLITZ MODE: {self.num_parallel_games} parallel games across {NUM_GPUS} GPUs")
+        log.info(f"🚀 BLITZ MODE: {self.num_parallel_games} workers across {NUM_GPUS} GPUs")
         log.info(f"   MCTS sims: {config.num_mcts_sims}, Episodes: {config.num_episodes}, Arena: {config.arena_compare}")
     
     def executeEpisode(self) -> List[Tuple[np.ndarray, np.ndarray, float]]:
@@ -1232,7 +1232,7 @@ class AlphaZeroCoach:
     
     def executeEpisodesParallel(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         """Run episodes in parallel across multiple GPUs."""
-        if not self.config.use_multiprocessing or NUM_GPUS <= 1:
+        if not self.config.use_multiprocessing or self.num_parallel_games <= 1:
             return self._executeEpisodesBatch(num_episodes)
 
         all_examples = []
@@ -1246,11 +1246,11 @@ class AlphaZeroCoach:
             'hidden_size': self.config.hidden_size,
         }
         
-        # Use only NUM_GPUS workers, each playing multiple games
-        num_workers = NUM_GPUS
+        # Determine how many episodes each worker should handle
+        num_workers = min(self.num_parallel_games, num_episodes)
         episodes_per_worker = (num_episodes + num_workers - 1) // num_workers
         
-        log.info(f"🎮 Distributing {num_episodes} games across {num_workers} GPU workers...")
+        log.info(f"🎮 Distributing {num_episodes} games across {num_workers} processes on {NUM_GPUS} GPUs...")
         
         try:
             mp.set_start_method('spawn', force=True)
@@ -1263,17 +1263,20 @@ class AlphaZeroCoach:
                 n = min(episodes_per_worker, num_episodes - i * episodes_per_worker)
                 if n <= 0: break
                 
+                # Each worker gets a unique ID to assign itself to a specific GPU
                 args = (i, n, nnet_state, config_dict)
                 tasks.append(executor.submit(execute_batch_worker, args))
             
+            completed = 0
             for i, future in enumerate(as_completed(tasks)):
                 try:
                     result = future.result(timeout=1800) # 30 min timeout
                     if result:
                         all_examples.extend(result)
-                        log.info(f"  ✅ Worker {i+1}/{num_workers} finished ({len(result)} examples)")
+                        completed += 1
+                        log.info(f"  ✅ Progress: {completed}/{num_workers} processes finished ({len(result)} examples)")
                 except Exception as e:
-                    log.error(f"  ❌ Worker {i+1} failed: {e}")
+                    log.error(f"  ❌ Worker failed: {e}")
         
         log.info(f"🏁 Parallel self-play complete: {len(all_examples)} examples collected")
         return all_examples
