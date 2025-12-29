@@ -317,7 +317,9 @@ class AIEngine:
             
             # Create game and config for MCTS
             game = TogyzkumalakGame()
-            config = AlphaZeroConfig(num_mcts_sims=25)  # Reduced for real-time play
+            # Expert level simulation count for AlphaZero
+            num_sims = 100 if torch.cuda.is_available() else 40
+            config = AlphaZeroConfig(num_mcts_sims=num_sims)  
             
             # Create wrapper for existing model
             class QuickNNetWrapper:

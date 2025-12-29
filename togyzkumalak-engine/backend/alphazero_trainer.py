@@ -130,9 +130,9 @@ class AlphaZeroConfig:
     
     # Bootstrap - Use human game data for initial training
     use_bootstrap: bool = True
-    bootstrap_file: str = "training_data/transitions_compact.jsonl"
-    bootstrap_epochs: int = 10
-    bootstrap_max_samples: int = 50000
+    bootstrap_file: str = "training_data/human_transitions.jsonl"
+    bootstrap_epochs: int = 15
+    bootstrap_max_samples: int = 100000
     
     # Parallelization - optimized for multi-GPU
     num_parallel_games: int = 0       # 0 = auto (will be set to NUM_GPUS)

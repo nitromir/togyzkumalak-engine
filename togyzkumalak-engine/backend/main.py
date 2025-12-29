@@ -880,7 +880,7 @@ async def list_models():
 
 
 @app.post("/api/training/models/{model_name}/load")
-async def load_model(model_name: str, use_mcts: bool = False):
+async def load_model(model_name: str, use_mcts: bool = True):
     """Load a saved model for use in gameplay."""
     try:
         models = training_manager.list_models()
@@ -908,9 +908,10 @@ async def load_model(model_name: str, use_mcts: bool = False):
                     pass
             
             # Set MCTS mode for AlphaZero models
-            model_type = model_info.get("type", "gym")
-            if model_type == "alphazero" and use_mcts:
-                ai_engine.use_mcts = True
+            model_type = model_info.get("type", "alphazero")
+            if model_type == "alphazero":
+                # Default to MCTS if use_mcts is True or not specified
+                ai_engine.use_mcts = use_mcts
             else:
                 ai_engine.use_mcts = False
                     

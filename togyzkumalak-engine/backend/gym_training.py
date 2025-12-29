@@ -346,12 +346,14 @@ class GymTrainingManager:
         from .alphazero_trainer import AlphaZeroNetwork, TogyzkumalakGame, NNetWrapper, AlphaZeroConfig
         
         state_dict = checkpoint['state_dict']
+        # Remove 'module.' prefix if it exists (from DataParallel)
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
         config_data = checkpoint.get('config', {})
         
         # Get hidden_size from config or detect from weights
         hidden_size = config_data.get('hidden_size', 256)
-        if 'fc1.weight' in state_dict:
-            hidden_size = state_dict['fc1.weight'].shape[0]
+        if 'fc1.weight' in clean_state_dict:
+            hidden_size = clean_state_dict['fc1.weight'].shape[0]
         
         # Create AlphaZero network
         alphazero_net = AlphaZeroNetwork(
@@ -360,7 +362,7 @@ class GymTrainingManager:
             action_size=9
         ).to(device)
         
-        alphazero_net.load_state_dict(state_dict)
+        alphazero_net.load_state_dict(clean_state_dict)
         alphazero_net.eval()
         
         # Create a wrapper that provides policy-only interface for game play
