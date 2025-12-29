@@ -394,10 +394,19 @@ class AlphaZeroNetwork(nn.Module):
         self.dropout = nn.Dropout(0.3)
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Validate input tensor shape
+        # CRITICAL: With DataParallel, always expect 2D input (batch, features)
+        # DataParallel splits along dim 0, so 1D tensors get split incorrectly!
+        
+        # Ensure 2D input
+        if x.dim() == 1:
+            # This should not happen with DataParallel - log warning
+            log.warning(f"FORWARD: Received 1D tensor {x.shape}, converting to 2D. This may cause issues with DataParallel!")
+            x = x.unsqueeze(0)
+        
+        # Validate input tensor shape - should be (batch, 128)
         if x.shape[-1] != 128:
             log.error(f"FORWARD: Input tensor has wrong shape: {x.shape}, expected last dim 128")
-            log.error(f"FORWARD: This means board was incorrectly converted to observation!")
+            log.error(f"FORWARD: This likely means DataParallel split a 1D tensor incorrectly!")
             # Try to fix if possible
             if x.shape[-1] < 128:
                 padding = torch.zeros(*x.shape[:-1], 128 - x.shape[-1], device=x.device, dtype=x.dtype)
@@ -406,10 +415,6 @@ class AlphaZeroNetwork(nn.Module):
             else:
                 x = x[..., :128]
                 log.warning(f"FORWARD: Truncated tensor to shape: {x.shape}")
-        
-        single_sample = x.dim() == 1
-        if single_sample:
-            x = x.unsqueeze(0)
         
         x = F.relu(self.bn1(self.fc1(x)))
         x = self.dropout(x)
@@ -425,9 +430,7 @@ class AlphaZeroNetwork(nn.Module):
         v = F.relu(self.value_fc1(x))
         v = torch.tanh(self.value_fc2(v))
         
-        if single_sample:
-            return pi.squeeze(0), v.squeeze(0)
-        
+        # Always return 2D tensors - caller should handle squeeze if needed
         return pi, v
 
 
@@ -574,19 +577,23 @@ class NNetWrapper:
             log.error(f"CRITICAL: Observation still has wrong size: {len(obs)}")
             raise ValueError(f"Observation must have exactly 128 elements, got {len(obs)}")
         
-        obs_tensor = torch.FloatTensor(obs).to(self.device)
+        # CRITICAL: Always use 2D tensor (batch, features) for DataParallel compatibility
+        # DataParallel splits tensors along dimension 0 (batch dimension)
+        # If we pass 1D tensor (128,), it will split into 128/16=8 elements per GPU - WRONG!
+        obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)  # Shape: (1, 128)
         
         # Validate tensor shape
-        if obs_tensor.shape[0] != 128:
-            log.error(f"CRITICAL: Tensor has wrong shape: {obs_tensor.shape}, expected (128,)")
-            raise ValueError(f"Tensor must have shape (128,), got {obs_tensor.shape}")
+        if obs_tensor.shape[-1] != 128:
+            log.error(f"CRITICAL: Tensor has wrong shape: {obs_tensor.shape}, expected (1, 128)")
+            raise ValueError(f"Tensor must have shape (1, 128), got {obs_tensor.shape}")
         
         self.nnet.eval()
         with torch.no_grad():
             pi, v = self.nnet(obs_tensor)
             pi = torch.exp(pi)
         
-        return pi.cpu().numpy(), float(v.cpu().numpy())
+        # Remove batch dimension
+        return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
     
     def predict_batch(self, boards: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """Batch prediction for multiple boards - much faster on GPU."""
