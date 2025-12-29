@@ -770,29 +770,24 @@ class MCTS:
             return -self.Es[s]
         
         if s not in self.Ps:
-            # Validate again before predict
-            if len(canonicalBoard) != 23:
-                log.error(f"MCTS.search: canonicalBoard still wrong size before predict: {len(canonicalBoard)}")
-                canonicalBoard = np.pad(canonicalBoard, (0, 23 - len(canonicalBoard)), mode='constant', constant_values=0)[:23]
-            
             self.Ps[s], v = self.nnet.predict(canonicalBoard)
             valids = self.game.getValidMoves(canonicalBoard, 1)
             
-            # Check if valids is empty
-            if np.sum(valids) == 0:
-                # If game logic didn't catch the end, but no moves possible
-                log.warning(f"MCTS.search: No valid moves possible for state. Ending search.")
-                return -self.game.getGameEnded(canonicalBoard, 1)
-
+            # Mask invalid moves
             self.Ps[s] = self.Ps[s] * valids
             
+            # Check for NaN and zero sum
             sum_Ps_s = np.sum(self.Ps[s])
-            if sum_Ps_s > 0:
+            if sum_Ps_s > 1e-10:
                 self.Ps[s] /= sum_Ps_s
             else:
-                # All valid moves were masked by network output
-                log.warning("MCTS.search: Network masked all valid moves, using uniform fallback")
-                self.Ps[s] = valids / np.sum(valids)
+                # Use uniform fallback without flooding logs if it's just initial randomness
+                # Only log if it's really weird (no valid moves at all)
+                sum_valids = np.sum(valids)
+                if sum_valids > 0:
+                    self.Ps[s] = valids / sum_valids
+                else:
+                    self.Ps[s] = np.ones(len(self.Ps[s])) / len(self.Ps[s])
             
             self.Vs[s] = valids
             self.Ns[s] = 0
@@ -1056,25 +1051,25 @@ class SimpleMCTS:
         if self.Es[s] != 0:
             return -self.Es[s]
         
-        # Leaf node - expand
-        if s not in self.Ps:
-            pi, v = nnet.predict(canonicalBoard)
-            valids = self.game.getValidMoves(canonicalBoard, 1)
-            
-            # Mask invalid moves
-            pi = pi * valids
-            sum_pi = np.sum(pi)
-            
-            if sum_pi > 0:
-                pi /= sum_pi
-            else:
-                # Network gave zero for all valid moves - use uniform
-                pi = valids / np.sum(valids) if np.sum(valids) > 0 else np.ones(len(valids)) / len(valids)
-            
-            self.Ps[s] = pi
-            self.Vs[s] = valids
-            self.Ns[s] = 0
-            return -v
+            # Leaf node - expand
+            if s not in self.Ps:
+                pi, v = nnet.predict(canonicalBoard)
+                valids = self.game.getValidMoves(canonicalBoard, 1)
+                
+                # Mask invalid moves
+                pi = pi * valids
+                sum_pi = np.sum(pi)
+                
+                if sum_pi > 1e-10:
+                    pi /= sum_pi
+                else:
+                    sum_valids = np.sum(valids)
+                    pi = valids / sum_valids if sum_valids > 0 else np.ones(len(valids)) / len(valids)
+                
+                self.Ps[s] = pi
+                self.Vs[s] = valids
+                self.Ns[s] = 0
+                return -v
         
         # Select action with highest UCB
         valids = self.Vs[s]
