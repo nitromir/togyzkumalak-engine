@@ -442,18 +442,22 @@ class NNetWrapper:
         self.config = config
         self.device = device
         
-        self.nnet = AlphaZeroNetwork(
+        # Create base network
+        self.nnet_base = AlphaZeroNetwork(
             input_size=128,
             hidden_size=config.hidden_size,
             action_size=game.getActionSize()
-        )
+        ).to(self.device)
         
-        # Multi-GPU support
+        # Multi-GPU support - wrap for training only
         if NUM_GPUS > 1:
-            log.info(f"Using DataParallel with {NUM_GPUS} GPUs")
-            self.nnet = DataParallel(self.nnet)
+            log.info(f"Using DataParallel with {NUM_GPUS} GPUs for TRAINING")
+            self.nnet = DataParallel(self.nnet_base)
+        else:
+            self.nnet = self.nnet_base
         
-        self.nnet = self.nnet.to(self.device)
+        # For predict, always use base network (no DataParallel)
+        # This avoids issues with single-sample inference on multi-GPU
     
     def train(self, examples: List[Tuple[np.ndarray, np.ndarray, float]]) -> Dict[str, float]:
         """Train network on examples (board, pi, v)."""
@@ -577,9 +581,8 @@ class NNetWrapper:
             log.error(f"CRITICAL: Observation still has wrong size: {len(obs)}")
             raise ValueError(f"Observation must have exactly 128 elements, got {len(obs)}")
         
-        # CRITICAL: Always use 2D tensor (batch, features) for DataParallel compatibility
-        # DataParallel splits tensors along dimension 0 (batch dimension)
-        # If we pass 1D tensor (128,), it will split into 128/16=8 elements per GPU - WRONG!
+        # Use base network for single-sample inference (no DataParallel)
+        # DataParallel would try to split batch=1 across GPUs, which fails
         obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)  # Shape: (1, 128)
         
         # Validate tensor shape
@@ -587,16 +590,17 @@ class NNetWrapper:
             log.error(f"CRITICAL: Tensor has wrong shape: {obs_tensor.shape}, expected (1, 128)")
             raise ValueError(f"Tensor must have shape (1, 128), got {obs_tensor.shape}")
         
-        self.nnet.eval()
+        # CRITICAL: Use nnet_base (not DataParallel wrapped) for single-sample predict
+        self.nnet_base.eval()
         with torch.no_grad():
-            pi, v = self.nnet(obs_tensor)
+            pi, v = self.nnet_base(obs_tensor)
             pi = torch.exp(pi)
         
         # Remove batch dimension
         return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
     
     def predict_batch(self, boards: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        """Batch prediction for multiple boards - much faster on GPU."""
+        """Batch prediction for multiple boards - uses DataParallel if available."""
         # Fix board sizes
         fixed_boards = []
         for b in boards:
@@ -616,10 +620,18 @@ class NNetWrapper:
         
         obs_tensor = torch.FloatTensor(np.array(observations)).to(self.device)
         
-        self.nnet.eval()
-        with torch.no_grad():
-            pi, v = self.nnet(obs_tensor)
-            pi = torch.exp(pi)
+        # For batch predictions with batch_size >= NUM_GPUS, can use DataParallel
+        # Otherwise use base network
+        if len(boards) >= NUM_GPUS and NUM_GPUS > 1:
+            self.nnet.eval()
+            with torch.no_grad():
+                pi, v = self.nnet(obs_tensor)
+                pi = torch.exp(pi)
+        else:
+            self.nnet_base.eval()
+            with torch.no_grad():
+                pi, v = self.nnet_base(obs_tensor)
+                pi = torch.exp(pi)
         
         return pi.cpu().numpy(), v.cpu().numpy().flatten()
     
@@ -628,8 +640,8 @@ class NNetWrapper:
         os.makedirs(folder, exist_ok=True)
         filepath = os.path.join(folder, filename)
         
-        # Handle DataParallel wrapped model
-        state_dict = self.nnet.module.state_dict() if isinstance(self.nnet, DataParallel) else self.nnet.state_dict()
+        # Always use base network state dict (not DataParallel wrapped)
+        state_dict = self.nnet_base.state_dict()
         
         checkpoint = {
             'state_dict': state_dict,
@@ -654,10 +666,8 @@ class NNetWrapper:
         
         checkpoint = torch.load(filepath, map_location=self.device)
         
-        if isinstance(self.nnet, DataParallel):
-            self.nnet.module.load_state_dict(checkpoint['state_dict'])
-        else:
-            self.nnet.load_state_dict(checkpoint['state_dict'])
+        # Always load into base network
+        self.nnet_base.load_state_dict(checkpoint['state_dict'])
         
         log.info(f'Checkpoint loaded: {filepath}')
         return checkpoint.get('metrics', {})
