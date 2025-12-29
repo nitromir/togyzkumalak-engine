@@ -247,6 +247,19 @@ class TogyzkumalakGame:
         for i in range(9):
             if board[i + color * 9] > 0:
                 valid[i] = 1
+        
+        # If no valid moves but game is not ended, force at least one move
+        # or return all zeros to signal end of game
+        if np.sum(valid) == 0:
+            # Check if this player really has no stones
+            my_stones = np.sum(board[color*9 : (color+1)*9])
+            if my_stones == 0:
+                # Normal end of game situation
+                return valid 
+            else:
+                # This should not happen if logic is correct, but let's be safe
+                log.warning(f"getValidMoves: Player {player} has {my_stones} stones but no moves?")
+        
         return valid
     
     def getGameEnded(self, board: np.ndarray, player: int) -> float:
@@ -749,13 +762,21 @@ class MCTS:
             
             self.Ps[s], v = self.nnet.predict(canonicalBoard)
             valids = self.game.getValidMoves(canonicalBoard, 1)
+            
+            # Check if valids is empty
+            if np.sum(valids) == 0:
+                # If game logic didn't catch the end, but no moves possible
+                log.warning(f"MCTS.search: No valid moves possible for state. Ending search.")
+                return -self.game.getGameEnded(canonicalBoard, 1)
+
             self.Ps[s] = self.Ps[s] * valids
             
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
                 self.Ps[s] /= sum_Ps_s
             else:
-                log.warning("All valid moves masked, using uniform policy")
+                # All valid moves were masked by network output
+                log.warning("MCTS.search: Network masked all valid moves, using uniform fallback")
                 self.Ps[s] = valids / np.sum(valids)
             
             self.Vs[s] = valids
@@ -799,23 +820,47 @@ class MCTS:
 # =============================================================================
 
 def execute_episode_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-    """Worker function for parallel self-play."""
+    """Worker function for parallel self-play with explicit GPU assignment."""
     nnet_state, config_dict, worker_id = args
     
-    # Recreate game and network in worker process
+    # 1. Assign worker to its own GPU
+    gpu_id = worker_id % max(1, NUM_GPUS)
+    worker_device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
+    
+    # 2. Recreate game and network in worker process
     game = TogyzkumalakGame()
     config = AlphaZeroConfig(**config_dict)
     
-    # Create network and load state
-    nnet = NNetWrapper(game, config)
+    # 3. Create network on SPECIFIC GPU
+    nnet = AlphaZeroNetwork(
+        input_size=128,
+        hidden_size=config.hidden_size,
+        action_size=game.getActionSize()
+    ).to(worker_device)
     
-    # Load state dict
-    if isinstance(nnet.nnet, DataParallel):
-        nnet.nnet.module.load_state_dict(nnet_state)
-    else:
-        nnet.nnet.load_state_dict(nnet_state)
+    # 4. Load weights (handling DataParallel key mismatch if needed)
+    clean_state = {}
+    for k, v in nnet_state.items():
+        name = k.replace("module.", "") # Remove DataParallel prefix
+        clean_state[name] = v
+    nnet.load_state_dict(clean_state)
+    nnet.eval()
     
-    mcts = MCTS(game, nnet, config)
+    # 5. Wrap nnet in a mini-wrapper for MCTS compatibility
+    class WorkerNNet:
+        def __init__(self, net, device, game):
+            self.net = net
+            self.device = device
+            self.game = game
+        def predict(self, board):
+            obs = self.game.boardToObservation(board)
+            obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+            with torch.no_grad():
+                pi, v = self.net(obs_tensor)
+                pi = torch.exp(pi)
+            return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
+
+    mcts = MCTS(game, WorkerNNet(nnet, worker_device, game), config)
     
     trainExamples = []
     board = game.getInitBoard()
@@ -832,7 +877,13 @@ def execute_episode_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         canonicalBoard = game.getCanonicalForm(board, curPlayer)
         temp = int(episodeStep < config.temp_threshold)
         
-        pi = mcts.getActionProb(canonicalBoard, temp=temp)
+        # Try to get action probs, if it fails due to masking, stop the episode
+        try:
+            pi = mcts.getActionProb(canonicalBoard, temp=temp)
+        except Exception as e:
+            log.error(f"Worker {worker_id}: Episode failed due to MCTS error: {e}")
+            return [] # Return empty to ignore this failed game
+            
         sym = game.getSymmetries(canonicalBoard, pi)
         
         for b, p in sym:
