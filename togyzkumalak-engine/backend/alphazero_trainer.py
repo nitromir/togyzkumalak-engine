@@ -129,7 +129,7 @@ class AlphaZeroConfig:
     save_every_n_iters: int = 5       # Save checkpoint every N iterations
     
     # Bootstrap - Use human game data for initial training
-    use_bootstrap: bool = False
+    use_bootstrap: bool = True
     bootstrap_file: str = "training_data/human_transitions.jsonl"
     bootstrap_epochs: int = 15
     bootstrap_max_samples: int = 100000
