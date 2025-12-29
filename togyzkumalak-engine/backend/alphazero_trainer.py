@@ -28,7 +28,7 @@ import json
 import logging
 import threading
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import copy
 
 # Configure logging with file handler for UI visibility
@@ -1248,8 +1248,8 @@ class AlphaZeroCoach:
 
         all_examples = []
         
-        # Prepare data for workers
-        nnet_state = {k: v.cpu() for k, v in self.nnet_base.state_dict().items()}
+        # Prepare data for workers - use underlying nnet_base to avoid DataParallel overhead
+        nnet_state = {k: v.cpu() for k, v in self.nnet.nnet_base.state_dict().items()}
         config_dict = {
             'num_mcts_sims': self.config.num_mcts_sims,
             'cpuct': self.config.cpuct,
