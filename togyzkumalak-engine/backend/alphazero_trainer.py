@@ -510,18 +510,23 @@ class NNetWrapper:
                 
                 observations = []
                 for b in boards:
-                    # Validate board size before conversion
-                    if len(b) != 23:
-                        log.error(f"TRAIN: Board has wrong size: {len(b)}, expected 23. Board: {b[:min(10, len(b))]}")
-                        if len(b) == 8:
-                            log.error(f"TRAIN: CRITICAL - 8-element board detected in training!")
-                            import traceback
-                            log.error(f"TRAIN: Call stack:\n{''.join(traceback.format_stack()[-8:-1])}")
-                        if len(b) < 23:
-                            b = np.pad(b, (0, 23 - len(b)), mode='constant', constant_values=0)
-                        else:
-                            b = b[:23]
-                    obs = self.game.boardToObservation(b)
+                    if len(b) == 128:
+                        # Direct observation from human data
+                        obs = b
+                    else:
+                        # Validate board size before conversion
+                        if len(b) != 23:
+                            log.error(f"TRAIN: Board has wrong size: {len(b)}, expected 23. Board: {b[:min(10, len(b))]}")
+                            if len(b) == 8:
+                                log.error(f"TRAIN: CRITICAL - 8-element board detected in training!")
+                                import traceback
+                                log.error(f"TRAIN: Call stack:\n{''.join(traceback.format_stack()[-8:-1])}")
+                            if len(b) < 23:
+                                b = np.pad(b, (0, 23 - len(b)), mode='constant', constant_values=0)
+                            else:
+                                b = b[:23]
+                        obs = self.game.boardToObservation(b)
+                    
                     if len(obs) != 128:
                         log.error(f"TRAIN: Observation has wrong size: {len(obs)}, expected 128. Board was: {b[:min(10, len(b))]}")
                         if len(obs) < 128:
@@ -1374,11 +1379,11 @@ class AlphaZeroCoach:
                         board[20] = state[18] * 162.0
                         board[21] = state[19] * 162.0
                     elif len(state) == 128:
-                        board = np.zeros(23, dtype=np.float32)
-                        for i in range(18):
-                            board[i] = state[i] * 81.0
-                        board[20] = state[18] * 162.0
-                        board[21] = state[19] * 162.0
+                        # Direct 128-dim observation from human data
+                        # We can either use it as is or try to reconstruct the board
+                        # The AlphaZero trainer expects board (23-dim) or obs (128-dim)
+                        # Let's keep it as 128-dim and handle it in the training loop
+                        board = np.array(state, dtype=np.float32)
                     elif len(state) >= 22:
                         board = np.array(state[:23] if len(state) >= 23 else state + [0]*(23-len(state)), dtype=np.float32)
                     else:
