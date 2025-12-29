@@ -830,7 +830,7 @@ class MCTS:
 # =============================================================================
 
 def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-    """Worker function that runs multiple episodes on a specific GPU."""
+    """Worker function that runs multiple episodes SIMULTANEOUSLY on a specific GPU."""
     gpu_id, num_episodes, nnet_state, config_dict = args
     
     device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
@@ -849,7 +849,8 @@ def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
     nnet_model.load_state_dict(clean_state)
     nnet_model.eval()
     
-    class WorkerNNet:
+    # Wrap for batch prediction
+    class BatchNNet:
         def __init__(self, net, dev, g):
             self.net = net
             self.dev = dev
@@ -859,42 +860,30 @@ def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
             obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.dev)
             with torch.no_grad():
                 pi, v = self.net(obs_tensor)
-                pi = torch.softmax(pi, dim=1) # Use softmax for stability
+                pi = torch.softmax(pi, dim=1)
             return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
 
-    all_examples = []
-    for _ in range(num_episodes):
-        mcts = MCTS(game, WorkerNNet(nnet_model, device, game), config)
-        trainExamples = []
-        board = game.getInitBoard()
-        curPlayer = 1
-        episodeStep = 0
-        
-        while True:
-            episodeStep += 1
-            if episodeStep > 500: break
-            
-            canonical = game.getCanonicalForm(board, curPlayer)
-            temp = int(episodeStep < config.temp_threshold)
-            
-            try:
-                pi = mcts.getActionProb(canonical, temp=temp)
-            except Exception:
-                break
-                
-            sym = game.getSymmetries(canonical, pi)
-            for b, p in sym:
-                trainExamples.append([b, curPlayer, p, None])
-            
-            action = np.random.choice(len(pi), p=pi)
-            board, curPlayer = game.getNextState(board, curPlayer, action)
-            
-            r = game.getGameEnded(board, curPlayer)
-            if r != 0:
-                all_examples.extend([(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples])
-                break
-                
-    return all_examples
+    # Use ParallelSelfPlay to play all episodes at once on this GPU
+    # This is the key to heating up the GPU!
+    from backend.alphazero_trainer import ParallelSelfPlay
+    
+    # Wrap nnet_model into a dummy wrapper that ParallelSelfPlay expects
+    class DummyWrapper:
+        def __init__(self, model, dev, g):
+            self.nnet_base = model
+            self.device = dev
+            self.game = g
+        def predict(self, board):
+            obs = self.game.boardToObservation(board)
+            obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+            with torch.no_grad():
+                pi, v = self.nnet_base(obs_tensor)
+                pi = torch.softmax(pi, dim=1)
+            return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
+
+    wrapper = DummyWrapper(nnet_model, device, game)
+    psp = ParallelSelfPlay(game, wrapper, config, num_games=num_episodes)
+    return psp.run_all_games()
 
 # =============================================================================
 # Fast Self-Play (NO ProcessPoolExecutor - single process, batch inference)
