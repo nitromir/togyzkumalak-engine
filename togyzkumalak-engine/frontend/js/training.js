@@ -505,7 +505,11 @@ class TrainingController {
         btnStop?.addEventListener('click', () => this.stopAlphaZero());
         btnOptimal?.addEventListener('click', () => this.loadOptimalConfig());
         
-        // Training logs button
+        // Training logs button (Always visible one)
+        const btnShowLogsAlways = document.getElementById('btnShowTrainingLogsAlways');
+        btnShowLogsAlways?.addEventListener('click', () => this.showTrainingLogs());
+        
+        // Training logs button (Progress section one)
         const btnShowLogs = document.getElementById('btnShowTrainingLogs');
         btnShowLogs?.addEventListener('click', () => this.showTrainingLogs());
         
