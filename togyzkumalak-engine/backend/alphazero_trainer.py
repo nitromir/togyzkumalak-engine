@@ -1041,25 +1041,25 @@ class SimpleMCTS:
         if self.Es[s] != 0:
             return -self.Es[s]
         
-            # Leaf node - expand
-            if s not in self.Ps:
-                pi, v = nnet.predict(canonicalBoard)
-                valids = self.game.getValidMoves(canonicalBoard, 1)
-                
-                # Mask invalid moves
-                pi = pi * valids
-                sum_pi = np.sum(pi)
-                
-                if sum_pi > 1e-10:
-                    pi /= sum_pi
-                else:
-                    sum_valids = np.sum(valids)
-                    pi = valids / sum_valids if sum_valids > 0 else np.ones(len(valids)) / len(valids)
-                
-                self.Ps[s] = pi
-                self.Vs[s] = valids
-                self.Ns[s] = 0
-                return -v
+        # Leaf node - expand
+        if s not in self.Ps:
+            pi, v = nnet.predict(canonicalBoard)
+            valids = self.game.getValidMoves(canonicalBoard, 1)
+            
+            # Mask invalid moves
+            pi = pi * valids
+            sum_pi = np.sum(pi)
+            
+            if sum_pi > 1e-10:
+                pi /= sum_pi
+            else:
+                sum_valids = np.sum(valids)
+                pi = valids / sum_valids if sum_valids > 0 else np.ones(len(valids)) / len(valids)
+            
+            self.Ps[s] = pi
+            self.Vs[s] = valids
+            self.Ns[s] = 0
+            return -v
         
         # Select action with highest UCB
         valids = self.Vs[s]
