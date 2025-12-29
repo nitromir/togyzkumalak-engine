@@ -319,6 +319,8 @@ class TogyzkumalakGame:
             if len(board) < 23:
                 if len(board) == 8:
                     log.error(f"boardToObservation: CRITICAL - 8-element board detected! This is the root cause.")
+                    import traceback
+                    log.error(f"boardToObservation: Call stack:\n{''.join(traceback.format_stack()[-8:-1])}")
                 board = np.pad(board, (0, 23 - len(board)), mode='constant', constant_values=0)
             else:
                 board = board[:23]
@@ -345,6 +347,16 @@ class TogyzkumalakGame:
         if board_len > 22:
             obs[38] = 1.0 if board[22] == 0 else 0.0
             obs[39] = 1.0 if board[22] == 1 else 0.0
+        
+        # CRITICAL: Validate output size
+        if len(obs) != 128:
+            log.error(f"boardToObservation: CRITICAL - Observation has wrong size: {len(obs)}, expected 128!")
+            log.error(f"boardToObservation: This should never happen! Board was: {board}")
+            # Force to 128
+            if len(obs) < 128:
+                obs = np.pad(obs, (0, 128 - len(obs)), mode='constant', constant_values=0)
+            else:
+                obs = obs[:128]
         
         return obs
 
