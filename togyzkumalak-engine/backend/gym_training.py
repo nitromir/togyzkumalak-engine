@@ -383,12 +383,14 @@ class GymTrainingManager:
         game = TogyzkumalakGame()
         wrapper = AlphaZeroPolicyWrapper(alphazero_net, game)
         
-        # Apply to ai_engine level 5 (Expert level)
-        ai_engine.models[5] = wrapper
+        # Apply to all neural levels for consistency when a model is loaded
+        for level in [3, 4, 5]:
+            ai_engine.models[level] = wrapper
+            
         ai_engine.current_model_name = Path(model_path).stem
         ai_engine.alphazero_model = alphazero_net  # Store reference for MCTS usage
         
-        print(f"[OK] AlphaZero model loaded (hidden_size={hidden_size})")
+        print(f"[OK] AlphaZero model loaded to all levels (hidden_size={hidden_size})")
         return True
     
     def _load_gym_model(self, model_path: str, checkpoint, device, ai_engine) -> bool:

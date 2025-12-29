@@ -266,13 +266,13 @@ class AIEngine:
         level: int
     ) -> int:
         """Level 3-5: Neural network-based move selection."""
+        # Use AlphaZero MCTS for any neural level if model is loaded and MCTS is enabled
+        if self.alphazero_model is not None and self.use_mcts:
+            return self._alphazero_mcts_move(board, legal_moves)
+            
         model = self.models.get(level)
         if not model:
             return self._heuristic_move(board, legal_moves)
-        
-        # Check if we should use AlphaZero with MCTS (level 5 with alphazero model)
-        if level == 5 and self.alphazero_model is not None and self.use_mcts:
-            return self._alphazero_mcts_move(board, legal_moves)
         
         # Get observation
         obs = board.to_observation()
