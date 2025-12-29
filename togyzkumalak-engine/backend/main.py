@@ -1554,6 +1554,97 @@ async def parse_all_human_data(request: ImportDataRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/data/upload-training-file")
+async def upload_training_file(file: UploadFile = File(...)):
+    """
+    Upload a training data file (.jsonl or .json) directly to the server.
+    Files are saved to training_data/ directory.
+    """
+    try:
+        # Validate file extension
+        if not file.filename.endswith(('.jsonl', '.json')):
+            raise HTTPException(status_code=400, detail="Only .jsonl and .json files are allowed")
+        
+        # Create training_data directory if not exists
+        training_dir = os.path.join(engine_dir, "training_data")
+        os.makedirs(training_dir, exist_ok=True)
+        
+        # Save file
+        file_path = os.path.join(training_dir, file.filename)
+        
+        # Read and save content
+        content = await file.read()
+        with open(file_path, 'wb') as f:
+            f.write(content)
+        
+        # Count lines for .jsonl files
+        line_count = 0
+        file_size = len(content)
+        if file.filename.endswith('.jsonl'):
+            line_count = content.count(b'\n')
+        
+        return {
+            "status": "success",
+            "filename": file.filename,
+            "size_bytes": file_size,
+            "size_mb": round(file_size / (1024 * 1024), 2),
+            "lines": line_count,
+            "path": file_path
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload error: {str(e)}")
+
+
+@app.get("/api/data/training-files-status")
+async def get_training_files_status():
+    """
+    Get status of all training data files including presence and sizes.
+    """
+    try:
+        training_dir = os.path.join(engine_dir, "training_data")
+        
+        files_status = {
+            "transitions_compact.jsonl": {"exists": False, "size_mb": 0, "lines": 0},
+            "human_transitions.jsonl": {"exists": False, "size_mb": 0, "lines": 0},
+            "human_games.jsonl": {"exists": False, "size_mb": 0, "lines": 0},
+            "android_apk_openings.jsonl": {"exists": False, "size_mb": 0, "lines": 0},
+            "gemini_transitions.jsonl": {"exists": False, "size_mb": 0, "lines": 0},
+        }
+        
+        if os.path.exists(training_dir):
+            for filename in files_status:
+                filepath = os.path.join(training_dir, filename)
+                if os.path.exists(filepath):
+                    size = os.path.getsize(filepath)
+                    lines = 0
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            lines = sum(1 for _ in f)
+                    except:
+                        pass
+                    files_status[filename] = {
+                        "exists": True,
+                        "size_mb": round(size / (1024 * 1024), 2),
+                        "lines": lines
+                    }
+        
+        # Calculate totals
+        total_size = sum(f["size_mb"] for f in files_status.values())
+        total_lines = sum(f["lines"] for f in files_status.values())
+        
+        return {
+            "training_dir": training_dir,
+            "files": files_status,
+            "total_size_mb": round(total_size, 2),
+            "total_lines": total_lines,
+            "bootstrap_ready": files_status["transitions_compact.jsonl"]["exists"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/data/parse-auto")
 async def parse_auto_discover():
     """

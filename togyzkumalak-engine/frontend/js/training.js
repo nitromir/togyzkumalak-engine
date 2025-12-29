@@ -22,6 +22,9 @@ class TrainingController {
         document.getElementById('btnParseData')?.addEventListener('click', () => this.parseData());
         document.getElementById('btnTrainOnHuman')?.addEventListener('click', () => this.trainOnHumanData());
         
+        // File upload handler
+        document.getElementById('uploadTrainingFile')?.addEventListener('change', (e) => this.handleFileUpload(e));
+        
         // FAQ modal
         document.getElementById('btnOpenFaq')?.addEventListener('click', () => this.openFaqModal());
         document.getElementById('closeFaqModal')?.addEventListener('click', () => this.closeFaqModal());
@@ -46,6 +49,93 @@ class TrainingController {
                 this.loadDataStats();
             }
         }, 5000);
+    }
+
+    /**
+     * Handle file upload for training data
+     */
+    async handleFileUpload(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        
+        const statusEl = document.getElementById('uploadStatus');
+        statusEl.textContent = '⏳ Загрузка...';
+        statusEl.className = 'upload-status uploading';
+        
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const file of files) {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/data/upload-training-file', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Uploaded:', result);
+                    successCount++;
+                } else {
+                    const error = await response.json();
+                    console.error('Upload error:', error);
+                    errorCount++;
+                }
+            } catch (error) {
+                console.error('Upload failed:', error);
+                errorCount++;
+            }
+        }
+        
+        // Update status
+        if (errorCount === 0) {
+            statusEl.textContent = `✅ Загружено ${successCount} файл(ов)`;
+            statusEl.className = 'upload-status success';
+        } else {
+            statusEl.textContent = `⚠️ Загружено: ${successCount}, ошибок: ${errorCount}`;
+            statusEl.className = 'upload-status error';
+        }
+        
+        // Refresh file list
+        this.loadTrainingFiles();
+        this.loadTrainingFilesStatus();
+        
+        // Clear file input
+        event.target.value = '';
+        
+        // Hide status after 5 seconds
+        setTimeout(() => {
+            statusEl.textContent = '';
+            statusEl.className = 'upload-status';
+        }, 5000);
+    }
+    
+    /**
+     * Load detailed training files status
+     */
+    async loadTrainingFilesStatus() {
+        try {
+            const response = await fetch('/api/data/training-files-status');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            console.log('Training files status:', data);
+            
+            // Update bootstrap ready indicator
+            if (data.bootstrap_ready) {
+                const checkbox = document.getElementById('azUseBootstrap');
+                if (checkbox && !checkbox.checked) {
+                    console.log('Bootstrap data available, checkbox can be enabled');
+                }
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Error loading training files status:', error);
+        }
     }
 
     /**

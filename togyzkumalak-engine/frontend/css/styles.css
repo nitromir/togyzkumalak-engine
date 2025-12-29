@@ -881,6 +881,38 @@ body::after {
     letter-spacing: 1px;
 }
 
+.upload-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px dashed var(--accent-blue);
+    border-radius: 8px;
+}
+
+.upload-status {
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.upload-status.uploading {
+    color: var(--accent-blue);
+    background: rgba(59, 130, 246, 0.2);
+}
+
+.upload-status.success {
+    color: var(--accent-green);
+    background: rgba(34, 197, 94, 0.2);
+}
+
+.upload-status.error {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.2);
+}
+
 .data-files-list {
     display: flex;
     flex-direction: column;

@@ -454,6 +454,13 @@
                 
                 <div class="data-files-section">
                     <h3>📁 Файлы данных</h3>
+                    <div class="upload-section">
+                        <input type="file" id="uploadTrainingFile" accept=".jsonl,.json" multiple style="display: none;">
+                        <button class="action-btn" onclick="document.getElementById('uploadTrainingFile').click()">
+                            📤 Загрузить файлы данных (.jsonl)
+                        </button>
+                        <span id="uploadStatus" class="upload-status"></span>
+                    </div>
                     <div id="dataFilesList" class="data-files-list">
                         <p class="empty-text">Загрузка...</p>
                     </div>
