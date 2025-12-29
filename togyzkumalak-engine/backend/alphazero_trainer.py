@@ -487,19 +487,21 @@ class NNetWrapper:
         # For predict, always use base network (no DataParallel)
         # This avoids issues with single-sample inference on multi-GPU
     
-    def train(self, examples: List[Tuple[np.ndarray, np.ndarray, float]]) -> Dict[str, float]:
+    def train(self, examples: List[Tuple[np.ndarray, np.ndarray, float]], epochs: int = None) -> Dict[str, float]:
         """Train network on examples (board, pi, v)."""
         optimizer = optim.Adam(self.nnet.parameters(), lr=self.config.learning_rate)
         
         # Scale batch size with number of GPUs
         effective_batch_size = self.config.batch_size * max(1, NUM_GPUS)
         
+        num_epochs = epochs if epochs is not None else self.config.epochs
+        
         self.nnet.train()
         
         pi_losses = AverageMeter()
         v_losses = AverageMeter()
         
-        for epoch in range(self.config.epochs):
+        for epoch in range(num_epochs):
             batch_count = max(1, len(examples) // effective_batch_size)
             
             for _ in range(batch_count):
@@ -1397,9 +1399,8 @@ class AlphaZeroCoach:
             log.info(f"[Bootstrap] Loaded {len(examples)} examples, training for {self.config.bootstrap_epochs} epochs...")
             
             start_time = time.time()
-            # The nnet.train already has an internal loop for config.epochs
-            # We just need to call it once to perform the bootstrap training
-            train_metrics = self.nnet.train(examples)
+            # Pass bootstrap_epochs to the train method
+            train_metrics = self.nnet.train(examples, epochs=self.config.bootstrap_epochs)
             
             # Update status for UI
             if callback:
