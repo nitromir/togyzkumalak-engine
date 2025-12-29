@@ -36,10 +36,16 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 # Add file handler for training logs (UI reads this)
-_log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'alphazero_training.log')
-_file_handler = logging.FileHandler(_log_file, mode='w')
-_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-log.addHandler(_file_handler)
+try:
+    _backend_dir = os.path.dirname(os.path.abspath(__file__))
+    _engine_dir = os.path.dirname(_backend_dir)
+    _log_file = os.path.join(_engine_dir, 'alphazero_training.log')
+    _file_handler = logging.FileHandler(_log_file, mode='w')
+    _file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    log.addHandler(_file_handler)
+except Exception as e:
+    # Use standard logging if file logging fails
+    log.error(f"Failed to setup file logging: {e}")
 
 # =============================================================================
 # Device Configuration - Auto-detect GPU
@@ -842,7 +848,6 @@ def execute_episode_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
     config = AlphaZeroConfig(**config_dict)
     
     # Create network on specific GPU
-    from alphazero_trainer import AlphaZeroNetwork # Re-import inside worker
     nnet_model = AlphaZeroNetwork(
         input_size=128,
         hidden_size=config.hidden_size,

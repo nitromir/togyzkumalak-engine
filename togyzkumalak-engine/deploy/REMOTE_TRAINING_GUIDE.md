@@ -11,7 +11,10 @@ ssh -p ПОРТ root@IP_АДРЕС -L 8000:localhost:8000
 ```python
 import subprocess, os, time
 os.chdir('/workspace/togyzkumalak/togyzkumalak-engine')
-subprocess.run("pkill -9 -f python", shell=True)
+# Безопасная очистка: только сервер и обучение, не трогаем Jupyter
+subprocess.run("pkill -9 -f run.py", shell=True)
+subprocess.run("pkill -9 -f alphazero_trainer", shell=True)
+subprocess.run("fuser -k 8000/tcp", shell=True)
 time.sleep(2)
 subprocess.run(['git', 'checkout', '.'], capture_output=True)
 subprocess.run(['git', 'pull', 'origin', 'master'], capture_output=True)
@@ -73,9 +76,10 @@ nvidia-smi --query-gpu=index,utilization.gpu,memory.used --format=csv,noheader
 
 ## 🛑 Экстренная остановка
 
-### Убить всё
+### Убить всё (Сервер и Обучение)
 ```bash
-pkill -9 -f python
+pkill -9 -f run.py
+pkill -9 -f alphazero_trainer
 ```
 
 ### Освободить порт
