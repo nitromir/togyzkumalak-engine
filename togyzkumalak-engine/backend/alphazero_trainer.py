@@ -1276,16 +1276,16 @@ class AlphaZeroCoach:
 
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             tasks = []
-        for i in range(num_workers):
-            n = min(episodes_per_worker, num_episodes - i * episodes_per_worker)
-            if n <= 0: break
-            
-            # Pass correct GPU index using modulo
-            args = (i % NUM_GPUS, n, nnet_state, config_dict)
-            tasks.append(executor.submit(execute_batch_worker, args))
+            for i in range(num_workers):
+                n = min(episodes_per_worker, num_episodes - i * episodes_per_worker)
+                if n <= 0: break
+                
+                # Pass correct GPU index using modulo
+                args = (i % NUM_GPUS, n, nnet_state, config_dict)
+                tasks.append(executor.submit(execute_batch_worker, args))
             
             completed = 0
-            for i, future in enumerate(as_completed(tasks)):
+            for future in as_completed(tasks):
                 try:
                     result = future.result(timeout=1800) # 30 min timeout
                     if result:
