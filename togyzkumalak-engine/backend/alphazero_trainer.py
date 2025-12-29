@@ -1206,11 +1206,15 @@ class AlphaZeroCoach:
         self.stop_requested = False
         
         # Determine parallelization level - optimize for multi-GPU
-        # Increase workers to keep GPUs busy (4 workers per GPU is a good sweet spot for RTX 4090)
-        self.num_workers = config.num_workers if config.num_workers > 0 else max(1, NUM_GPUS * 4)
+        if config.num_workers > 0:
+            self.num_workers = config.num_workers
+        else:
+            # 10 workers per GPU is good for high-core count servers
+            self.num_workers = min(os.cpu_count() - 2, NUM_GPUS * 10)
+            
         self.num_parallel_games = config.num_parallel_games if config.num_parallel_games > 0 else self.num_workers
         
-        log.info(f"🚀 BLITZ MODE: {self.num_parallel_games} workers across {NUM_GPUS} GPUs")
+        log.info(f"🚀 BLITZ MODE: {self.num_workers} workers across {NUM_GPUS} GPUs")
         log.info(f"   MCTS sims: {config.num_mcts_sims}, Episodes: {config.num_episodes}, Arena: {config.arena_compare}")
     
     def executeEpisode(self) -> List[Tuple[np.ndarray, np.ndarray, float]]:
