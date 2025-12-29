@@ -471,9 +471,40 @@ class NNetWrapper:
                 sample_ids = np.random.randint(len(examples), size=min(effective_batch_size, len(examples)))
                 boards, pis, vs = zip(*[examples[i] for i in sample_ids])
                 
-                observations = [self.game.boardToObservation(b) for b in boards]
+                observations = []
+                for b in boards:
+                    # Validate board size before conversion
+                    if len(b) != 23:
+                        log.error(f"TRAIN: Board has wrong size: {len(b)}, expected 23. Board: {b[:min(10, len(b))]}")
+                        if len(b) == 8:
+                            log.error(f"TRAIN: CRITICAL - 8-element board detected in training!")
+                            import traceback
+                            log.error(f"TRAIN: Call stack:\n{''.join(traceback.format_stack()[-8:-1])}")
+                        if len(b) < 23:
+                            b = np.pad(b, (0, 23 - len(b)), mode='constant', constant_values=0)
+                        else:
+                            b = b[:23]
+                    obs = self.game.boardToObservation(b)
+                    if len(obs) != 128:
+                        log.error(f"TRAIN: Observation has wrong size: {len(obs)}, expected 128. Board was: {b[:min(10, len(b))]}")
+                        if len(obs) < 128:
+                            obs = np.pad(obs, (0, 128 - len(obs)), mode='constant', constant_values=0)
+                        else:
+                            obs = obs[:128]
+                    observations.append(obs)
                 
-                obs_tensor = torch.FloatTensor(np.array(observations)).to(self.device)
+                # Final validation before tensor creation
+                obs_array = np.array(observations)
+                if obs_array.shape[-1] != 128:
+                    log.error(f"TRAIN: CRITICAL - Final observation array has wrong shape: {obs_array.shape}, expected (N, 128)")
+                    # Fix it
+                    if obs_array.shape[-1] < 128:
+                        padding = np.zeros((*obs_array.shape[:-1], 128 - obs_array.shape[-1]), dtype=obs_array.dtype)
+                        obs_array = np.concatenate([obs_array, padding], axis=-1)
+                    else:
+                        obs_array = obs_array[..., :128]
+                
+                obs_tensor = torch.FloatTensor(obs_array).to(self.device)
                 target_pis = torch.FloatTensor(np.array(pis)).to(self.device)
                 target_vs = torch.FloatTensor(np.array(vs)).to(self.device)
                 
