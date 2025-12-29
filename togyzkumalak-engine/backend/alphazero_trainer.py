@@ -830,10 +830,9 @@ class MCTS:
 # =============================================================================
 
 def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-    """Worker function that runs multiple episodes on a specific GPU."""
+    """Worker function that runs multiple episodes SIMULTANEOUSLY on a specific GPU."""
     gpu_id, num_episodes, nnet_state, config_dict = args
     
-    # Ensure gpu_id is within valid range
     num_gpus_available = torch.cuda.device_count()
     actual_gpu_id = gpu_id % max(1, num_gpus_available)
     
@@ -854,52 +853,41 @@ def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         nnet_model.load_state_dict(clean_state)
         nnet_model.eval()
         
-        class WorkerNNet:
-            def __init__(self, net, dev, g):
-                self.net = net
-                self.dev = dev
+        # Wrap nnet_model into a wrapper that ParallelSelfPlay expects
+        class DummyWrapper:
+            def __init__(self, model, dev, g):
+                self.nnet_base = model
+                self.device = dev
                 self.game = g
             def predict(self, board):
+                # This is only used if fallback happens
                 obs = self.game.boardToObservation(board)
-                obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.dev)
+                obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
                 with torch.no_grad():
-                    pi, v = self.net(obs_tensor)
+                    pi, v = self.nnet_base(obs_tensor)
                     pi = torch.softmax(pi, dim=1)
                 return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
-
-        all_examples = []
-        # Play episodes one by one but in 16 parallel processes total
-        for _ in range(num_episodes):
-            mcts = MCTS(game, WorkerNNet(nnet_model, device, game), config)
-            trainExamples = []
-            board = game.getInitBoard()
-            curPlayer = 1
-            episodeStep = 0
             
-            while True:
-                episodeStep += 1
-                if episodeStep > 500: break
-                
-                canonical = game.getCanonicalForm(board, curPlayer)
-                temp = int(episodeStep < config.temp_threshold)
-                
-                pi = mcts.getActionProb(canonical, temp=temp)
-                sym = game.getSymmetries(canonical, pi)
-                for b, p in sym:
-                    trainExamples.append([b, curPlayer, p, None])
-                
-                action = np.random.choice(len(pi), p=pi)
-                board, curPlayer = game.getNextState(board, curPlayer, action)
-                
-                r = game.getGameEnded(board, curPlayer)
-                if r != 0:
-                    all_examples.extend([(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples])
-                    break
-        return all_examples
+            def predict_batch(self, boards):
+                # ACTUAL BATCH PREDICTION FOR GPU WARMUP
+                obs_list = [self.game.boardToObservation(b) for b in boards]
+                obs_tensor = torch.FloatTensor(np.array(obs_list)).to(self.device)
+                with torch.no_grad():
+                    pi_batch, v_batch = self.nnet_base(obs_tensor)
+                    pi_batch = torch.softmax(pi_batch, dim=1)
+                return pi_batch.cpu().numpy(), v_batch.cpu().numpy().flatten()
+
+        wrapper = DummyWrapper(nnet_model, device, game)
+        
+        # Use ParallelSelfPlay for maximum GPU utilization within the worker
+        from backend.alphazero_trainer import ParallelSelfPlay
+        psp = ParallelSelfPlay(game, wrapper, config, num_games=num_episodes)
+        return psp.run_all_games()
+        
     except Exception as e:
-        # Return empty list on failure to not crash the whole training, but log it
         import traceback
         print(f"Worker on GPU {actual_gpu_id} failed: {str(e)}")
+        traceback.print_exc()
         return []
 
 # =============================================================================
