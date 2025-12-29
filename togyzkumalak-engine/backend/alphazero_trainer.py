@@ -1455,8 +1455,9 @@ class AlphaZeroCoach:
             return 0
     
     def _try_resume_from_checkpoint(self) -> bool:
-        """Try to resume from existing checkpoint (best.pth.tar or bootstrapped.pth.tar)."""
-        checkpoint_dir = self.config.checkpoint_dir
+        """Try to resume from existing checkpoint with ABSOLUTE path safety."""
+        # Force absolute path resolution
+        checkpoint_dir = os.path.abspath(self.config.checkpoint_dir)
         
         # Priority order: best.pth.tar > bootstrapped.pth.tar > latest checkpoint_N.pth.tar
         checkpoints_to_try = [
@@ -1472,35 +1473,41 @@ class AlphaZeroCoach:
                 numbered.sort(key=lambda x: int(x.replace('checkpoint_', '').replace('.pth.tar', '')), reverse=True)
                 checkpoints_to_try.append(os.path.join(checkpoint_dir, numbered[0]))
         
+        log.info(f"🔍 [Resume] Checking for existing models in {checkpoint_dir}...")
+        
         for checkpoint_path in checkpoints_to_try:
             if os.path.exists(checkpoint_path):
                 try:
+                    log.info(f"📂 [Resume] Found existing model: {checkpoint_path}. Loading...")
                     metrics = self.nnet.load_checkpoint(os.path.dirname(checkpoint_path), os.path.basename(checkpoint_path))
-                    log.info(f"✅ RESUMED from checkpoint: {checkpoint_path}")
+                    log.info(f"✅ [Resume] SUCCESSFULLY LOADED. Skipping bootstrap stage.")
                     if metrics:
-                        log.info(f"   Checkpoint metrics: {metrics}")
+                        log.info(f"   Metrics: {metrics}")
                     return True
                 except Exception as e:
-                    log.warning(f"Failed to load {checkpoint_path}: {e}")
+                    log.warning(f"⚠️ [Resume] Failed to load {checkpoint_path}: {e}")
                     continue
         
+        log.info("ℹ️ [Resume] No existing models found. Will start fresh (or bootstrap).")
         return False
     
     def learn(self, callback=None) -> Dict[str, Any]:
-        """Main training loop with parallel self-play."""
+        """Main training loop with parallel self-play and auto-resume."""
         self.status = "running"
         start_time = time.time()
         
-        # Try to resume from existing checkpoint first
-        resumed = False
-        if self.config.resume_from_checkpoint:
-            resumed = self._try_resume_from_checkpoint()
+        # 1. ALWAYS try to resume first, regardless of config flag
+        # If any model exists, we MUST use it instead of bootstrapping
+        resumed = self._try_resume_from_checkpoint()
         
-        # Bootstrap from human data if enabled AND we didn't resume
-        if self.config.use_bootstrap and not resumed:
+        # 2. Bootstrap ONLY if we didn't find ANY existing model
+        if not resumed and self.config.use_bootstrap:
+            log.info("🚀 [Bootstrap] Starting initial training on human data...")
             bootstrap_count = self._bootstrap_from_human_data(callback=callback)
             if bootstrap_count > 0:
-                log.info(f"Bootstrapped from {bootstrap_count} human examples")
+                log.info(f"✅ [Bootstrap] Done with {bootstrap_count} examples.")
+        elif resumed:
+            log.info("⏩ [Learn] Skipping bootstrap as an existing model was loaded.")
         
         for i in range(1, self.config.num_iterations + 1):
             if self.stop_requested:
