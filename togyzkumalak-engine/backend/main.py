@@ -2260,38 +2260,28 @@ async def update_and_restart():
                     "stdout": result.stdout
                 }
         
-        # Check if there were any changes
-        has_changes = "Already up to date" not in result.stdout
-        
         # Schedule restart (give time for response to be sent)
         async def delayed_restart():
             await asyncio.sleep(2)  # Wait 2 seconds for response
-            # Restart by exiting and letting process manager restart
-            # On Vast.ai, the onstart script will restart it
+            
+            # Restart by replacing the current process with a new one
+            # This works everywhere (Jupyter, SSH, nohup) without needing an external manager
             try:
-                if hasattr(signal, 'SIGTERM'):
-                    os.kill(os.getpid(), signal.SIGTERM)
-                else:
-                    # Windows fallback
-                    sys.exit(0)
-            except:
-                sys.exit(0)
+                print(f"🔄 RESTARTING SERVER: {sys.executable} {' '.join(sys.argv)}")
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+            except Exception as e:
+                print(f"❌ Restart failed: {e}")
+                os._exit(1)
         
-        if has_changes:
-            asyncio.create_task(delayed_restart())
-            return {
-                "success": True,
-                "message": "Code updated successfully. Server will restart in 2 seconds...",
-                "git_output": result.stdout,
-                "restarting": True
-            }
-        else:
-            return {
-                "success": True,
-                "message": "Already up to date. No restart needed.",
-                "git_output": result.stdout,
-                "restarting": False
-            }
+        # Always restart if requested, or if changes were detected
+        asyncio.create_task(delayed_restart())
+        
+        return {
+            "success": True,
+            "message": "Code updated successfully." if has_changes else "System up to date. Restarting anyway to apply all changes...",
+            "git_output": result.stdout,
+            "restarting": True
+        }
             
     except subprocess.TimeoutExpired:
         return {
