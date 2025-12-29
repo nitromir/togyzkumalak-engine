@@ -829,20 +829,15 @@ class MCTS:
 # Parallel Self-Play Worker
 # =============================================================================
 
-def execute_episode_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-    """Worker function for parallel self-play with explicit GPU assignment."""
-    nnet_state, config_dict, worker_id = args
+def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+    """Worker function that runs multiple episodes on a specific GPU."""
+    gpu_id, num_episodes, nnet_state, config_dict = args
     
-    # Assign to GPU based on worker ID
-    num_gpus = torch.cuda.device_count()
-    gpu_id = worker_id % max(1, num_gpus)
     device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
-    
-    # Recreate game and network
     game = TogyzkumalakGame()
     config = AlphaZeroConfig(**config_dict)
     
-    # Create network on specific GPU
+    # Create network
     nnet_model = AlphaZeroNetwork(
         input_size=128,
         hidden_size=config.hidden_size,
@@ -864,41 +859,42 @@ def execute_episode_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
             obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.dev)
             with torch.no_grad():
                 pi, v = self.net(obs_tensor)
-                pi = torch.exp(pi)
+                pi = torch.softmax(pi, dim=1) # Use softmax for stability
             return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
 
-    mcts = MCTS(game, WorkerNNet(nnet_model, device, game), config)
-    
-    trainExamples = []
-    board = game.getInitBoard()
-    curPlayer = 1
-    episodeStep = 0
-    max_steps = 500
-    
-    while True:
-        episodeStep += 1
-        if episodeStep > max_steps: break
+    all_examples = []
+    for _ in range(num_episodes):
+        mcts = MCTS(game, WorkerNNet(nnet_model, device, game), config)
+        trainExamples = []
+        board = game.getInitBoard()
+        curPlayer = 1
+        episodeStep = 0
         
-        canonical = game.getCanonicalForm(board, curPlayer)
-        temp = int(episodeStep < config.temp_threshold)
-        
-        try:
-            pi = mcts.getActionProb(canonical, temp=temp)
-        except Exception:
-            return [] # Failed game
+        while True:
+            episodeStep += 1
+            if episodeStep > 500: break
             
-        sym = game.getSymmetries(canonical, pi)
-        for b, p in sym:
-            trainExamples.append([b, curPlayer, p, None])
-        
-        action = np.random.choice(len(pi), p=pi)
-        board, curPlayer = game.getNextState(board, curPlayer, action)
-        
-        r = game.getGameEnded(board, curPlayer)
-        if r != 0:
-            return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
-    
-    return []
+            canonical = game.getCanonicalForm(board, curPlayer)
+            temp = int(episodeStep < config.temp_threshold)
+            
+            try:
+                pi = mcts.getActionProb(canonical, temp=temp)
+            except Exception:
+                break
+                
+            sym = game.getSymmetries(canonical, pi)
+            for b, p in sym:
+                trainExamples.append([b, curPlayer, p, None])
+            
+            action = np.random.choice(len(pi), p=pi)
+            board, curPlayer = game.getNextState(board, curPlayer, action)
+            
+            r = game.getGameEnded(board, curPlayer)
+            if r != 0:
+                all_examples.extend([(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples])
+                break
+                
+    return all_examples
 
 # =============================================================================
 # Fast Self-Play (NO ProcessPoolExecutor - single process, batch inference)
@@ -1246,18 +1242,14 @@ class AlphaZeroCoach:
                 return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
     
     def executeEpisodesParallel(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-        """
-        Execute multiple episodes in parallel.
-        Uses ProcessPoolExecutor for multi-GPU distribution if enabled.
-        """
-        if not self.config.use_multiprocessing or self.num_parallel_games <= 1:
-            # Fallback to single-process batching
+        """Run episodes in parallel across multiple GPUs."""
+        if not self.config.use_multiprocessing or NUM_GPUS <= 1:
             return self._executeEpisodesBatch(num_episodes)
 
         all_examples = []
         
         # Prepare data for workers
-        nnet_state = {k: v.cpu() for k, v in self.nnet.nnet_base.state_dict().items()}
+        nnet_state = {k: v.cpu() for k, v in self.nnet_base.state_dict().items()}
         config_dict = {
             'num_mcts_sims': self.config.num_mcts_sims,
             'cpuct': self.config.cpuct,
@@ -1265,32 +1257,34 @@ class AlphaZeroCoach:
             'hidden_size': self.config.hidden_size,
         }
         
-        # Determine workers (typically one per GPU or two)
-        workers = min(self.num_parallel_games, num_episodes)
+        # Use only NUM_GPUS workers, each playing multiple games
+        num_workers = NUM_GPUS
+        episodes_per_worker = (num_episodes + num_workers - 1) // num_workers
         
-        log.info(f"🎮 Distributing {num_episodes} games across {workers} workers on {NUM_GPUS} GPUs...")
+        log.info(f"🎮 Distributing {num_episodes} games across {num_workers} GPU workers...")
         
         try:
             mp.set_start_method('spawn', force=True)
         except RuntimeError:
             pass
 
-        completed = 0
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            args = [(nnet_state, config_dict, i) for i in range(num_episodes)]
-            futures = [executor.submit(execute_episode_worker, arg) for arg in args]
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            tasks = []
+            for i in range(num_workers):
+                n = min(episodes_per_worker, num_episodes - i * episodes_per_worker)
+                if n <= 0: break
+                
+                args = (i, n, nnet_state, config_dict)
+                tasks.append(executor.submit(execute_batch_worker, args))
             
-            for future in futures:
+            for i, future in enumerate(as_completed(tasks)):
                 try:
-                    result = future.result(timeout=600) # 10 min timeout
+                    result = future.result(timeout=1800) # 30 min timeout
                     if result:
                         all_examples.extend(result)
-                        completed += 1
-                    
-                    if completed % 10 == 0:
-                        log.info(f"  ✅ Progress: {completed}/{num_episodes} games finished")
+                        log.info(f"  ✅ Worker {i+1}/{num_workers} finished ({len(result)} examples)")
                 except Exception as e:
-                    log.error(f"  ❌ Game failed: {e}")
+                    log.error(f"  ❌ Worker {i+1} failed: {e}")
         
         log.info(f"🏁 Parallel self-play complete: {len(all_examples)} examples collected")
         return all_examples
