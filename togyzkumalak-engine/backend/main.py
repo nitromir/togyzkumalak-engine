@@ -801,7 +801,7 @@ async def get_gpu_utilization():
         return {
             "status": "ok",
             "gpus": gpus,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.datetime.now().isoformat()
         }
     except Exception as e:
         return {
