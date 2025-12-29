@@ -1918,14 +1918,14 @@ def get_optimal_config(num_gpus: int, time_budget_hours: float = 1.0) -> Dict:
         epochs = 10
         save_interval = 2
     elif num_gpus >= 4:
-        # Medium setup (4-7 GPUs) - BLITZ
-        mcts_sims = 25
-        episodes = 32
-        iter_time_min = 8
+        # Medium setup (4-7 GPUs) - BLITZ: OPTIMIZED FOR 4x RTX 3090/4090
+        mcts_sims = 60          # Good depth for 4 GPUs
+        episodes = 128          # 32 games per GPU
+        iter_time_min = 6       # Fast 6-min iterations
         hidden_size = 256
-        arena_games = 12
+        arena_games = 20        # Quick evaluation
         epochs = 8
-        save_interval = 5
+        save_interval = 2
     elif num_gpus >= 2:
         # Small setup (2-3 GPUs) - BLITZ
         mcts_sims = 20
