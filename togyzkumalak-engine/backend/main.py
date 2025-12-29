@@ -2265,10 +2265,16 @@ async def update_and_restart():
             await asyncio.sleep(2)  # Wait 2 seconds for response
             
             # Restart by replacing the current process with a new one
-            # This works everywhere (Jupyter, SSH, nohup) without needing an external manager
             try:
-                print(f"🔄 RESTARTING SERVER: {sys.executable} {' '.join(sys.argv)}")
-                os.execv(sys.executable, [sys.executable] + sys.argv)
+                # Use absolute path for the entry point script
+                run_py_path = os.path.join(os.path.dirname(engine_dir), 'run.py')
+                # Reconstruct full command with absolute path to run.py
+                restart_args = [sys.executable, run_py_path]
+                
+                print(f"🔄 RESTARTING SERVER: {' '.join(restart_args)}")
+                # Ensure we are in the engine directory for correct imports
+                os.chdir(os.path.dirname(engine_dir))
+                os.execv(sys.executable, restart_args)
             except Exception as e:
                 print(f"❌ Restart failed: {e}")
                 os._exit(1)
