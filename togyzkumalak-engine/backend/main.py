@@ -681,6 +681,44 @@ async def list_alphazero_checkpoints():
         return {"checkpoints": [], "total": 0, "error": str(e)}
 
 
+@app.post("/api/training/alphazero/checkpoints/{checkpoint_name}/rename")
+async def rename_alphazero_checkpoint(checkpoint_name: str, new_name: str):
+    """Rename a specific AlphaZero checkpoint file."""
+    try:
+        success = az_task_manager.rename_checkpoint(checkpoint_name, new_name)
+        if success:
+            return {"status": "success", "old_name": checkpoint_name, "new_name": new_name}
+        else:
+            raise HTTPException(status_code=404, detail=f"Checkpoint not found: {checkpoint_name}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/training/alphazero/tournament/start")
+async def start_alphazero_tournament(num_games: int = 20):
+    """Start a tournament between all checkpoints."""
+    try:
+        task_id = az_task_manager.start_tournament(num_games)
+        return {"task_id": task_id, "status": "started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/alphazero/tournament/sessions")
+async def list_alphazero_tournaments():
+    """List all AlphaZero tournament sessions."""
+    return {"sessions": az_task_manager.list_tournaments()}
+
+
+@app.get("/api/training/alphazero/tournament/sessions/{task_id}")
+async def get_alphazero_tournament_status(task_id: str):
+    """Get status of an AlphaZero tournament session."""
+    status = az_task_manager.get_tournament_status(task_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Tournament task not found")
+    return status
+
+
 @app.get("/api/training/alphazero/checkpoints/{checkpoint_name}/download")
 async def download_alphazero_checkpoint(checkpoint_name: str):
     """Download a specific AlphaZero checkpoint file."""

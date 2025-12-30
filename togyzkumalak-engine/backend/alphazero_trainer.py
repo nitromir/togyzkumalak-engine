@@ -1916,6 +1916,162 @@ class AlphaZeroCoach:
 # Task Manager Integration
 # =============================================================================
 
+class TournamentTask:
+    """Manages an AlphaZero tournament between all checkpoints."""
+    
+    def __init__(self, task_id: str, checkpoint_dir: str, num_games: int = 20):
+        self.task_id = task_id
+        self.checkpoint_dir = Path(checkpoint_dir)
+        self.num_games = num_games
+        self.game = TogyzkumalakGame()
+        
+        self.thread = None
+        self.results = {}
+        self.status = {
+            'task_id': task_id,
+            'status': 'pending',
+            'progress': 0,
+            'pairs_completed': 0,
+            'total_pairs': 0,
+            'current_pair': None,
+            'start_time': None,
+            'end_time': None,
+            'results': {},
+            'gpus': NUM_GPUS
+        }
+        
+    def start(self):
+        """Start tournament in background thread."""
+        self.status['status'] = 'running'
+        self.status['start_time'] = datetime.now().isoformat()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+        
+    def _run(self):
+        """Run round-robin tournament."""
+        try:
+            # 1. Find all checkpoints
+            checkpoints = list(self.checkpoint_dir.glob('*.pth.tar'))
+            checkpoints = [cp for cp in checkpoints if cp.name not in ['temp.pth.tar']]
+            
+            if len(checkpoints) < 2:
+                raise ValueError(f"Need at least 2 checkpoints for tournament, found {len(checkpoints)}")
+                
+            # 2. Generate pairs
+            import itertools
+            pairs = list(itertools.combinations(checkpoints, 2))
+            self.status['total_pairs'] = len(pairs)
+            
+            # Initialize results table
+            model_names = [cp.name for cp in checkpoints]
+            self.results = {name: {'wins': 0, 'losses': 0, 'draws': 0, 'score': 0.0} for name in model_names}
+            
+            log.info(f"🏆 TOURNAMENT START: {len(model_names)} models, {len(pairs)} pairings")
+            
+            for idx, (cp1, cp2) in enumerate(pairs):
+                self.status['current_pair'] = f"{cp1.name} vs {cp2.name}"
+                self.status['progress'] = (idx / len(pairs)) * 100
+                log.info(f"⚔️ Pair {idx+1}/{len(pairs)}: {cp1.name} vs {cp2.name}")
+                
+                # Load models
+                nnet1 = NNetWrapper(self.game, AlphaZeroConfig(hidden_size=256)) # Hidden size might need auto-detection
+                nnet1.load_checkpoint(str(self.checkpoint_dir), cp1.name)
+                
+                nnet2 = NNetWrapper(self.game, AlphaZeroConfig(hidden_size=256))
+                nnet2.load_checkpoint(str(self.checkpoint_dir), cp2.name)
+                
+                # Play games
+                # We need a helper function that plays between two specific state dicts
+                pwins, nwins, draws = self._play_pair(nnet1, nnet2)
+                
+                # Update results
+                self.results[cp1.name]['wins'] += pwins
+                self.results[cp1.name]['losses'] += nwins
+                self.results[cp1.name]['draws'] += draws
+                self.results[cp1.name]['score'] += pwins + 0.5 * draws
+                
+                self.results[cp2.name]['wins'] += nwins
+                self.results[cp2.name]['losses'] += pwins
+                self.results[cp2.name]['draws'] += draws
+                self.results[cp2.name]['score'] += nwins + 0.5 * draws
+                
+                self.status['pairs_completed'] = idx + 1
+                self.status['results'] = self.results
+                
+                # Save intermediate results
+                self._save_results()
+                
+            self.status['status'] = 'completed'
+            self.status['progress'] = 100
+            log.info(f"🏆 TOURNAMENT COMPLETE! Results saved to models/alphazero/tournament_results.json")
+            
+        except Exception as e:
+            log.error(f"Tournament {self.task_id} failed: {e}")
+            self.status['status'] = 'error'
+            self.status['error_message'] = str(e)
+            import traceback
+            traceback.print_exc()
+        finally:
+            self.status['end_time'] = datetime.now().isoformat()
+            self._save_results()
+
+    def _play_pair(self, nnet1, nnet2) -> Tuple[int, int, int]:
+        """Play games between two models using available GPUs."""
+        # Use executeArenaParallel logic but with two custom models
+        # We need to reach into executeArenaParallel's logic
+        
+        nnet1_state = {k: v.cpu() for k, v in nnet1.nnet_base.state_dict().items()}
+        nnet2_state = {k: v.cpu() for k, v in nnet2.nnet_base.state_dict().items()}
+        
+        config_dict = {
+            'num_mcts_sims': 60, # Use blitz config depth
+            'cpuct': 1.0,
+            'temp_threshold': 30,
+            'hidden_size': 256,
+        }
+        
+        nwins = 0
+        pwins = 0
+        draws = 0
+        
+        num_games = self.num_games
+        num_workers = min(num_games, os.cpu_count() - 2, NUM_GPUS * 10)
+        
+        try:
+            mp.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass
+            
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            tasks = []
+            for i in range(num_games):
+                player1_starts = (i % 2 == 0)
+                # Player 1 is nnet1, Player 2 is nnet2
+                args = (i % NUM_GPUS, nnet1_state, nnet2_state, config_dict, player1_starts)
+                tasks.append(executor.submit(execute_arena_worker, args))
+                
+            for future in as_completed(tasks):
+                try:
+                    res = future.result(timeout=600)
+                    if res == 1: pwins += 1
+                    elif res == -1: nwins += 1
+                    else: draws += 1
+                except Exception as e:
+                    log.error(f"  ❌ Tournament Worker failed: {e}")
+                    draws += 1
+                    
+        return pwins, nwins, draws
+
+    def _save_results(self):
+        """Save tournament results to JSON."""
+        res_path = self.checkpoint_dir / 'tournament_results.json'
+        with open(res_path, 'w') as f:
+            json.dump(self.status, f, indent=2)
+
+    def get_status(self) -> Dict:
+        return self.status.copy()
+
+
 class AlphaZeroTrainingTask:
     """Manages an AlphaZero training task in a background thread."""
     
@@ -1994,9 +2150,48 @@ class AlphaZeroTaskManagerV2:
     
     def __init__(self, checkpoint_dir: str = "models/alphazero"):
         self.tasks: Dict[str, AlphaZeroTrainingTask] = {}
+        self.tournaments: Dict[str, TournamentTask] = {}
         self.checkpoint_dir = checkpoint_dir
         self.lock = threading.Lock()
     
+    def start_tournament(self, num_games: int = 20) -> str:
+        """Start a round-robin tournament between all checkpoints."""
+        task_id = f"tournament_{int(time.time())}"
+        task = TournamentTask(task_id, self.checkpoint_dir, num_games)
+        
+        with self.lock:
+            self.tournaments[task_id] = task
+            
+        task.start()
+        return task_id
+        
+    def get_tournament_status(self, task_id: str) -> Optional[Dict]:
+        """Get status of a tournament."""
+        with self.lock:
+            task = self.tournaments.get(task_id)
+            if task:
+                return task.get_status()
+        return None
+        
+    def list_tournaments(self) -> Dict[str, Dict]:
+        """List all tournaments."""
+        with self.lock:
+            return {tid: task.get_status() for tid, task in self.tournaments.items()}
+
+    def rename_checkpoint(self, old_name: str, new_name: str) -> bool:
+        """Rename a checkpoint file."""
+        if not old_name.endswith('.pth.tar'): old_name += '.pth.tar'
+        if not new_name.endswith('.pth.tar'): new_name += '.pth.tar'
+        
+        old_path = Path(self.checkpoint_dir) / old_name
+        new_path = Path(self.checkpoint_dir) / new_name
+        
+        if old_path.exists():
+            old_path.rename(new_path)
+            log.info(f"✅ Renamed checkpoint {old_name} to {new_name}")
+            return True
+        return False
+
     def start_training(self, params: Dict) -> str:
         """Start a new training task."""
         task_id = f"az_{int(time.time())}"

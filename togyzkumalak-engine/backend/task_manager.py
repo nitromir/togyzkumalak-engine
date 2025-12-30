@@ -154,6 +154,22 @@ class AlphaZeroTaskManager:
         """Get list of all checkpoints from the underlying manager."""
         return self._manager.get_checkpoints()
 
+    def start_tournament(self, num_games: int = 20) -> str:
+        """Start a tournament between all checkpoints."""
+        return self._manager.start_tournament(num_games)
+        
+    def get_tournament_status(self, task_id: str) -> Optional[Dict]:
+        """Get status of a tournament."""
+        return self._manager.get_tournament_status(task_id)
+        
+    def list_tournaments(self) -> Dict[str, Dict]:
+        """List all tournaments."""
+        return self._manager.list_tournaments()
+
+    def rename_checkpoint(self, old_name: str, new_name: str) -> bool:
+        """Rename a checkpoint file."""
+        return self._manager.rename_checkpoint(old_name, new_name)
+
 
 # Global instance - backward compatible with existing code
 az_task_manager = AlphaZeroTaskManager()
