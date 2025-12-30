@@ -1351,7 +1351,7 @@ class AlphaZeroCoach:
             if r != 0:
                 return [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in trainExamples]
     
-    def executeEpisodesParallel(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+    def executeEpisodesParallel(self, num_episodes: int, callback=None) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         """Run episodes in parallel across multiple GPUs."""
         if not self.config.use_multiprocessing or self.num_parallel_games <= 1:
             return self._executeEpisodesBatch(num_episodes)
@@ -1399,6 +1399,15 @@ class AlphaZeroCoach:
                     completed += 1
                     # Update progress for UI visibility
                     self.progress = ((self.current_iteration - 1) + (completed / num_workers) * 0.9) / self.config.num_iterations * 100
+                    
+                    if callback:
+                        callback({
+                            'iteration': self.current_iteration,
+                            'total_iterations': self.config.num_iterations,
+                            'progress': self.progress,
+                            'status': f"Iteration {self.current_iteration}: Self-play ({completed}/{num_workers})",
+                        })
+
                     log.info(f"  ✅ Progress: {completed}/{num_workers} processes finished ({len(result) if result else 0} examples)")
                 except Exception as e:
                     log.error(f"  ❌ Worker failed: {e}")
@@ -1406,7 +1415,7 @@ class AlphaZeroCoach:
         log.info(f"🏁 Parallel self-play complete: {len(all_examples)} examples collected")
         return all_examples
 
-    def executeArenaParallel(self, num_games: int) -> Tuple[int, int, int]:
+    def executeArenaParallel(self, num_games: int, callback=None) -> Tuple[int, int, int]:
         """Play Arena games in parallel using multiple GPUs."""
         log.info(f"⚔️  Arena Parallel: Playing {num_games} games across {NUM_GPUS} GPUs...")
         
@@ -1451,6 +1460,15 @@ class AlphaZeroCoach:
                     completed += 1
                     # Update progress during Arena (remaining 10% of iteration)
                     self.progress = ((self.current_iteration - 1) + 0.9 + (completed / num_games) * 0.1) / self.config.num_iterations * 100
+                    
+                    if callback:
+                        callback({
+                            'iteration': self.current_iteration,
+                            'total_iterations': self.config.num_iterations,
+                            'progress': self.progress,
+                            'status': f"Iteration {self.current_iteration}: Arena ({completed}/{num_games})",
+                        })
+
                     log.info(f"  ✅ Arena Progress: {completed}/{num_games} games finished (New: {nwins}, Old: {pwins}, Draws: {draws})")
                 except Exception as e:
                     log.error(f"  ❌ Arena Worker failed: {e}")
@@ -1682,13 +1700,22 @@ class AlphaZeroCoach:
             self.current_iteration = i
             self.progress = (i - 1) / self.config.num_iterations * 100
             
+            if callback:
+                callback({
+                    'iteration': i,
+                    'total_iterations': self.config.num_iterations,
+                    'progress': self.progress,
+                    'status': f"Iteration {i}: Self-play",
+                    'elapsed_time': time.time() - start_time
+                })
+            
             log.info(f'=== Iteration {i}/{self.config.num_iterations} ===')
             
             # Self-play (parallel if enabled)
             iterationExamples = deque([], maxlen=self.config.max_queue_length)
             
             if self.config.use_multiprocessing and self.num_parallel_games > 1:
-                examples = self.executeEpisodesParallel(self.config.num_episodes)
+                examples = self.executeEpisodesParallel(self.config.num_episodes, callback=callback)
                 iterationExamples.extend(examples)
             else:
                 for ep in range(self.config.num_episodes):
@@ -1698,6 +1725,13 @@ class AlphaZeroCoach:
                     examples = self.executeEpisode()
                     iterationExamples.extend(examples)
                     log.info(f'  Self-play episode {ep+1}/{self.config.num_episodes}, examples: {len(examples)}')
+                    if callback:
+                        callback({
+                            'iteration': i,
+                            'total_iterations': self.config.num_iterations,
+                            'progress': ((i - 1) + (ep + 1) / self.config.num_episodes * 0.9) / self.config.num_iterations * 100,
+                            'status': f"Iteration {i}: Self-play ({ep+1}/{self.config.num_episodes})",
+                        })
             
             self.trainExamplesHistory.append(iterationExamples)
             
@@ -1716,6 +1750,14 @@ class AlphaZeroCoach:
             
             # Train
             log.info(f'  Training on {len(trainExamples)} examples...')
+            if callback:
+                callback({
+                    'iteration': i,
+                    'total_iterations': self.config.num_iterations,
+                    'progress': ((i - 1) + 0.9) / self.config.num_iterations * 100,
+                    'status': f"Iteration {i}: Training",
+                })
+            
             train_metrics = self.nnet.train(trainExamples)
             
             # CRITICAL: Clean up GPU after training to prevent Arena stalls
@@ -1724,8 +1766,16 @@ class AlphaZeroCoach:
             
             # Arena evaluation
             log.info('  Arena: comparing new vs old model...')
+            if callback:
+                callback({
+                    'iteration': i,
+                    'total_iterations': self.config.num_iterations,
+                    'progress': ((i - 1) + 0.95) / self.config.num_iterations * 100,
+                    'status': f"Iteration {i}: Arena Start",
+                })
+                
             if self.config.use_multiprocessing and self.num_parallel_games > 1:
-                pwins, nwins, draws = self.executeArenaParallel(self.config.arena_compare)
+                pwins, nwins, draws = self.executeArenaParallel(self.config.arena_compare, callback=callback)
             else:
                 pmcts = MCTS(self.game, self.pnet, self.config)
                 nmcts = MCTS(self.game, self.nnet, self.config)

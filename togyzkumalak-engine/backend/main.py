@@ -555,7 +555,7 @@ async def start_alphazero_training(request: AlphaZeroTrainingRequest):
 @app.get("/api/training/alphazero/sessions")
 async def list_alphazero_sessions():
     """List all AlphaZero sessions."""
-    return {"sessions": az_task_manager.tasks}
+    return {"sessions": az_task_manager.list_tasks()}
 
 
 @app.get("/api/training/alphazero/sessions/{task_id}")
