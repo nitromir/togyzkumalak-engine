@@ -496,14 +496,14 @@ class AIEngine:
                 player = 1 if board.current_player == "white" else -1
                 canonical = game.getCanonicalForm(az_board, player)
                 
-            # Ensure MCTS exists for this level (or use level 5 sims for better analysis)
-            self._alphazero_mcts_move(board, board.get_legal_moves(), level)
-            mcts = self.mcts_cache[level]
-            
-            print(f"[AI] MCTS Probability calculation for Level {level}")
-            
-            # Get probabilities from MCTS (temp=1 for full distribution)
-            action_probs = mcts.getActionProb(canonical, temp=1.0)
+                # Ensure MCTS exists for this level (or use level 5 sims for better analysis)
+                self._alphazero_mcts_move(board, board.get_legal_moves(), level)
+                mcts = self.mcts_cache[level]
+                
+                print(f"[AI] MCTS Probability calculation for Level {level}")
+                
+                # Get probabilities from MCTS (temp=1 for full distribution)
+                action_probs = mcts.getActionProb(canonical, temp=1.0)
                 
                 return {i: float(action_probs[i]) for i in range(9)}
             except Exception as e:
