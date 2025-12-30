@@ -141,8 +141,13 @@ def get_training_status(base_url: str) -> Dict:
             pass
         
         # 4. Logs
-        logs_resp = requests.get(f"{base_url}/api/training/alphazero/logs?lines=20", timeout=2)
+        logs_resp = requests.get(f"{base_url}/api/training/alphazero/logs?lines=50", timeout=2)
         logs_data = logs_resp.json()
+        
+        # Prefer the detailed training log if available
+        display_logs = logs_data.get("training", [])
+        if not display_logs:
+            display_logs = logs_data.get("output", [])
         
         # Find active task
         active_task = None
@@ -157,7 +162,7 @@ def get_training_status(base_url: str) -> Dict:
             "metrics": metrics_data.get("metrics", []),
             "gpu_util": gpu_util.get("gpus", []),
             "cpu_util": cpu_util,
-            "logs": logs_data.get("output", [])[-15:],
+            "logs": display_logs[-30:], # Get last 30 lines
             "connected": True
         }
     except Exception as e:
@@ -260,10 +265,10 @@ def generate_dashboard(status: Dict, start_time: datetime) -> Layout:
     layout["left"].update(Panel("\n".join(left_content), title="📊 Training Status", border_style="green"))
 
     # === RIGHT PANE: GPU & Logs ===
-    # Split right into GPU (top) and Logs (bottom)
+    # Split right into GPU (top) and Logs (bottom) - Logs get more space
     layout["right"].split_column(
-        Layout(name="gpu"),
-        Layout(name="logs")
+        Layout(name="gpu", ratio=1),
+        Layout(name="logs", ratio=3)
     )
 
     # GPU Utilization
@@ -301,20 +306,36 @@ def generate_dashboard(status: Dict, start_time: datetime) -> Layout:
 
     layout["gpu"].update(Panel(gpu_panel_content, title="🔥 GPU Real-Time Load", border_style="magenta"))
 
-    # Logs
+    # Logs - Styled like the user's screenshot
     log_text = Text()
     if logs:
         for line in logs:
-            if "ERROR" in line or "fail" in line.lower():
+            # Parse line: 2025-12-30 07:54:02,622 - INFO - Message
+            if " - INFO - " in line:
+                parts = line.split(" - INFO - ", 1)
+                log_text.append(parts[0], style="dim")
+                log_text.append(" - INFO - ", style="green")
+                msg = parts[1]
+                
+                # Highlight important keywords
+                if "Epoch" in msg:
+                    log_text.append(msg + "\n", style="bold yellow")
+                elif "Progress" in msg:
+                    log_text.append(msg + "\n", style="cyan")
+                elif "Arena" in msg:
+                    log_text.append(msg + "\n", style="bold magenta")
+                elif "Checkpoint" in msg:
+                    log_text.append(msg + "\n", style="bold green")
+                else:
+                    log_text.append(msg + "\n")
+            elif "ERROR" in line or "fail" in line.lower():
                 log_text.append(line + "\n", style="bold red")
-            elif "iter" in line.lower() or "save" in line.lower():
-                log_text.append(line + "\n", style="bold green")
             else:
                 log_text.append(line + "\n", style="dim")
     else:
         log_text.append("Waiting for logs...", style="dim")
 
-    layout["logs"].update(Panel(log_text, title="📜 Training Output (Last 15 lines)", border_style="yellow"))
+    layout["logs"].update(Panel(log_text, title="📜 Training Log (Live Feed)", border_style="yellow"))
 
     return layout
 
