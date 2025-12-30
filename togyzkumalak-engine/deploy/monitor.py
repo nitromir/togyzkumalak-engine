@@ -217,50 +217,59 @@ def generate_dashboard(status: Dict, start_time: datetime) -> Layout:
     # === LEFT PANE: Progress & Metrics ===
     left_content = []
     
+    # 1. System Load (Always visible)
+    cpu = status.get("cpu_util", {})
+    if cpu.get("status") == "ok":
+        cpu_p = cpu.get("cpu_percent", 0)
+        mem_p = cpu.get("memory_percent", 0)
+        cores = cpu.get("cpu_count", "N/A")
+        
+        left_content.append(f"[bold cyan]System Load ({cores} cores):[/bold cyan]")
+        left_content.append(f"  CPU: {create_progress_bar(int(cpu_p), 100, 25)}")
+        left_content.append(f"  RAM: {create_progress_bar(int(mem_p), 100, 25)}")
+        left_content.append("")
+
+    # 2. Training Progress
     if task:
         curr = task.get("current_iteration", 0)
         total = task.get("total_iterations", 100)
         tid = task.get("id", "N/A")
+        status_text = task.get("status_text", "Running")
+        
         left_content.append(f"[bold yellow]Task ID:[/bold yellow] {tid}")
-        left_content.append(f"[bold]Iteration:[/bold] {curr} / {total}")
+        left_content.append(f"[bold]Iteration:[/bold] {curr} / {total} [dim]({status_text})[/dim]")
         left_content.append(create_progress_bar(curr, total, 30))
+    else:
+        # If no active task, show last info from metrics
+        last_iter = metrics[-1].get("iteration", "N/A") if metrics else "N/A"
+        left_content.append("[bold red]⚠ NO ACTIVE TRAINING TASK[/bold red]")
+        left_content.append(f"[dim]Last completed iteration: {last_iter}[/dim]")
+        left_content.append("[dim]Start training in Jupyter to see progress.[/dim]")
+    
+    left_content.append("")
+    
+    # 3. Metrics
+    if metrics:
+        last = metrics[-1]
+        p_loss = last.get("policy_loss", 0)
+        v_loss = last.get("value_loss", 0)
+        win_r = last.get("win_rate", 0) * 100
+        
+        left_content.append(f"[bold cyan]Metrics (Last Iter):[/bold cyan]")
+        left_content.append(f"  • Policy Loss: [green]{p_loss:.4f}[/green]")
+        left_content.append(f"  • Value Loss:  [green]{v_loss:.4f}[/green]")
+        left_content.append(f"  • Win Rate:    [bold yellow]{win_r:.1f}%[/bold yellow]")
         left_content.append("")
         
-        # System Load
-        cpu = status.get("cpu_util", {})
-        if cpu.get("status") == "ok":
-            cpu_p = cpu.get("cpu_percent", 0)
-            mem_p = cpu.get("memory_percent", 0)
-            cores = cpu.get("cpu_count", "N/A")
-            
-            left_content.append(f"[bold cyan]System Load ({cores} cores):[/bold cyan]")
-            left_content.append(f"  CPU: {create_progress_bar(int(cpu_p), 100, 25)}")
-            left_content.append(f"  RAM: {create_progress_bar(int(mem_p), 100, 25)}")
-            left_content.append("")
-        
-        # Metrics
-        if metrics:
-            last = metrics[-1]
-            p_loss = last.get("policy_loss", 0)
-            v_loss = last.get("value_loss", 0)
-            win_r = last.get("win_rate", 0) * 100
-            
-            left_content.append(f"[bold cyan]Metrics (Last Iter):[/bold cyan]")
-            left_content.append(f"  • Policy Loss: [green]{p_loss:.4f}[/green]")
-            left_content.append(f"  • Value Loss:  [green]{v_loss:.4f}[/green]")
-            left_content.append(f"  • Win Rate:    [bold yellow]{win_r:.1f}%[/bold yellow]")
-            left_content.append("")
-            
-            # Mini Graph
-            if len(metrics) > 2:
-                left_content.append("[bold cyan]Policy Loss Trend:[/bold cyan]")
-                p_values = [m.get("policy_loss", 0) for m in metrics]
-                left_content.append(create_ascii_graph(p_values, width=30))
-        else:
-            left_content.append("[dim]Waiting for first iteration metrics...[/dim]")
+        # Mini Graph
+        if len(metrics) > 2:
+            left_content.append("[bold cyan]Policy Loss Trend:[/bold cyan]")
+            p_values = [m.get("policy_loss", 0) for m in metrics]
+            left_content.append(create_ascii_graph(p_values, width=30))
     else:
-        left_content.append("[bold red]⚠ NO ACTIVE TRAINING TASK[/bold red]")
-        left_content.append("Check the web UI to start training.")
+        left_content.append("[dim]Waiting for first iteration metrics...[/dim]")
+
+    layout["left"].update(Panel("\n".join(left_content), title="📊 Training Status", border_style="green"))
 
     layout["left"].update(Panel("\n".join(left_content), title="📊 Training Status", border_style="green"))
 
