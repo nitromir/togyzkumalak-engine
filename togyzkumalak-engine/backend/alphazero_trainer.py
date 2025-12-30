@@ -691,17 +691,30 @@ class NNetWrapper:
         log.info(f'Checkpoint saved: {filepath}')
     
     def load_checkpoint(self, folder: str, filename: str):
-        """Load model checkpoint."""
+        """Load model checkpoint with robustness to architecture changes."""
         filepath = os.path.join(folder, filename)
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"No checkpoint at {filepath}")
         
         checkpoint = torch.load(filepath, map_location=self.device)
+        state_dict = checkpoint['state_dict']
+        
+        # Remove 'module.' prefix if it exists
+        clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+        
+        # Filter weights to match current architecture
+        model_state = self.nnet_base.state_dict()
+        filtered_sd = {}
+        for k, v in clean_state_dict.items():
+            if k in model_state and v.shape == model_state[k].shape:
+                filtered_sd[k] = v
+            else:
+                log.warning(f"Skipping key {k} from checkpoint due to mismatch or missing")
         
         # Always load into base network
-        self.nnet_base.load_state_dict(checkpoint['state_dict'])
+        self.nnet_base.load_state_dict(filtered_sd, strict=False)
         
-        log.info(f'Checkpoint loaded: {filepath}')
+        log.info(f'Checkpoint loaded: {filepath} ({len(filtered_sd)} layers matched)')
         return checkpoint.get('metrics', {})
 
 
@@ -1490,8 +1503,10 @@ class AlphaZeroCoach:
                     if metrics:
                         log.info(f"   Metrics: {metrics}")
                     return True
-                except Exception as e:
-                    log.warning(f"⚠️ [Resume] Failed to load {checkpoint_path}: {e}")
+            except Exception as e:
+                log.error(f"❌ [Resume] CRITICAL FAILURE: Failed to load {checkpoint_path}: {e}")
+                # Re-raise exception to prevent starting from scratch
+                raise RuntimeError(f"Could not load specified checkpoint {checkpoint_path}. Aborting to prevent progress loss.")
                     continue
         
         log.info("ℹ️ [Resume] No existing models found. Will start fresh (or bootstrap).")
