@@ -120,10 +120,18 @@ def format_time(seconds: float) -> str:
 def get_training_status(base_url: str) -> Dict:
     """Fetch all necessary status info from API."""
     try:
-        # 1. Sessions status
+        # 1. Sessions status (Training)
         sessions_resp = requests.get(f"{base_url}/api/training/alphazero/sessions", timeout=2)
         sessions = sessions_resp.json().get("sessions", {})
         
+        # 1b. Tournament status
+        tournaments = {}
+        try:
+            tour_resp = requests.get(f"{base_url}/api/training/alphazero/tournament/sessions", timeout=2)
+            tournaments = tour_resp.json().get("sessions", {})
+        except:
+            pass
+            
         # 2. Metrics (Loss, Win Rate)
         metrics_resp = requests.get(f"{base_url}/api/training/alphazero/metrics", timeout=2)
         metrics_data = metrics_resp.json()
@@ -151,11 +159,22 @@ def get_training_status(base_url: str) -> Dict:
         
         # Find active task
         active_task = None
+        # Check training sessions first
         for task_id, task in sessions.items():
             if isinstance(task, dict) and task.get("status") in ["running", "pending"]:
                 active_task = task
                 active_task["id"] = task_id
+                active_task["type"] = "Training"
                 break
+        
+        # If no training, check tournaments
+        if not active_task:
+            for task_id, task in tournaments.items():
+                if isinstance(task, dict) and task.get("status") in ["running", "pending"]:
+                    active_task = task
+                    active_task["id"] = task_id
+                    active_task["type"] = "Tournament"
+                    break
         
         return {
             "active_task": active_task,
@@ -189,7 +208,7 @@ def generate_dashboard(status: Dict, start_time: datetime) -> Layout:
     # Header
     layout["header"].update(
         Panel(
-            Text("🚀 Togyzkumalak AlphaZero - 16x GPU Super-Training Monitor", justify="center", style="bold cyan"),
+            Text("🚀 Togyzkumalak AlphaZero - 4x RTX 4080 Super-Training Monitor", justify="center", style="bold cyan"),
             box=box.ROUNDED, border_style="cyan"
         )
     )
@@ -208,7 +227,7 @@ def generate_dashboard(status: Dict, start_time: datetime) -> Layout:
             Panel(f"[red]❌ Connection Error:[/red] {status.get('error')}", title="Error", border_style="red")
         )
         return layout
-
+    
     task = status.get("active_task")
     metrics = status.get("metrics", [])
     gpu_list = status.get("gpu_util", [])
@@ -229,49 +248,63 @@ def generate_dashboard(status: Dict, start_time: datetime) -> Layout:
         left_content.append(f"  RAM: {create_progress_bar(int(mem_p), 100, 25)}")
         left_content.append("")
 
-    # 2. Training Progress
+    # 2. Progress
     if task:
-        curr = task.get("current_iteration", 0)
-        total = task.get("total_iterations", 100)
+        task_type = task.get("type", "Task")
         tid = task.get("id", "N/A")
-        status_text = task.get("status_text", "Running")
+        status_text = task.get("status", "Running")
         
-        left_content.append(f"[bold yellow]Task ID:[/bold yellow] {tid}")
-        left_content.append(f"[bold]Iteration:[/bold] {curr} / {total} [dim]({status_text})[/dim]")
-        left_content.append(create_progress_bar(curr, total, 30))
+        left_content.append(f"[bold yellow]{task_type} ID:[/bold yellow] {tid}")
+        
+        if task_type == "Training":
+            curr = task.get("current_iteration", 0)
+            total = task.get("total_iterations", 100)
+            left_content.append(f"[bold]Iteration:[/bold] {curr} / {total} [dim]({status_text})[/dim]")
+            left_content.append(create_progress_bar(curr, total, 30))
+        else:
+            # Tournament
+            curr = task.get("pairs_completed", 0)
+            total = task.get("total_pairs", 0)
+            pair = task.get("current_pair", "N/A")
+            left_content.append(f"[bold]Tournament Pairs:[/bold] {curr} / {total}")
+            left_content.append(f"[bold]Current Match:[/bold] [magenta]{pair}[/magenta]")
+            left_content.append(create_progress_bar(curr, total, 30))
     else:
-        # If no active task, show last info from metrics
         last_iter = metrics[-1].get("iteration", "N/A") if metrics else "N/A"
-        left_content.append("[bold red]⚠ NO ACTIVE TRAINING TASK[/bold red]")
+        left_content.append("[bold red]⚠ NO ACTIVE TASK[/bold red]")
         left_content.append(f"[dim]Last completed iteration: {last_iter}[/dim]")
-        left_content.append("[dim]Start training in Jupyter to see progress.[/dim]")
     
     left_content.append("")
     
-    # 3. Metrics
-    if metrics:
+    # 3. Metrics (show training metrics if available, or tournament leaderboard)
+    if task and task.get("type") == "Tournament":
+        results = task.get("results", {})
+        if results:
+            left_content.append("[bold cyan]🏆 Tournament Leaderboard:[/bold cyan]")
+            # Sort by score
+            sorted_results = sorted(results.items(), key=lambda x: x[1]['score'], reverse=True)
+            for name, res in sorted_results[:5]: # Show top 5
+                left_content.append(f" • [bold green]{name[:20]}[/bold green]: {res['score']} pts")
+    elif metrics:
         last = metrics[-1]
         p_loss = last.get("policy_loss", 0)
         v_loss = last.get("value_loss", 0)
         win_r = last.get("win_rate", 0) * 100
         
-        left_content.append(f"[bold cyan]Metrics (Last Iter):[/bold cyan]")
+        left_content.append(f"[bold cyan]Latest Training Metrics:[/bold cyan]")
         left_content.append(f"  • Policy Loss: [green]{p_loss:.4f}[/green]")
         left_content.append(f"  • Value Loss:  [green]{v_loss:.4f}[/green]")
         left_content.append(f"  • Win Rate:    [bold yellow]{win_r:.1f}%[/bold yellow]")
-        left_content.append("")
         
-        # Mini Graph
         if len(metrics) > 2:
+            left_content.append("")
             left_content.append("[bold cyan]Policy Loss Trend:[/bold cyan]")
             p_values = [m.get("policy_loss", 0) for m in metrics]
             left_content.append(create_ascii_graph(p_values, width=30))
     else:
-        left_content.append("[dim]Waiting for first iteration metrics...[/dim]")
+        left_content.append("[dim]No metrics data available...[/dim]")
 
-    layout["left"].update(Panel("\n".join(left_content), title="📊 Training Status", border_style="green"))
-
-    layout["left"].update(Panel("\n".join(left_content), title="📊 Training Status", border_style="green"))
+    layout["left"].update(Panel("\n".join(left_content), title="📊 Status & Leaderboard", border_style="green"))
 
     # === RIGHT PANE: GPU & Logs ===
     # Split right into GPU (top) and Logs (bottom) - Logs get more space
