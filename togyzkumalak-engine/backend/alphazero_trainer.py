@@ -1459,8 +1459,6 @@ class AlphaZeroCoach:
         return pwins, nwins, draws
 
     def _executeEpisodesBatch(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-
-    def _executeEpisodesBatch(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         """Batch execution fallback (single process)."""
         all_examples = []
         batch_size = min(16, num_episodes)
