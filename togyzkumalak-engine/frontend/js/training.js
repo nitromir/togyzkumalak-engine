@@ -804,8 +804,11 @@ class TrainingController {
         
         container.innerHTML = checkpoints.slice(0, 10).map((cp, i) => `
             <div class="checkpoint-item ${i === 0 ? 'best' : ''} ${cp.accepted ? 'accepted' : 'rejected'}">
-                <span class="cp-rank">#${i + 1}</span>
-                <span class="cp-iter">iter ${cp.iteration}</span>
+                <div class="cp-main-info">
+                    <span class="cp-rank">#${i + 1}</span>
+                    <span class="cp-iter">iter ${cp.iteration}</span>
+                    <span class="cp-time">${cp.timestamp ? new Date(cp.timestamp).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'}) : ''}</span>
+                </div>
                 <div class="cp-metrics">
                     <span class="cp-loss" title="Policy Loss">📉 ${cp.policy_loss?.toFixed(3) || '?'}</span>
                     <span class="cp-value" title="Value Loss">📊 ${cp.value_loss?.toFixed(3) || '?'}</span>

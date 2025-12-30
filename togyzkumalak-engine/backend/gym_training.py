@@ -486,12 +486,13 @@ class GymTrainingManager:
                     "name": display_name,
                     "path": str(model_file),
                     "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                    "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "created": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "created_raw": stat.st_mtime,
                     "type": "alphazero",
                     "architecture": "AlphaZeroNetwork"
                 })
         
-        return sorted(models, key=lambda x: x["created"], reverse=True)
+        return sorted(models, key=lambda x: x.get("created_raw", 0), reverse=True)
 
 
 # Global training manager instance

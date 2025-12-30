@@ -2569,7 +2569,7 @@ body::after {
 .checkpoints-list { display: flex; flex-direction: column; gap: 6px; max-height: 400px; overflow-y: auto; }
 .checkpoint-item {
     display: grid;
-    grid-template-columns: 40px 80px 1fr auto;
+    grid-template-columns: 40px 100px 1fr auto;
     align-items: center;
     gap: 12px;
     padding: 10px 14px;
@@ -2578,6 +2578,18 @@ body::after {
     font-size: 12px;
     border: 1px solid transparent;
     transition: all 0.2s ease;
+}
+
+.cp-main-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cp-time {
+    font-size: 10px;
+    color: #94a3b8;
+    font-family: monospace;
 }
 .checkpoint-item:hover {
     background: rgba(15, 23, 42, 0.6);

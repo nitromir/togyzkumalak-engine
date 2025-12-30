@@ -595,13 +595,15 @@ async def get_alphazero_metrics():
             checkpoint_path = os.path.join(alphazero_dir, checkpoint_file)
             
             if os.path.exists(checkpoint_path):
+                stat = os.stat(checkpoint_path)
                 checkpoints.append({
                     "iteration": iter_num,
                     "filename": checkpoint_file,
                     "policy_loss": m.get("policy_loss", 0),
                     "value_loss": m.get("value_loss", 0),
                     "win_rate": m.get("win_rate", 0),
-                    "accepted": m.get("accepted", False)
+                    "accepted": m.get("accepted", False),
+                    "timestamp": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()
                 })
         
         # Sort by policy_loss (best first)
