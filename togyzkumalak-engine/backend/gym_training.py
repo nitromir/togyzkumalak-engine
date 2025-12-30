@@ -321,12 +321,17 @@ class GymTrainingManager:
             
             from .ai_engine import ai_engine
             
-            # Check if this is an AlphaZero model (has 'state_dict' key and policy/value heads)
-            is_alphazero = (
-                isinstance(checkpoint, dict) and 
-                'state_dict' in checkpoint and
-                any('policy_fc' in k or 'value_fc' in k for k in checkpoint.get('state_dict', {}).keys())
-            )
+            # Check if this is an AlphaZero model
+            # 1. Has 'state_dict' key
+            # 2. Or is a dict with policy/value keywords
+            sd_keys = []
+            if isinstance(checkpoint, dict):
+                if 'state_dict' in checkpoint:
+                    sd_keys = checkpoint['state_dict'].keys()
+                else:
+                    sd_keys = checkpoint.keys()
+            
+            is_alphazero = any('policy' in k.lower() or 'value' in k.lower() for k in sd_keys)
             
             if is_alphazero:
                 # Load AlphaZero model
