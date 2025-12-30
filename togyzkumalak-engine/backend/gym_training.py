@@ -408,14 +408,18 @@ class GymTrainingManager:
         for level in [3, 4, 5]:
             ai_engine.models[level] = wrapper
             
-        ai_engine.current_model_name = Path(model_path).stem
+        ai_engine.current_model_name = Path(model_path).name
         ai_engine.alphazero_model = alphazero_net
         ai_engine.mcts_cache = {} # Clear cache
         
         # CRITICAL: Force MCTS usage when AlphaZero model is loaded
         ai_engine.use_mcts = True
         
-        print(f"[OK] AlphaZero model {ai_engine.current_model_name} loaded and MCTS activated")
+        # Get file date for the log
+        from datetime import datetime
+        file_time = datetime.fromtimestamp(os.path.getmtime(model_path)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        print(f"[OK] AlphaZero model {ai_engine.current_model_name} (created: {file_time}) loaded and MCTS activated")
         return True
     
     def _load_gym_model(self, model_path: str, checkpoint, device, ai_engine) -> bool:
