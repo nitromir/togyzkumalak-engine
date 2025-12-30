@@ -408,14 +408,14 @@ class AlphaZeroNetwork(nn.Module):
         self.bn1 = nn.BatchNorm1d(hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.bn2 = nn.BatchNorm1d(hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size)
-        self.bn3 = nn.BatchNorm1d(hidden_size)
+        self.fc3 = nn.Linear(hidden_size, 128)
+        self.bn3 = nn.BatchNorm1d(128)
         
         # Policy head
-        self.policy_fc = nn.Linear(hidden_size, action_size)
+        self.policy_fc = nn.Linear(128, action_size)
         
         # Value head
-        self.value_fc1 = nn.Linear(hidden_size, 64)
+        self.value_fc1 = nn.Linear(128, 64)
         self.value_fc2 = nn.Linear(64, 1)
         
         self.dropout = nn.Dropout(0.3)
