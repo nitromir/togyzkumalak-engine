@@ -30,6 +30,7 @@ import threading
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import copy
+import gc
 
 # Configure logging with file handler for UI visibility
 logging.basicConfig(level=logging.INFO)
@@ -897,8 +898,6 @@ def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         wrapper = DummyWrapper(nnet_model, device, game)
         
         # Use ParallelSelfPlay for maximum GPU utilization within the worker
-        from backend.alphazero_trainer import ParallelSelfPlay
-        # Increased games per worker simultaneously to 16 to better utilize RTX 4090
         psp = ParallelSelfPlay(game, wrapper, config, num_games=num_episodes, batch_size=min(16, num_episodes))
         return psp.run_all_games()
         
@@ -907,6 +906,100 @@ def execute_batch_worker(args) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         print(f"Worker on GPU {actual_gpu_id} failed: {str(e)}")
         traceback.print_exc()
         return []
+
+def execute_arena_worker(args) -> int:
+    """Worker function to play one arena game on a specific GPU."""
+    gpu_id, nnet_state, pnet_state, config_dict, player1_starts = args
+    
+    num_gpus_available = torch.cuda.device_count()
+    actual_gpu_id = gpu_id % max(1, num_gpus_available)
+    
+    device = torch.device(f"cuda:{actual_gpu_id}" if torch.cuda.is_available() else "cpu")
+    game = TogyzkumalakGame()
+    config = AlphaZeroConfig(**config_dict)
+    
+    try:
+        # Create networks for both players
+        def create_nnet(state):
+            model = AlphaZeroNetwork(
+                input_size=128,
+                hidden_size=config.hidden_size,
+                action_size=game.getActionSize()
+            ).to(device)
+            clean_state = {k.replace("module.", ""): v for k, v in state.items()}
+            model.load_state_dict(clean_state)
+            model.eval()
+            return model
+            
+        nnet_model = create_nnet(nnet_state)
+        pnet_model = create_nnet(pnet_state)
+        
+        # Create MCTS for both
+        class DummyWrapper:
+            def __init__(self, model, dev, g):
+                self.nnet_base = model
+                self.device = dev
+                self.game = g
+            def predict(self, board):
+                obs = self.game.boardToObservation(board)
+                obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+                with torch.no_grad():
+                    pi, v = self.nnet_base(obs_tensor)
+                    pi = torch.exp(pi)
+                return pi.squeeze(0).cpu().numpy(), float(v.squeeze(0).cpu().numpy())
+
+        nmcts = MCTS(game, DummyWrapper(nnet_model, device, game), config)
+        pmcts = MCTS(game, DummyWrapper(pnet_model, device, game), config)
+        
+        # Arena logic
+        if player1_starts:
+            # player1 is pnet, player2 is nnet
+            players = [
+                lambda x: np.argmax(nmcts.getActionProb(x, temp=0)), # Black
+                None,
+                lambda x: np.argmax(pmcts.getActionProb(x, temp=0))  # White
+            ]
+        else:
+            # player1 is nnet, player2 is pnet
+            players = [
+                lambda x: np.argmax(pmcts.getActionProb(x, temp=0)), # Black
+                None,
+                lambda x: np.argmax(nmcts.getActionProb(x, temp=0))  # White
+            ]
+            
+        curPlayer = 1
+        board = game.getInitBoard()
+        move_count = 0
+        max_moves = 500
+        
+        while game.getGameEnded(board, curPlayer) == 0:
+            move_count += 1
+            if move_count > max_moves: break
+            
+            canonical = game.getCanonicalForm(board, curPlayer)
+            action = players[curPlayer + 1](canonical)
+            board, curPlayer = game.getNextState(board, curPlayer, action)
+            
+        if move_count > max_moves:
+            return 0
+            
+        # Result is from perspective of curPlayer
+        r = game.getGameEnded(board, curPlayer)
+        # Convert to 1 if nnet won, -1 if pnet won
+        if player1_starts:
+            # pnet was White (1), nnet was Black (-1)
+            # if r=1 and curPlayer=1 -> pnet won -> return -1
+            # if r=1 and curPlayer=-1 -> nnet won -> return 1
+            return 1 if (r * curPlayer == -1) else (-1 if r * curPlayer == 1 else 0)
+        else:
+            # nnet was White (1), pnet was Black (-1)
+            # if r=1 and curPlayer=1 -> nnet won -> return 1
+            # if r=1 and curPlayer=-1 -> pnet won -> return -1
+            return 1 if (r * curPlayer == 1) else (-1 if r * curPlayer == -1 else 0)
+            
+    except Exception as e:
+        print(f"Arena Worker on GPU {actual_gpu_id} failed: {str(e)}")
+        return 0
 
 # =============================================================================
 # Fast Self-Play (NO ProcessPoolExecutor - single process, batch inference)
@@ -1275,12 +1368,7 @@ class AlphaZeroCoach:
         }
         
         # Determine how many episodes each worker should handle
-        if self.config.num_workers > 0:
-            num_workers = self.config.num_workers
-        else:
-            # 10 workers per GPU is good for 48-core setups
-            num_workers = min(os.cpu_count() - 2, NUM_GPUS * 10)
-            
+        num_workers = self.num_workers
         num_workers = max(1, min(num_workers, num_episodes))
         episodes_per_worker = math.ceil(num_episodes / num_workers)
         
@@ -1307,13 +1395,70 @@ class AlphaZeroCoach:
                     result = future.result(timeout=1800) # 30 min timeout
                     if result:
                         all_examples.extend(result)
-                        completed += 1
-                        log.info(f"  ✅ Progress: {completed}/{num_workers} processes finished ({len(result)} examples)")
+                    
+                    completed += 1
+                    # Update progress for UI visibility
+                    self.progress = ((self.current_iteration - 1) + (completed / num_workers) * 0.9) / self.config.num_iterations * 100
+                    log.info(f"  ✅ Progress: {completed}/{num_workers} processes finished ({len(result) if result else 0} examples)")
                 except Exception as e:
                     log.error(f"  ❌ Worker failed: {e}")
         
         log.info(f"🏁 Parallel self-play complete: {len(all_examples)} examples collected")
         return all_examples
+
+    def executeArenaParallel(self, num_games: int) -> Tuple[int, int, int]:
+        """Play Arena games in parallel using multiple GPUs."""
+        log.info(f"⚔️  Arena Parallel: Playing {num_games} games across {NUM_GPUS} GPUs...")
+        
+        # Prepare states for workers
+        nnet_state = {k: v.cpu() for k, v in self.nnet.nnet_base.state_dict().items()}
+        pnet_state = {k: v.cpu() for k, v in self.pnet.nnet_base.state_dict().items()}
+        
+        config_dict = {
+            'num_mcts_sims': self.config.num_mcts_sims,
+            'cpuct': self.config.cpuct,
+            'temp_threshold': self.config.temp_threshold,
+            'hidden_size': self.config.hidden_size,
+        }
+        
+        num_workers = min(num_games, self.num_workers)
+        
+        try:
+            mp.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass
+            
+        nwins = 0
+        pwins = 0
+        draws = 0
+        
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            tasks = []
+            for i in range(num_games):
+                # Half start as White (1), half as Black (-1)
+                player1_starts = (i % 2 == 0)
+                args = (i % NUM_GPUS, nnet_state, pnet_state, config_dict, player1_starts)
+                tasks.append(executor.submit(execute_arena_worker, args))
+                
+            completed = 0
+            for future in as_completed(tasks):
+                try:
+                    res = future.result(timeout=600) # 10 min per game
+                    if res == 1: nwins += 1
+                    elif res == -1: pwins += 1
+                    else: draws += 1
+                    
+                    completed += 1
+                    # Update progress during Arena (remaining 10% of iteration)
+                    self.progress = ((self.current_iteration - 1) + 0.9 + (completed / num_games) * 0.1) / self.config.num_iterations * 100
+                    log.info(f"  ✅ Arena Progress: {completed}/{num_games} games finished (New: {nwins}, Old: {pwins}, Draws: {draws})")
+                except Exception as e:
+                    log.error(f"  ❌ Arena Worker failed: {e}")
+                    draws += 1
+                    
+        return pwins, nwins, draws
+
+    def _executeEpisodesBatch(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
 
     def _executeEpisodesBatch(self, num_episodes: int) -> List[Tuple[np.ndarray, np.ndarray, float]]:
         """Batch execution fallback (single process)."""
@@ -1574,16 +1719,24 @@ class AlphaZeroCoach:
             # Train
             log.info(f'  Training on {len(trainExamples)} examples...')
             train_metrics = self.nnet.train(trainExamples)
-            nmcts = MCTS(self.game, self.nnet, self.config)
+            
+            # CRITICAL: Clean up GPU after training to prevent Arena stalls
+            torch.cuda.empty_cache()
+            gc.collect()
             
             # Arena evaluation
             log.info('  Arena: comparing new vs old model...')
-            arena = Arena(
-                lambda x: np.argmax(pmcts.getActionProb(x, temp=0)),
-                lambda x: np.argmax(nmcts.getActionProb(x, temp=0)),
-                self.game
-            )
-            pwins, nwins, draws = arena.playGames(self.config.arena_compare)
+            if self.config.use_multiprocessing and self.num_parallel_games > 1:
+                pwins, nwins, draws = self.executeArenaParallel(self.config.arena_compare)
+            else:
+                pmcts = MCTS(self.game, self.pnet, self.config)
+                nmcts = MCTS(self.game, self.nnet, self.config)
+                arena = Arena(
+                    lambda x: np.argmax(pmcts.getActionProb(x, temp=0)),
+                    lambda x: np.argmax(nmcts.getActionProb(x, temp=0)),
+                    self.game
+                )
+                pwins, nwins, draws = arena.playGames(self.config.arena_compare)
             
             log.info(f'  Arena results - New wins: {nwins}, Old wins: {pwins}, Draws: {draws}')
             
@@ -1812,6 +1965,7 @@ class AlphaZeroTaskManagerV2:
             use_bootstrap=params.get('use_bootstrap', True),
             use_multiprocessing=params.get('use_multiprocessing', True),
             num_parallel_games=params.get('num_parallel_games', 0),
+            num_workers=params.get('num_workers', 0),
             save_every_n_iters=params.get('save_every_n_iters', 5),
             resume_from_checkpoint=params.get('resume_from_checkpoint', True),
             initial_checkpoint=params.get('initial_checkpoint', None)

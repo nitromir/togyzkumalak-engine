@@ -11,6 +11,8 @@ import os
 import subprocess
 import sys
 import signal
+import psutil
+import psutil
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
@@ -534,7 +536,10 @@ class AlphaZeroTrainingRequest(BaseModel):
     use_bootstrap: bool = True
     use_multiprocessing: bool = True
     num_parallel_games: int = 0  # 0 = auto
+    num_workers: int = 0         # 0 = auto
     save_every_n_iters: int = 5
+    resume_from_checkpoint: bool = True
+    initial_checkpoint: Optional[str] = None
 
 
 @app.post("/api/training/alphazero/start")
@@ -809,6 +814,24 @@ async def get_gpu_utilization():
         return {
             "status": "ok",
             "gpus": gpus,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+@app.get("/api/system/cpu-utilization")
+async def get_cpu_utilization():
+    """Get real-time CPU utilization and system memory."""
+    try:
+        return {
+            "status": "ok",
+            "cpu_percent": psutil.cpu_percent(interval=None),
+            "cpu_count": psutil.cpu_count(),
+            "memory_percent": psutil.virtual_memory().percent,
             "timestamp": datetime.datetime.now().isoformat()
         }
     except Exception as e:

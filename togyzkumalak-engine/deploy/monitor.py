@@ -132,6 +132,14 @@ def get_training_status(base_url: str) -> Dict:
         gpu_util_resp = requests.get(f"{base_url}/api/system/gpu-utilization", timeout=2)
         gpu_util = gpu_util_resp.json()
         
+        # 3b. REAL-TIME CPU Utilization
+        cpu_util = {"connected": False}
+        try:
+            cpu_util_resp = requests.get(f"{base_url}/api/system/cpu-utilization", timeout=2)
+            cpu_util = cpu_util_resp.json()
+        except:
+            pass
+        
         # 4. Logs
         logs_resp = requests.get(f"{base_url}/api/training/alphazero/logs?lines=20", timeout=2)
         logs_data = logs_resp.json()
@@ -148,6 +156,7 @@ def get_training_status(base_url: str) -> Dict:
             "active_task": active_task,
             "metrics": metrics_data.get("metrics", []),
             "gpu_util": gpu_util.get("gpus", []),
+            "cpu_util": cpu_util,
             "logs": logs_data.get("output", [])[-15:],
             "connected": True
         }
@@ -211,6 +220,18 @@ def generate_dashboard(status: Dict, start_time: datetime) -> Layout:
         left_content.append(f"[bold]Iteration:[/bold] {curr} / {total}")
         left_content.append(create_progress_bar(curr, total, 30))
         left_content.append("")
+        
+        # System Load
+        cpu = status.get("cpu_util", {})
+        if cpu.get("status") == "ok":
+            cpu_p = cpu.get("cpu_percent", 0)
+            mem_p = cpu.get("memory_percent", 0)
+            cores = cpu.get("cpu_count", "N/A")
+            
+            left_content.append(f"[bold cyan]System Load ({cores} cores):[/bold cyan]")
+            left_content.append(f"  CPU: {create_progress_bar(int(cpu_p), 100, 25)}")
+            left_content.append(f"  RAM: {create_progress_bar(int(mem_p), 100, 25)}")
+            left_content.append("")
         
         # Metrics
         if metrics:
