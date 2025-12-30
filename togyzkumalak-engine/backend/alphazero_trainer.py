@@ -1503,10 +1503,10 @@ class AlphaZeroCoach:
                     if metrics:
                         log.info(f"   Metrics: {metrics}")
                     return True
-            except Exception as e:
-                log.error(f"❌ [Resume] CRITICAL FAILURE: Failed to load {checkpoint_path}: {e}")
-                # Re-raise exception to prevent starting from scratch
-                raise RuntimeError(f"Could not load specified checkpoint {checkpoint_path}. Aborting to prevent progress loss.")
+                except Exception as e:
+                    log.error(f"❌ [Resume] CRITICAL FAILURE: Failed to load {checkpoint_path}: {e}")
+                    # Re-raise exception to prevent starting from scratch
+                    raise RuntimeError(f"Could not load specified checkpoint {checkpoint_path}. Aborting to prevent progress loss.")
                     continue
         
         log.info("ℹ️ [Resume] No existing models found. Will start fresh (or bootstrap).")
