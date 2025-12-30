@@ -368,9 +368,18 @@ class GymTrainingManager:
                 action_size=9
             ).to(device)
             
-            # CRITICAL: Always use strict=False to ensure we can load even if minor differences exist
-            # This is our safety net to prevent Server Error 500
-            alphazero_net.load_state_dict(clean_state_dict, strict=False)
+            # Filter state_dict to only include keys that match our current architecture's shapes
+            # This prevents RuntimeError during load_state_dict even with strict=False
+            model_state = alphazero_net.state_dict()
+            filtered_sd = {}
+            for k, v in clean_state_dict.items():
+                if k in model_state:
+                    if v.shape == model_state[k].shape:
+                        filtered_sd[k] = v
+                    else:
+                        print(f"[AI] Skipping key {k} due to shape mismatch: {v.shape} vs {model_state[k].shape}")
+            
+            alphazero_net.load_state_dict(filtered_sd, strict=False)
             alphazero_net.eval()
         except Exception as e:
             print(f"[ERROR] Could not construct network for checkpoint: {e}")

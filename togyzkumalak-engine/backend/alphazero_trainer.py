@@ -141,6 +141,7 @@ class AlphaZeroConfig:
     
     # Resume training
     resume_from_checkpoint: bool = True  # Auto-resume from best.pth.tar or bootstrapped.pth.tar
+    initial_checkpoint: str = None       # Specific checkpoint to start from (e.g. "checkpoint_4.pth.tar")
 
 
 # =============================================================================
@@ -1456,11 +1457,19 @@ class AlphaZeroCoach:
         # Force absolute path resolution
         checkpoint_dir = os.path.abspath(self.config.checkpoint_dir)
         
+        checkpoints_to_try = []
+        
+        # 0. User specified initial_checkpoint has absolute priority
+        if self.config.initial_checkpoint:
+            cp_name = self.config.initial_checkpoint
+            if not cp_name.endswith('.pth.tar'): cp_name += '.pth.tar'
+            checkpoints_to_try.append(os.path.join(checkpoint_dir, cp_name))
+
         # Priority order: best.pth.tar > bootstrapped.pth.tar > latest checkpoint_N.pth.tar
-        checkpoints_to_try = [
+        checkpoints_to_try.extend([
             os.path.join(checkpoint_dir, 'best.pth.tar'),
             os.path.join(checkpoint_dir, 'bootstrapped.pth.tar'),
-        ]
+        ])
         
         # Also try to find latest numbered checkpoint
         if os.path.exists(checkpoint_dir):
