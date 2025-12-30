@@ -402,21 +402,19 @@ class AlphaZeroNetwork(nn.Module):
     def __init__(self, input_size: int = 128, hidden_size: int = 256, action_size: int = 9):
         super().__init__()
         
-        # Deeper network for better representation
+        # ORIGINAL ARCHITECTURE (Compatible with existing checkpoints)
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.bn1 = nn.BatchNorm1d(hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.bn2 = nn.BatchNorm1d(hidden_size)
         self.fc3 = nn.Linear(hidden_size, hidden_size)
         self.bn3 = nn.BatchNorm1d(hidden_size)
-        self.fc4 = nn.Linear(hidden_size, hidden_size // 2)
-        self.bn4 = nn.BatchNorm1d(hidden_size // 2)
         
         # Policy head
-        self.policy_fc = nn.Linear(hidden_size // 2, action_size)
+        self.policy_fc = nn.Linear(hidden_size, action_size)
         
         # Value head
-        self.value_fc1 = nn.Linear(hidden_size // 2, 64)
+        self.value_fc1 = nn.Linear(hidden_size, 64)
         self.value_fc2 = nn.Linear(64, 1)
         
         self.dropout = nn.Dropout(0.3)
@@ -449,8 +447,6 @@ class AlphaZeroNetwork(nn.Module):
         x = F.relu(self.bn2(self.fc2(x)))
         x = self.dropout(x)
         x = F.relu(self.bn3(self.fc3(x)))
-        x = self.dropout(x)
-        x = F.relu(self.bn4(self.fc4(x)))
         
         pi = self.policy_fc(x)
         pi = F.log_softmax(pi, dim=1)

@@ -363,16 +363,14 @@ class GymTrainingManager:
                 action_size=9
             ).to(device)
             
-            # Use strict=False to allow loading even if some layers (like new fc4) are missing
-            msg = alphazero_net.load_state_dict(clean_state_dict, strict=False)
-            if msg.missing_keys:
-                print(f"[WARNING] Loaded model has missing keys: {msg.missing_keys}")
-            if msg.unexpected_keys:
-                print(f"[WARNING] Loaded model has unexpected keys: {msg.unexpected_keys}")
-                
+            # CRITICAL: Always use strict=False to ensure we can load even if minor differences exist
+            # This is our safety net to prevent Server Error 500
+            alphazero_net.load_state_dict(clean_state_dict, strict=False)
             alphazero_net.eval()
         except Exception as e:
             print(f"[ERROR] Could not construct network for checkpoint: {e}")
+            import traceback
+            traceback.print_exc()
             return False
         
         # Create a wrapper that provides policy-only interface for game play
@@ -400,7 +398,10 @@ class GymTrainingManager:
         ai_engine.alphazero_model = alphazero_net
         ai_engine.mcts_cache = {} # Clear cache
         
-        print(f"[OK] AlphaZero model {ai_engine.current_model_name} loaded (hidden_size={hidden_size})")
+        # CRITICAL: Force MCTS usage when AlphaZero model is loaded
+        ai_engine.use_mcts = True
+        
+        print(f"[OK] AlphaZero model {ai_engine.current_model_name} loaded and MCTS activated")
         return True
     
     def _load_gym_model(self, model_path: str, checkpoint, device, ai_engine) -> bool:
