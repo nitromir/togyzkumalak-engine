@@ -150,6 +150,10 @@ class AlphaZeroTaskManager:
             
             return dict(self.tasks)
 
+    def get_checkpoints(self):
+        """Get list of all checkpoints from the underlying manager."""
+        return self._manager.get_checkpoints()
+
 
 # Global instance - backward compatible with existing code
 az_task_manager = AlphaZeroTaskManager()
