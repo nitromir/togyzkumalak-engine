@@ -342,28 +342,38 @@ class GymTrainingManager:
             return False
     
     def _load_alphazero_model(self, model_path: str, checkpoint: dict, device, ai_engine) -> bool:
-        """Load an AlphaZero dual-head model."""
-        from .alphazero_trainer import AlphaZeroNetwork, TogyzkumalakGame, NNetWrapper, AlphaZeroConfig
+        """Load an AlphaZero dual-head model with architecture mismatch handling."""
+        from .alphazero_trainer import AlphaZeroNetwork, TogyzkumalakGame
         
         state_dict = checkpoint['state_dict']
         # Remove 'module.' prefix if it exists (from DataParallel)
         clean_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
-        config_data = checkpoint.get('config', {})
         
-        # Get hidden_size from config or detect from weights
-        hidden_size = config_data.get('hidden_size', 256)
+        # Detect hidden_size from weights to handle architecture changes
+        hidden_size = 256 # Default
         if 'fc1.weight' in clean_state_dict:
             hidden_size = clean_state_dict['fc1.weight'].shape[0]
+            print(f"[AI] Detected model hidden_size: {hidden_size}")
         
-        # Create AlphaZero network
-        alphazero_net = AlphaZeroNetwork(
-            input_size=128,
-            hidden_size=hidden_size,
-            action_size=9
-        ).to(device)
-        
-        alphazero_net.load_state_dict(clean_state_dict)
-        alphazero_net.eval()
+        # Create AlphaZero network with detected architecture
+        try:
+            alphazero_net = AlphaZeroNetwork(
+                input_size=128,
+                hidden_size=hidden_size,
+                action_size=9
+            ).to(device)
+            
+            # Use strict=False to allow loading even if some layers (like new fc4) are missing
+            msg = alphazero_net.load_state_dict(clean_state_dict, strict=False)
+            if msg.missing_keys:
+                print(f"[WARNING] Loaded model has missing keys: {msg.missing_keys}")
+            if msg.unexpected_keys:
+                print(f"[WARNING] Loaded model has unexpected keys: {msg.unexpected_keys}")
+                
+            alphazero_net.eval()
+        except Exception as e:
+            print(f"[ERROR] Could not construct network for checkpoint: {e}")
+            return False
         
         # Create a wrapper that provides policy-only interface for game play
         class AlphaZeroPolicyWrapper(nn.Module):
@@ -375,7 +385,6 @@ class GymTrainingManager:
             
             def forward(self, x):
                 """Return only policy probabilities for compatibility with existing AI."""
-                # x is board observation (128-dim)
                 with torch.no_grad():
                     pi, _ = self.net(x)
                     return torch.exp(pi)  # Convert log-prob to prob
@@ -383,15 +392,15 @@ class GymTrainingManager:
         game = TogyzkumalakGame()
         wrapper = AlphaZeroPolicyWrapper(alphazero_net, game)
         
-        # Apply to all neural levels for consistency when a model is loaded
+        # Apply to all neural levels for consistency
         for level in [3, 4, 5]:
             ai_engine.models[level] = wrapper
             
         ai_engine.current_model_name = Path(model_path).stem
-        ai_engine.alphazero_model = alphazero_net  # Store reference for MCTS usage
-        ai_engine.mcts_cache = {}  # Clear cache to force recreation with new model
+        ai_engine.alphazero_model = alphazero_net
+        ai_engine.mcts_cache = {} # Clear cache
         
-        print(f"[OK] AlphaZero model loaded to all levels (hidden_size={hidden_size})")
+        print(f"[OK] AlphaZero model {ai_engine.current_model_name} loaded (hidden_size={hidden_size})")
         return True
     
     def _load_gym_model(self, model_path: str, checkpoint, device, ai_engine) -> bool:
