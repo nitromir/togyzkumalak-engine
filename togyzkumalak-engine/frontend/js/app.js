@@ -1270,7 +1270,58 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize panel expand buttons
     initPanelExpandButtons();
+    
+    // Initialize theme switcher
+    initThemeSwitcher();
 });
+
+/**
+ * Theme Switcher functionality
+ */
+function initThemeSwitcher() {
+    const themeSwitcher = document.getElementById('themeSwitcher');
+    const themeLabel = document.getElementById('themeLabel');
+    
+    const themes = [
+        { id: 'default', name: 'Киберпанк' },
+        { id: 'purple', name: 'Пурпур' }
+    ];
+    
+    // Load saved theme
+    let currentThemeIndex = 0;
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+        const idx = themes.findIndex(t => t.id === savedTheme);
+        if (idx !== -1) {
+            currentThemeIndex = idx;
+            applyTheme(themes[currentThemeIndex]);
+        }
+    }
+    updateLabel();
+    
+    function applyTheme(theme) {
+        if (theme.id === 'default') {
+            document.documentElement.removeAttribute('data-theme');
+        } else {
+            document.documentElement.setAttribute('data-theme', theme.id);
+        }
+        localStorage.setItem('theme', theme.id);
+    }
+    
+    function updateLabel() {
+        if (themeLabel) {
+            themeLabel.textContent = themes[currentThemeIndex].name;
+        }
+    }
+    
+    if (themeSwitcher) {
+        themeSwitcher.addEventListener('click', () => {
+            currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+            applyTheme(themes[currentThemeIndex]);
+            updateLabel();
+        });
+    }
+}
 
 /**
  * ============================================

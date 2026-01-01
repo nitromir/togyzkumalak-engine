@@ -50,6 +50,110 @@
 }
 
 /* =============================================================================
+   Purple-Burgundy Theme
+   ============================================================================= */
+
+[data-theme="purple"] {
+    /* Colors - Purple-Burgundy Theme */
+    --bg-primary: #0d0a14;
+    --bg-secondary: rgba(25, 15, 35, 0.9);
+    --bg-tertiary: rgba(45, 25, 55, 0.7);
+    --bg-hover: rgba(65, 35, 75, 0.8);
+    
+    --accent-primary: #d946ef; /* Fuchsia/Magenta */
+    --accent-secondary: #9333ea; /* Purple */
+    --accent-error: #dc2626; /* Red */
+    --accent-gold: #f59e0b; /* Amber */
+    --accent-gold-light: #fbbf24;
+    --accent-orange: #ea580c;
+    
+    --text-primary: #f3e8ff;
+    --text-secondary: #c4b5fd;
+    --text-muted: #8b5cf6;
+    
+    --border-color: rgba(217, 70, 239, 0.25);
+    --border-accent: #d946ef;
+    
+    /* Board colors */
+    --board-bg: #1a0f24;
+    --board-border: #3b1f4a;
+    --pit-bg: rgba(30, 15, 40, 0.7);
+    --pit-shadow: inset 0 0 15px rgba(217, 70, 239, 0.15);
+    --tuzduk-bg: rgba(245, 158, 11, 0.3);
+    
+    /* Shadows & Glows */
+    --glow-cyan: 0 0 15px rgba(217, 70, 239, 0.5);
+    --glow-purple: 0 0 15px rgba(147, 51, 234, 0.5);
+    --glow-text: 0 0 8px rgba(217, 70, 239, 0.6);
+}
+
+/* Theme switcher button */
+.theme-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.theme-switcher:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
+.theme-switcher svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--accent-primary);
+    transition: transform 0.3s ease;
+}
+
+.theme-switcher:hover svg {
+    transform: rotate(180deg);
+}
+
+.theme-switcher .theme-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Purple theme specific overrides */
+[data-theme="purple"] .btn-analyze-styled {
+    background: rgba(147, 51, 234, 0.15) !important;
+    border: 1px solid rgba(147, 51, 234, 0.4) !important;
+    color: #a855f7 !important;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="purple"] .btn-analyze-styled:hover:not(:disabled) {
+    background: rgba(147, 51, 234, 0.25) !important;
+    border-color: #a855f7 !important;
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+}
+
+[data-theme="purple"] .board-wrapper.classic-active {
+    background: radial-gradient(circle at center, #1a0f24 0%, #0d0a14 100%);
+    border-color: var(--accent-primary);
+}
+
+[data-theme="purple"] .mode-tab.active {
+    background: var(--accent-primary);
+}
+
+[data-theme="purple"] .btn-primary {
+    background: linear-gradient(135deg, #d946ef, #9333ea);
+}
+
+[data-theme="purple"] .mesmerizing-loader {
+    background: rgba(13, 10, 20, 0.9);
+}
+
+/* =============================================================================
    Reset & Base
    ============================================================================= */
 
