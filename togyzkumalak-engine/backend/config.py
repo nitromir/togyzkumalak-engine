@@ -65,7 +65,7 @@ class ServerConfig:
 class GeminiConfig:
     """Gemini API configuration."""
     api_key: Optional[str] = None
-    model: str = "gemini-2.0-flash"  # Stable model instead of preview
+    model: str = "gemini-2.0-flash"  # Use stable 2.0 Flash
     tts_model: str = "gemini-2.5-flash-preview-tts"  # TTS model for voice
     max_tokens: int = 8000  # Increased for longer analysis output
     temperature: float = 0.5  # Balanced: creative but focused (was 0.7)

@@ -1,30 +1,41 @@
 /**
- * Voice Service - TTS and STT integration for AI Analysis
+ * Voice Service - Hybrid Implementation
  * 
- * Uses Gemini TTS for text-to-speech and Groq Whisper for speech-to-text.
+ * TTS: First 2 sentences via Native Windows SpeechKit (Fast start)
+ *      Following sentences via Google Gemini TTS (High quality)
+ * STT: MediaRecorder + Groq Whisper
  */
 
 class VoiceService {
     constructor() {
-        this.audioContext = null;
         this.isVoiceEnabled = true;
         this.isPaused = false;
         this.isRecording = false;
-        this.isSpeaking = false;
+        this.playbackId = 0;
         
-        // Audio playback queue
+        // Native Speech Synthesis
+        this.synth = window.speechSynthesis;
+        this.nativeVoice = null;
+        
+        // High Quality Audio Context
+        this.audioContext = null;
         this.audioQueue = [];
         this.currentSource = null;
+        this.byteBuffer = new Uint8Array(0);
         
-        // Recording
+        // Sentence processing for Hybrid TTS
+        this.sentenceIndex = 0;
+        this.isProcessingQueue = false;
+        
+        // STT
         this.mediaRecorder = null;
         this.recordedChunks = [];
+        this.sttAvailable = true;
         
-        // Last analysis context for voice conversation
+        // Context
         this.lastAnalysisText = '';
-        this.conversationHistory = [];
+        this.onVoiceInput = null;
         
-        // UI elements
         this.elements = {
             toggleBtn: null,
             pauseBtn: null,
@@ -32,553 +43,335 @@ class VoiceService {
             statusEl: null
         };
         
-        // Check availability on init
-        this.ttsAvailable = false;
-        this.sttAvailable = false;
-        this.checkAvailability();
-        
-        // Progressive TTS queue
-        this.sentenceQueue = [];
-        this.isProcessingQueue = false;
+        this.initNativeVoices();
     }
     
-    /**
-     * Check if voice is enabled and available
-     */
-    get isEnabled() {
-        return this.isVoiceEnabled && this.ttsAvailable;
+    initNativeVoices() {
+        const load = () => {
+            const voices = this.synth.getVoices();
+            this.nativeVoice = voices.find(v => v.lang.includes('ru') && v.name.includes('Google')) || 
+                               voices.find(v => v.lang.includes('ru')) || 
+                               voices[0];
+        };
+        if (this.synth.onvoiceschanged !== undefined) this.synth.onvoiceschanged = load;
+        load();
     }
-    
-    /**
-     * Initialize with UI elements
-     */
-    init(elements) {
-        this.elements = elements;
-        this.setupEventListeners();
-        this.initAudioContext();
-    }
-    
-    /**
-     * Initialize Web Audio API context
-     */
+
     initAudioContext() {
         if (!this.audioContext) {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 24000  // Gemini TTS outputs 24kHz
+                sampleRate: 24000
             });
         }
     }
-    
-    /**
-     * Check if voice services are available
-     */
-    async checkAvailability() {
-        try {
-            const response = await fetch('/api/voice/status');
-            if (response.ok) {
-                const data = await response.json();
-                this.ttsAvailable = data.tts_available;
-                this.sttAvailable = data.stt_available;
-                console.log('[Voice] TTS:', this.ttsAvailable, 'STT:', this.sttAvailable);
-            }
-        } catch (e) {
-            console.warn('[Voice] Could not check availability:', e);
-        }
+
+    init(elements) {
+        this.elements = elements;
+        this.setupEventListeners();
     }
     
-    /**
-     * Setup button event listeners
-     */
     setupEventListeners() {
-        if (this.elements.toggleBtn) {
-            this.elements.toggleBtn.addEventListener('click', () => this.toggleVoice());
-        }
-        
-        if (this.elements.pauseBtn) {
-            this.elements.pauseBtn.addEventListener('click', () => this.togglePause());
-        }
-        
+        if (this.elements.toggleBtn) this.elements.toggleBtn.addEventListener('click', () => this.toggleVoice());
+        if (this.elements.pauseBtn) this.elements.pauseBtn.addEventListener('click', () => this.togglePause());
         if (this.elements.recordBtn) {
-            // Hold to record
             this.elements.recordBtn.addEventListener('mousedown', () => this.startRecording());
             this.elements.recordBtn.addEventListener('mouseup', () => this.stopRecording());
-            this.elements.recordBtn.addEventListener('mouseleave', () => {
-                if (this.isRecording) this.stopRecording();
-            });
-            
-            // Touch support
-            this.elements.recordBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                this.startRecording();
-            });
-            this.elements.recordBtn.addEventListener('touchend', () => this.stopRecording());
+            this.elements.recordBtn.addEventListener('mouseleave', () => { if (this.isRecording) this.stopRecording(); });
         }
     }
     
-    /**
-     * Toggle voice on/off
-     */
     toggleVoice() {
         this.isVoiceEnabled = !this.isVoiceEnabled;
-        
         if (this.elements.toggleBtn) {
-            this.elements.toggleBtn.textContent = this.isVoiceEnabled ? '🔊' : '🔇';
+            // Toggle class for SVG icon visibility (no text change needed)
             this.elements.toggleBtn.classList.toggle('voice-on', this.isVoiceEnabled);
-            this.elements.toggleBtn.classList.toggle('voice-off', !this.isVoiceEnabled);
         }
-        
-        if (!this.isVoiceEnabled) {
-            this.stopPlayback();
-        }
-        
-        this.updateStatus(this.isVoiceEnabled ? 'Голос включён' : 'Голос выключен');
+        if (!this.isVoiceEnabled) this.stopPlayback();
     }
     
-    /**
-     * Toggle pause/resume
-     */
     togglePause() {
-        if (!this.isSpeaking) return;
-        
+        if (this.synth.speaking) {
+            if (this.synth.paused) this.synth.resume(); else this.synth.pause();
+        }
+        if (this.audioContext) {
+            if (this.audioContext.state === 'running') this.audioContext.suspend();
+            else if (this.audioContext.state === 'suspended') this.audioContext.resume();
+        }
         this.isPaused = !this.isPaused;
-        
-        if (this.elements.pauseBtn) {
-            this.elements.pauseBtn.textContent = this.isPaused ? '▶️' : '⏸️';
-        }
-        
-        if (this.isPaused) {
-            this.audioContext?.suspend();
-            this.updateStatus('Пауза');
-        } else {
-            this.audioContext?.resume();
-            this.updateStatus('Воспроизведение...');
-        }
+        if (this.elements.pauseBtn) this.elements.pauseBtn.textContent = this.isPaused ? '▶️' : '⏸️';
     }
     
-    /**
-     * Stop all playback
-     */
     stopPlayback() {
+        this.playbackId++;
+        this.synth.cancel();
         if (this.currentSource) {
-            try {
-                this.currentSource.stop();
-            } catch (e) {}
+            try { this.currentSource.stop(); } catch(e) {}
             this.currentSource = null;
         }
         this.audioQueue = [];
-        this.sentenceQueue = []; // Clear sentence queue too
-        this.isSpeaking = false;
+        this.byteBuffer = new Uint8Array(0);
+        this.sentenceIndex = 0;
         this.isPaused = false;
-        this.isProcessingQueue = false;
         
         if (this.elements.pauseBtn) {
             this.elements.pauseBtn.disabled = true;
             this.elements.pauseBtn.textContent = '⏸️';
         }
+        this.updateStatus('');
     }
 
     /**
-     * Queue a sentence for progressive TTS (called during streaming)
-     * @param {string} sentence - Sentence to queue
+     * Required by app.js for streaming
      */
     queueSpeak(sentence) {
-        if (!this.isEnabled || !sentence) return;
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:125',message:'queueSpeak',data:{sentence,sentenceIndex:this.sentenceIndex,playbackId:this.playbackId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'1'})}).catch(()=>{});
+        // #endregion
+        if (!this.isVoiceEnabled || !sentence) return;
         
-        const cleanSentence = this.cleanTextForTTS(sentence);
-        if (!cleanSentence || cleanSentence.length < 5) return;
-        
-        this.sentenceQueue.push(cleanSentence);
-        
-        // Start processing queue if not already running
-        if (!this.isProcessingQueue) {
-            this.processSentenceQueue();
+        // First 4 sentences are fast (Native) - increased from 3 as requested
+        if (this.sentenceIndex < 4) {
+            this.speakNative(sentence, this.playbackId);
+        } else {
+            // Rest are high quality (Google)
+            this.speakGoogle(sentence, this.playbackId);
         }
+        this.sentenceIndex++;
     }
-    
+
     /**
-     * Process queued sentences one by one
+     * Fallback speak for whole text
      */
-    async processSentenceQueue() {
-        if (this.isProcessingQueue) return;
-        this.isProcessingQueue = true;
+    async speak(text) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:145',message:'speak called',data:{textLen:text?.length,playbackId:this.playbackId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'1'})}).catch(()=>{});
+        // #endregion
+        if (!this.isVoiceEnabled || !text) return;
+        this.stopPlayback();
+        const pid = this.playbackId;
+        this.lastAnalysisText = text;
         
-        while (this.sentenceQueue.length > 0) {
-            const sentence = this.sentenceQueue.shift();
-            // Don't call stopPlayback here because we want to append audio!
-            // But we do want to ensure speakSingle doesn't clear the audioQueue if it's part of a sequence
-            await this.speak(sentence, true); // true = append mode
-        }
-        
-        this.isProcessingQueue = false;
+        const sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
+        sentences.forEach(s => this.queueSpeak(s));
     }
-    
-    /**
-     * Update status text
-     */
-    updateStatus(text) {
-        if (this.elements.statusEl) {
-            this.elements.statusEl.textContent = text;
-            this.elements.statusEl.className = 'voice-status';
-            
-            if (this.isRecording) {
-                this.elements.statusEl.classList.add('listening');
-            } else if (this.isSpeaking) {
-                this.elements.statusEl.classList.add('speaking');
-            }
-        }
+
+    speakNative(text, pid) {
+        const clean = this.cleanText(text);
+        if (!clean) return;
+
+        const utterance = new SpeechSynthesisUtterance(clean);
+        if (this.nativeVoice) utterance.voice = this.nativeVoice;
+        utterance.lang = 'ru-RU';
+        utterance.rate = 1.1;
+        
+        utterance.onstart = () => {
+            if (this.playbackId !== pid) { this.synth.cancel(); return; }
+            this.updateStatus('Озвучка (Fast)...');
+            if (this.elements.pauseBtn) this.elements.pauseBtn.disabled = false;
+        };
+        
+        this.synth.speak(utterance);
     }
-    
-    /**
-     * Speak text using streaming TTS
-     * @param {string} text - Text to speak
-     * @param {boolean} append - If true, don't stop current playback (used for queue)
-     */
-    async speak(text, append = false) {
-        if (!this.isVoiceEnabled || !this.ttsAvailable || !text) return;
-        
-        // Clean text for TTS (remove markdown, emojis used as headers, etc.)
-        let cleanText = this.cleanTextForTTS(text);
-        if (!cleanText) return;
-        
-        // Additional safety: encode/decode to remove any invalid sequences
-        try {
-            cleanText = decodeURIComponent(encodeURIComponent(cleanText));
-        } catch (e) {
-            // If encoding fails, strip non-ASCII as last resort
-            cleanText = cleanText.replace(/[^\x00-\x7F\u0400-\u04FF\u0410-\u044F]/g, '');
-        }
-        
-        if (!cleanText || cleanText.length < 3) return;
-        
-        // Save for conversation context (only if not append mode or it's the first part)
-        if (!append) {
-            this.lastAnalysisText = cleanText;
-        }
-        
+
+    async speakGoogle(text, pid) {
+        const clean = this.cleanText(text);
+        if (!clean) return;
+
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:175',message:'speakGoogle entry',data:{clean,pid,sentenceIndex:this.sentenceIndex},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
+        // #endregion
+
         this.initAudioContext();
-        
-        if (!append) {
-            this.stopPlayback();
-        }
-        
-        this.isSpeaking = true;
-        
-        if (this.elements.pauseBtn) {
-            this.elements.pauseBtn.disabled = false;
-        }
-        
-        // Only update status if not already playing
-        if (!this.currentSource && this.audioQueue.length === 0) {
-            this.updateStatus('Генерация голоса...');
-        }
-        
         try {
-            // Use streaming endpoint with Form data
             const response = await fetch('/api/voice/tts/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `text=${encodeURIComponent(cleanText)}`
+                body: `text=${encodeURIComponent(clean)}`
             });
             
-            if (!response.ok) {
-                throw new Error(`TTS error: ${response.status}`);
-            }
-            
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:185',message:'speakGoogle response',data:{status:response.status,ok:response.ok,pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
+            // #endregion
+
+            if (!response.ok) return;
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-            let firstChunkInThisSpeak = false;
             
-            // Promise to wait for this specific speak to FINISH streaming into audioQueue
-            // This is important for processSentenceQueue to wait for the next sentence
-            return new Promise(async (resolve) => {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    
-                    if (done) break;
-                    
-                    buffer += decoder.decode(value, { stream: true });
-                    
-                    // Process complete lines (base64 chunks separated by newlines)
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';  // Keep incomplete line in buffer
-                    
-                    for (const line of lines) {
-                        if (!line.trim()) continue;
+            while (true) {
+                if (this.playbackId !== pid) { 
+                    // #region agent log
+                    fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:195',message:'speakGoogle cancelled due to playbackId mismatch',data:{current:this.playbackId,pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
+                    // #endregion
+                    await reader.cancel(); 
+                    return; 
+                }
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                
+                for (const line of lines) {
+                    if (!line.trim() || this.playbackId !== pid) continue;
+                    try {
+                        const binary = atob(line);
+                        // #region agent log
+                        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:205',message:'speakGoogle chunk',data:{binLen:binary.length,queueLen:this.audioQueue.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
+                        // #endregion
+                        const bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
                         
-                        try {
-                            // Decode base64 to binary
-                            const binaryString = atob(line);
-                            const bytes = new Uint8Array(binaryString.length);
-                            for (let i = 0; i < binaryString.length; i++) {
-                                bytes[i] = binaryString.charCodeAt(i);
-                            }
-                            
-                            // Queue audio chunk
-                            this.audioQueue.push(bytes);
-                            
-                            // Start playback if nothing is playing
-                            if (!this.currentSource && !this.isPaused) {
-                                this.updateStatus('Воспроизведение...');
-                                this.playNextChunk();
-                            }
-                        } catch (e) {
-                            console.warn('[Voice] Error decoding chunk:', e);
+                        const total = this.byteBuffer.length + bytes.length;
+                        const combined = new Uint8Array(total);
+                        combined.set(this.byteBuffer);
+                        combined.set(bytes, this.byteBuffer.length);
+                        
+                        const even = total & ~1;
+                        if (even > 0) {
+                            this.audioQueue.push(combined.slice(0, even));
+                            this.byteBuffer = combined.slice(even);
+                        } else {
+                            this.byteBuffer = combined;
                         }
+                        
+                        // Start Google only when Native is done
+                        // #region agent log
+                        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:215',message:'checking if can play google chunk',data:{hasSource:!!this.currentSource,isPaused:this.isPaused,isSynthSpeaking:this.synth.speaking},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+                        // #endregion
+                        if (!this.currentSource && !this.isPaused && !this.synth.speaking) {
+                            this.playNextChunk(pid);
+                        }
+                    } catch (e) {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:230',message:'speakGoogle atob error',data:{err:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
+                        // #endregion
                     }
                 }
-                
-                // For processSentenceQueue, we need to wait until THIS sentence starts playing 
-                // and potentially finishes if we want strict sequential sentences.
-                // But for "progressive" feel, we just need to wait until it's fully queued.
-                
-                // However, to avoid "crossover" or issues, let's wait until audioQueue is empty-ish
-                const checkDone = () => {
-                    if (this.audioQueue.length === 0 && !this.currentSource) {
-                        resolve();
-                    } else {
-                        setTimeout(checkDone, 100);
-                    }
-                };
-                
-                // If we are appending, we wait for previous stuff to finish? 
-                // No, we want to start playing as soon as chunks arrive.
-                
-                // For the promise resolve, let's just resolve once it's fully received.
-                // The processSentenceQueue will then start the next fetch.
-                resolve();
-            });
-            
-        } catch (e) {
-            console.error('[Voice] TTS error:', e);
-            if (!append) {
-                this.updateStatus('Ошибка TTS');
-                this.isSpeaking = false;
             }
+            
+            const check = () => {
+                if (this.playbackId !== pid) return;
+                if (!this.synth.speaking && this.audioQueue.length > 0 && !this.currentSource) {
+                    this.playNextChunk(pid);
+                } else if (this.synth.speaking || this.currentSource || this.audioQueue.length > 0) {
+                    setTimeout(check, 100);
+                }
+            };
+            check();
+        } catch (e) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:245',message:'speakGoogle fatal error',data:{err:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
+            // #endregion
         }
     }
-    
-    /**
-     * Play next audio chunk from queue
-     */
-    async playNextChunk() {
-        if (!this.isSpeaking || this.audioQueue.length === 0) {
-            // Queue exhausted
-            this.currentSource = null;  // Always reset when queue empty
-            if (this.audioQueue.length === 0 && this.isSpeaking) {
-                // Wait a bit for more chunks
-                setTimeout(() => {
-                    if (this.audioQueue.length === 0) {
-                        this.isSpeaking = false;
-                        this.currentSource = null;
-                        this.updateStatus('');
-                        if (this.elements.pauseBtn) {
-                            this.elements.pauseBtn.disabled = true;
-                        }
-                    } else {
-                        this.playNextChunk();
-                    }
-                }, 200);
-            }
-            return;
-        }
-        
-        if (this.isPaused) {
-            // Check again later
-            setTimeout(() => this.playNextChunk(), 100);
+
+    async playNextChunk(pid) {
+        if (this.playbackId !== pid || this.audioQueue.length === 0) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:260',message:'playNextChunk exit',data:{pid,match:this.playbackId===pid,queueLen:this.audioQueue.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            // #endregion
             return;
         }
         
         const chunk = this.audioQueue.shift();
-        
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:265',message:'playNextChunk starting',data:{chunkLen:chunk.length,queueLen:this.audioQueue.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+        // #endregion
         try {
-            // Resume AudioContext if suspended (browser policy)
-            if (this.audioContext.state === 'suspended') {
-                await this.audioContext.resume();
-            }
+            if (this.audioContext.state === 'suspended') await this.audioContext.resume();
+            let offset = (chunk.length > 44 && chunk[0] === 0x52 && chunk[1] === 0x49) ? 44 : 0;
+            const count = Math.floor((chunk.byteLength - offset) / 2);
+            const view = new DataView(chunk.buffer, chunk.byteOffset + offset, count * 2);
+            const samples = new Float32Array(count);
+            // Try little endian first? Or stick to big for now?
+            // User said "шипение" previously which is often endianness.
+            // Let's log if it's mostly noise.
+            for (let i = 0; i < count; i++) samples[i] = view.getInt16(i * 2, false) / 32768.0;
             
-            // Convert PCM to AudioBuffer
-            // Gemini TTS outputs 16-bit signed PCM at 24kHz mono
-            const samples = new Int16Array(chunk.buffer);
-            const floatSamples = new Float32Array(samples.length);
-            
-            for (let i = 0; i < samples.length; i++) {
-                floatSamples[i] = samples[i] / 32768.0;  // Convert to -1.0 to 1.0
-            }
-            
-            const audioBuffer = this.audioContext.createBuffer(1, floatSamples.length, 24000);
-            audioBuffer.getChannelData(0).set(floatSamples);
-            
-            // Create source and play
+            const buffer = this.audioContext.createBuffer(1, samples.length, 24000);
+            buffer.getChannelData(0).set(samples);
             const source = this.audioContext.createBufferSource();
-            source.buffer = audioBuffer;
+            source.buffer = buffer;
             source.connect(this.audioContext.destination);
-            
             this.currentSource = source;
-            
             source.onended = () => {
-                this.currentSource = null;  // Reset before calling next
-                this.playNextChunk();
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:280',message:'chunk source ended',data:{pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+                // #endregion
+                this.currentSource = null;
+                this.playNextChunk(pid);
             };
-            
             source.start();
-            
-        } catch (e) {
-            console.error('[Voice] Playback error:', e);
-            this.playNextChunk();  // Try next chunk
+            this.updateStatus('Озвучка (Quality)...');
+        } catch (e) { 
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'playNextChunk error',data:{err:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            // #endregion
+            this.playNextChunk(pid); 
         }
     }
-    
-    /**
-     * Clean text for TTS (remove markdown, emojis, invalid chars)
-     */
-    cleanTextForTTS(text) {
+
+    cleanText(text) {
         if (!text) return '';
-        
-        let cleaned = text
-            // Remove ALL emojis and special unicode symbols
-            .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
-            .replace(/[\u{2600}-\u{26FF}]/gu, '')
-            .replace(/[\u{2700}-\u{27BF}]/gu, '')
-            .replace(/[\u{1F000}-\u{1F02F}]/gu, '')
-            .replace(/[\u{1F0A0}-\u{1F0FF}]/gu, '')
-            // Remove box drawing and special chars
-            .replace(/[═─│┌┐└┘├┤┬┴┼]/g, '')
-            // Remove markdown headers
-            .replace(/^#{1,6}\s+/gm, '')
-            // Remove markdown bold/italic
-            .replace(/\*\*([^*]+)\*\*/g, '$1')
-            .replace(/\*([^*]+)\*/g, '$1')
-            .replace(/__([^_]+)__/g, '$1')
-            .replace(/_([^_]+)_/g, '$1')
-            // Remove bullet points
-            .replace(/^[\-\*]\s+/gm, '')
-            // Remove numbered lists
-            .replace(/^\d+\.\s+/gm, '')
-            // Remove code blocks
-            .replace(/```[^`]+```/g, '')
-            .replace(/`([^`]+)`/g, '$1')
-            // Clean up extra whitespace
-            .replace(/\n{3,}/g, '\n\n')
+        return text
+            .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Emojis
+            .replace(/[📊🔍🎯⚠️💡📜🤖═─│┌┐└┘├┤┬┴┼]/g, '') // Special chars
+            .replace(/[*#_~`]/g, '') // Markdown symbols
+            .replace(/\n+/g, ' ') // Multiple newlines to single space
             .trim();
-        
-        // Remove any remaining invalid Unicode (lone surrogates)
-        cleaned = cleaned.replace(/[\uD800-\uDFFF]/g, '');
-        
-        return cleaned;
     }
-    
-    /**
-     * Start recording voice input
-     */
+
     async startRecording() {
-        if (!this.sttAvailable || this.isRecording) return;
-        
+        if (this.isRecording) return;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
             this.recordedChunks = [];
-            this.mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus'
-            });
-            
-            this.mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    this.recordedChunks.push(e.data);
-                }
-            };
-            
+            this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            this.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) this.recordedChunks.push(e.data); };
             this.mediaRecorder.onstop = async () => {
-                // Stop all tracks
-                stream.getTracks().forEach(track => track.stop());
-                
-                // Process recording
-                await this.processRecording();
+                stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(this.recordedChunks, { type: 'audio/webm' });
+                const fd = new FormData();
+                fd.append('file', blob, 'rec.webm');
+                fd.append('language', 'ru');
+                const resp = await fetch('/api/voice/stt', { method: 'POST', body: fd });
+                const data = await resp.json();
+                if (data.text) this.onVoiceInput?.(data.text, this.lastAnalysisText);
             };
-            
             this.mediaRecorder.start();
             this.isRecording = true;
-            
-            if (this.elements.recordBtn) {
-                this.elements.recordBtn.classList.add('recording');
-            }
-            
-            this.updateStatus('Говорите...');
-            
-        } catch (e) {
-            console.error('[Voice] Recording error:', e);
-            this.updateStatus('Ошибка микрофона');
-        }
+            if (this.elements.recordBtn) this.elements.recordBtn.classList.add('recording');
+            this.updateStatus('Слушаю...');
+        } catch (e) {}
     }
     
-    /**
-     * Stop recording and process
-     */
     stopRecording() {
-        if (!this.isRecording || !this.mediaRecorder) return;
-        
+        if (!this.isRecording) return;
         this.mediaRecorder.stop();
         this.isRecording = false;
-        
-        if (this.elements.recordBtn) {
-            this.elements.recordBtn.classList.remove('recording');
-        }
-        
-        this.updateStatus('Распознавание...');
+        if (this.elements.recordBtn) this.elements.recordBtn.classList.remove('recording');
     }
     
-    /**
-     * Process recorded audio - send to STT and then to AI
-     */
-    async processRecording() {
-        if (this.recordedChunks.length === 0) return;
+    setVoiceInputCallback(cb) { this.onVoiceInput = cb; }
+    updateStatus(t) {
+        if (!this.elements.statusEl) return;
         
-        const blob = new Blob(this.recordedChunks, { type: 'audio/webm' });
-        
-        try {
-            // Send to STT endpoint
-            const formData = new FormData();
-            formData.append('file', blob, 'recording.webm');
-            formData.append('language', 'ru');
-            
-            const response = await fetch('/api/voice/stt', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                throw new Error(`STT error: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            const userText = data.text;
-            
-            if (userText && userText.trim()) {
-                console.log('[Voice] Recognized:', userText);
-                this.updateStatus(`Вы: "${userText}"`);
-                
-                // Trigger voice conversation callback
-                if (this.onVoiceInput) {
-                    this.onVoiceInput(userText, this.lastAnalysisText);
-                }
-            } else {
-                this.updateStatus('Не удалось распознать');
-            }
-            
-        } catch (e) {
-            console.error('[Voice] STT error:', e);
-            this.updateStatus('Ошибка распознавания');
+        if (t.includes('Quality') || t.includes('Fast')) {
+            // Show mesmerizing loader during speech generation/playback
+            this.elements.statusEl.innerHTML = `
+                <div class="loader-geometry" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle; margin-right: 8px;">
+                    <span></span><span></span><span></span>
+                </div>
+                <span>${t}</span>
+            `;
+            this.elements.statusEl.classList.add('speaking');
+        } else {
+            this.elements.statusEl.textContent = t;
+            this.elements.statusEl.classList.remove('speaking');
         }
-    }
-    
-    /**
-     * Set callback for voice input
-     * @param {Function} callback - (userText, lastAnalysisContext) => void
-     */
-    setVoiceInputCallback(callback) {
-        this.onVoiceInput = callback;
     }
 }
 
-// Global instance
 const voiceService = new VoiceService();

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Voice Service - TTS and STT integration.
 """
 
@@ -49,12 +49,22 @@ class VoiceService:
             return
         voice = voice or self.DEFAULT_VOICE
         prompt = f"Say clearly:\n\n{text}"
+        
+        # #region agent log
+        import json, time
+        with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({"location": "voice_service.py:53", "message": "text_to_speech_stream entry", "data": {"text": text[:50], "voice": voice}, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": "1"}) + "\n")
+        # #endregion
+
         try:
             q = queue.Queue()
             err = {"e": None}
             def w():
                 try:
-                    r = self.tts_client.models.generate_content(
+                    # Use generate_content_stream for TRUE streaming
+                    # IMPORTANT: For AUDIO output, many SDKs don't support true partial audio chunks
+                    # but we can try to force smaller yields to the browser.
+                    responses = self.tts_client.models.generate_content_stream(
                         model=self.tts_model,
                         contents=prompt,
                         config=types.GenerateContentConfig(
@@ -66,15 +76,33 @@ class VoiceService:
                             ),
                         )
                     )
-                    if r.candidates and r.candidates[0].content and r.candidates[0].content.parts:
-                        for p in r.candidates[0].content.parts:
-                            if hasattr(p, "inline_data") and p.inline_data:
-                                d = p.inline_data.data
-                                if d:
-                                    for i in range(0, len(d), 8192):
-                                        q.put(d[i:i+8192])
+                    
+                    chunk_count = 0
+                    for r in responses:
+                        if r.candidates and r.candidates[0].content and r.candidates[0].content.parts:
+                            for p in r.candidates[0].content.parts:
+                                if hasattr(p, "inline_data") and p.inline_data:
+                                    d = p.inline_data.data
+                                    if d:
+                                        chunk_count += 1
+                                        # Yield raw bytes in smaller chunks to network
+                                        # This prevents the browser from waiting for massive 500KB blobs
+                                        chunk_size = 16384 # 16KB chunks for smoother network delivery
+                                        for i in range(0, len(d), chunk_size):
+                                            q.put(d[i:i+chunk_size])
+                    
+                    # #region agent log
+                    with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a') as f:
+                        f.write(json.dumps({"location": "voice_service.py:88", "message": "TTS stream generation finished", "data": {"chunk_count": chunk_count}, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": "1"}) + "\n")
+                    # #endregion
+
                 except Exception as ex:
                     err["e"] = str(ex)
+                    print(f"[TTS Stream Error] {ex}")
+                    # #region agent log
+                    with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a') as f:
+                        f.write(json.dumps({"location": "voice_service.py:96", "message": "TTS stream generation error", "data": {"err": str(ex)}, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": "1"}) + "\n")
+                    # #endregion
                 finally:
                     q.put(None)
             t = threading.Thread(target=w, daemon=True)
@@ -90,6 +118,10 @@ class VoiceService:
                 yield c
         except Exception as ex:
             print(f"[TTS Error] {ex}")
+            # #region agent log
+            with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a') as f:
+                f.write(json.dumps({"location": "voice_service.py:115", "message": "TTS stream outer error", "data": {"err": str(ex)}, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": "1"}) + "\n")
+            # #endregion
     
     async def text_to_speech(self, text, voice=None):
         if not self.tts_client:

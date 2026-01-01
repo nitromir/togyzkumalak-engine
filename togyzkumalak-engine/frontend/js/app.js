@@ -327,8 +327,16 @@ class TogyzkumalakApp {
     /**
      * Start a new game.
      */
+    /**
+     * Start a new game.
+     */
     async startGame() {
+        let loader = null;
         try {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:330',message:'startGame entry',data:{playerColor:this.playerColor,aiLevel:this.aiLevel},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'4'})}).catch(()=>{});
+            // #endregion
+
             this.elements.btnStartGame.disabled = true;
             this.elements.btnStartGame.textContent = 'Starting...';
             
@@ -336,8 +344,25 @@ class TogyzkumalakApp {
             this.isBoardReady = false;
             this.isProcessingMove = false;
             
+            // Show setup panel hiding and game panel showing
+            this.elements.setupPanel.classList.add('hidden');
+            this.elements.gamePanel.classList.remove('hidden');
+            
+            // Show mesmerizing loader over the board (after showing panel)
+            // We store the reference to manually remove it if needed
+            loader = this.showBoardLoader(4000);
+
+            // RESTORED API CALL WITH CORRECT RESPONSE HANDLING
             const response = await api.createGame(this.playerColor, this.aiLevel);
             
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:345',message:'game created',data:{gameId:response?.game_id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'4'})}).catch(()=>{});
+            // #endregion
+
+            if (!response || !response.game_id) {
+                throw new Error('Server failed to create game. Check console logs.');
+            }
+
             this.gameId = response.game_id;
             this.gameState = response;
             
@@ -350,10 +375,6 @@ class TogyzkumalakApp {
             // Configure board
             this.classicBoard.setHumanColor(this.playerColor);
             this.loadConfidenceSetting();
-            
-            // Update UI
-            this.elements.setupPanel.classList.add('hidden');
-            this.elements.gamePanel.classList.remove('hidden');
             
             // Update player labels with model info
             this.updatePlayerLabels();
@@ -376,8 +397,20 @@ class TogyzkumalakApp {
             this.isBoardReady = true;
             
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:390',message:'startGame error',data:{err:error.message,stack:error.stack},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'4'})}).catch(()=>{});
+            // #endregion
             console.error('Failed to start game:', error);
             alert('Failed to start game: ' + error.message);
+            
+            // Manual loader removal on error
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 500);
+            }
+            
+            // Show setup panel again if game creation failed
+            this.showSetup();
         } finally {
             this.elements.btnStartGame.disabled = false;
             this.elements.btnStartGame.textContent = '▶️ Start Game';
@@ -432,23 +465,41 @@ class TogyzkumalakApp {
                 this.userScrolling = false;
                 this.ttsBuffer = '';  // Buffer for progressive TTS
                 this.ttsSentIndex = 0;  // Track what we've sent to TTS
-                // Remove preloader, prepare for streaming content
-                this.elements.analysisContent.innerHTML = '<div class="analysis-result"><span class="chunk-loading"></span></div>';
+                this.accumulatedText = ''; // Hidden buffer for raw text
+                this.firstSentenceSent = false; // For faster first sentence detection
+                
+                // Stop current speech when new analysis starts
+                if (typeof voiceService !== 'undefined') voiceService.stopPlayback();
+                
+                // Show mesmerizing preloader
+                this.elements.analysisContent.innerHTML = `
+                    <div class="analysis-result">
+                        <div class="analysis-preloader">
+                            ${this.getMesmerizingLoaderHtml('AI анализирует позицию...')}
+                        </div>
+                    </div>`;
                 this.elements.btnAnalyze.disabled = true;
                 break;
                 
             case 'analysis_chunk':
-                this.appendAnalysisChunk(data.chunk);
-                // Progressive TTS: accumulate and send sentences
+                // Accumulate text silently
+                this.accumulatedText += data.chunk;
+                // Progressive TTS still works in background
                 this.processProgressiveTTS(data.chunk);
                 break;
                 
             case 'analysis_end':
                 this.isStreaming = false;
                 this.elements.btnAnalyze.disabled = false;
-                // Final render to ensure formatting is correct
-                this.elements.analysisContent.querySelector('.analysis-result').innerHTML = this.formatAnalysis(data.full_text);
-                // Flush remaining buffer to TTS
+                
+                // Now show the BEAUTIFULLY formatted text all at once
+                const resEl = this.elements.analysisContent.querySelector('.analysis-result');
+                const fullTxt = data.full_text || this.accumulatedText;
+                if (resEl) {
+                    resEl.innerHTML = this.formatAnalysis(fullTxt);
+                }
+                
+                // Flush remaining buffer to TTS (progressive system handles the rest)
                 this.flushTTSBuffer();
                 break;
                 
@@ -457,13 +508,23 @@ class TogyzkumalakApp {
                 this.userScrolling = false;
                 this.ttsBuffer = '';  // Buffer for progressive TTS
                 this.ttsSentIndex = 0;  // Track what we've sent to TTS
-                // Remove preloader, prepare for streaming content
-                this.elements.analysisContent.innerHTML = '<div class="suggestion-result"><span class="chunk-loading"></span></div>';
+                this.accumulatedText = '';
+                this.firstSentenceSent = false;
+                
+                // Stop current speech
+                if (typeof voiceService !== 'undefined') voiceService.stopPlayback();
+                
+                this.elements.analysisContent.innerHTML = `
+                    <div class="suggestion-result">
+                        <div class="analysis-preloader">
+                            ${this.getMesmerizingLoaderHtml('Ищу лучший ход...')}
+                        </div>
+                    </div>`;
                 this.elements.btnSuggest.disabled = true;
                 break;
                 
             case 'suggestion_chunk':
-                this.appendAnalysisChunk(data.chunk);
+                this.accumulatedText += data.chunk;
                 // Progressive TTS: accumulate and send sentences
                 this.processProgressiveTTS(data.chunk);
                 break;
@@ -471,8 +532,14 @@ class TogyzkumalakApp {
             case 'suggestion_end':
                 this.isStreaming = false;
                 this.elements.btnSuggest.disabled = false;
-                this.elements.analysisContent.querySelector('.suggestion-result').innerHTML = this.formatAnalysis(data.full_text);
-                // Flush remaining buffer to TTS
+                
+                const suggestEl = this.elements.analysisContent.querySelector('.suggestion-result');
+                const fullText = data.full_text || this.accumulatedText;
+                if (suggestEl) {
+                    suggestEl.innerHTML = this.formatAnalysis(fullText);
+                }
+                
+                // Flush remaining buffer to TTS (progressive system handles the rest)
                 this.flushTTSBuffer();
                 break;
                 
@@ -521,23 +588,85 @@ class TogyzkumalakApp {
         
         this.ttsBuffer = (this.ttsBuffer || '') + chunk;
         
-        // Look for sentence endings: . ! ? or newline after text
-        const sentenceEndings = /[.!?。！？]\s*|\n\n/g;
-        let lastEnd = 0;
+        // Update UI if we have enough text but haven't switched from preloader yet
+        // Show text as soon as we start speaking
+        const shouldUpdateUI = !this.firstSentenceSent && this.ttsBuffer.length > 20;
+
+        // Fast sentence detection:
+        // Match . ! ? followed by space, newline, or even just end of string if enough text
+        const sentenceEndings = /([.!?。！？])(\s+|\n+|$)/g;
         let match;
         
-        // Only start looking for endings after some text is accumulated
-        if (this.ttsBuffer.length - this.ttsSentIndex < 20) return;
+        // Very first sentence optimization: 
+        // If we have > 30 chars and NO sentence yet, just take what we have
+        if (!this.firstSentenceSent && this.ttsBuffer.length > 40) {
+            const lastSpace = this.ttsBuffer.lastIndexOf(' ');
+            if (lastSpace > 20) {
+                const fragment = this.ttsBuffer.substring(0, lastSpace).trim();
+                voiceService.queueSpeak(fragment);
+                this.ttsSentIndex = lastSpace + 1;
+                this.firstSentenceSent = true;
+                this.updateAnalysisUIWithAccumulated();
+                return;
+            }
+        }
 
         while ((match = sentenceEndings.exec(this.ttsBuffer)) !== null) {
-            const sentenceEnd = match.index + match[0].length;
+            const sentenceEnd = match.index + match[1].length;
+            
             if (sentenceEnd > this.ttsSentIndex) {
-                // Extract sentence from last sent position to this ending
                 const sentence = this.ttsBuffer.substring(this.ttsSentIndex, sentenceEnd).trim();
+                
                 if (sentence.length > 5) {
-                    voiceService.queueSpeak(sentence);
+                    if (sentence.length > 15 || (sentence.length > 2 && !/\d$/.test(sentence))) {
+                        voiceService.queueSpeak(sentence);
+                        this.ttsSentIndex = match.index + match[0].length;
+                        this.firstSentenceSent = true;
+                        this.updateAnalysisUIWithAccumulated();
+                    }
                 }
-                this.ttsSentIndex = sentenceEnd;
+            }
+        }
+        
+        // Safety break for long texts
+        const unsentLen = this.ttsBuffer.length - this.ttsSentIndex;
+        if (unsentLen > 150) {
+            const lastSpace = this.ttsBuffer.lastIndexOf(' ');
+            if (lastSpace > this.ttsSentIndex + 40) {
+                const fragment = this.ttsBuffer.substring(this.ttsSentIndex, lastSpace).trim();
+                voiceService.queueSpeak(fragment);
+                this.ttsSentIndex = lastSpace + 1;
+                this.firstSentenceSent = true;
+                this.updateAnalysisUIWithAccumulated();
+            }
+        }
+    }
+
+    /**
+     * Update Analysis UI with current accumulated text (partial).
+     */
+    updateAnalysisUIWithAccumulated() {
+        if (!this.accumulatedText) return;
+        
+        const resultEl = this.elements.analysisContent.querySelector('.analysis-result') || 
+                         this.elements.analysisContent.querySelector('.suggestion-result');
+        
+        if (resultEl) {
+            // Remove preloader if it exists
+            const preloader = resultEl.querySelector('.analysis-preloader');
+            if (preloader) preloader.remove();
+            
+            // Format and set content
+            resultEl.innerHTML = this.formatAnalysis(this.accumulatedText);
+            
+            // Add a temporary cursor to show it's still streaming
+            const cursor = document.createElement('span');
+            cursor.className = 'chunk-loading';
+            resultEl.appendChild(cursor);
+            
+            // Auto-scroll
+            if (!this.userScrolling) {
+                this.elements.analysisContent.scrollTop = this.elements.analysisContent.scrollHeight;
             }
         }
     }
@@ -564,6 +693,9 @@ class TogyzkumalakApp {
      */
     async makeMove(move) {
         if (!this.gameId) return;
+        
+        // Stop speech when making a new move
+        if (typeof voiceService !== 'undefined') voiceService.stopPlayback();
         
         // Block moves if board is not ready (still loading)
         if (!this.isBoardReady) {
@@ -907,8 +1039,7 @@ class TogyzkumalakApp {
         this.elements.analysisContent.innerHTML = `
             <div class="analysis-result">
                 <div class="analysis-preloader">
-                    <span class="preloader-spinner"></span>
-                    <span class="preloader-text">Анализирую позицию...</span>
+                    ${this.getMesmerizingLoaderHtml('Анализирую позицию...')}
                 </div>
             </div>`;
         this.elements.btnAnalyze.disabled = true;
@@ -928,8 +1059,7 @@ class TogyzkumalakApp {
         this.elements.analysisContent.innerHTML = `
             <div class="suggestion-result">
                 <div class="analysis-preloader">
-                    <span class="preloader-spinner"></span>
-                    <span class="preloader-text">Ищу лучший ход...</span>
+                    ${this.getMesmerizingLoaderHtml('Ищу лучший ход...')}
                 </div>
             </div>`;
         this.elements.btnSuggest.disabled = true;
@@ -1003,7 +1133,11 @@ class TogyzkumalakApp {
                 <span class="voice-icon">🎤</span>
                 <span class="voice-text">"${this.escapeHtml(userText)}"</span>
             </div>
-            <div class="analysis-result"><span class="chunk-loading"></span></div>
+            <div class="analysis-result">
+                <div class="analysis-preloader">
+                    ${this.getMesmerizingLoaderHtml('AI обдумывает вопрос...')}
+                </div>
+            </div>
         `;
         this.elements.analysisContent.innerHTML = userQuestionHtml;
         
@@ -1029,6 +1163,76 @@ class TogyzkumalakApp {
         this._glowTimer = window.setTimeout(() => {
             el.classList.remove('board-glow');
         }, 900);
+    }
+
+    /**
+     * Show mesmerizing loader over the board.
+     */
+    showBoardLoader(duration = 4000) {
+        const boardWrapper = document.querySelector('.board-wrapper.classic-active');
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:100',message:'showBoardLoader entry',data:{duration,found:!!boardWrapper},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+        // #endregion
+
+        if (!boardWrapper) return null;
+
+        // Wishes pool
+        const wishes = [
+            "Удачи в великой игре!",
+            "Пусть каждый ход будет мудрым!",
+            "Тоғыз құмалақ — игра смелых и терпеливых!",
+            "Найди путь к победе!",
+            "Сокруши ИИ своим интеллектом!",
+            "Каждая лунка хранит секрет победы!",
+            "Время показать мастерство!",
+            "Пусть удача сопутствует тебе!",
+            "Стратегия — твой главный союзник!",
+            "Будь внимателен к каждому кумалаку!",
+            "Твоя интуиция тебя не подведет!",
+            "Разгадай замыслы противника!",
+            "Стань легендой Тоғыз құмалақ!",
+            "Победа куется в каждом ходе!",
+            "Играй сердцем, побеждай разумом!",
+            "Пусть твой казан всегда будет полон!",
+            "Тактика — это искусство побеждать!",
+            "Твой интеллект сильнее любого алгоритма!",
+            "Шаг за шагом к триумфу!",
+            "Наслаждайся красотой древней игры!"
+        ];
+        
+        const randomWish = wishes[Math.floor(Math.random() * wishes.length)];
+
+        const loader = document.createElement('div');
+        loader.className = 'mesmerizing-loader';
+        loader.innerHTML = this.getMesmerizingLoaderHtml(randomWish);
+        boardWrapper.appendChild(loader);
+
+        setTimeout(() => {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:140',message:'hiding board loader',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            // #endregion
+            loader.style.opacity = '0';
+            setTimeout(() => {
+                if (loader.parentNode) loader.remove();
+            }, 500);
+        }, duration);
+
+        return loader; // Return the element
+    }
+
+    /**
+     * Get HTML for mesmerizing geometric loader.
+     */
+    getMesmerizingLoaderHtml(text) {
+        return `
+            <div class="loader-geometry">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <div class="loader-text">${text}</div>
+        `;
     }
 
     /**
