@@ -1284,7 +1284,9 @@ function initThemeSwitcher() {
     
     const themes = [
         { id: 'default', name: 'Киберпанк' },
-        { id: 'purple', name: 'Пурпур' }
+        { id: 'purple', name: 'Пурпур' },
+        { id: 'coffee', name: 'Кофе' },
+        { id: 'light', name: 'Светлая' }
     ];
     
     // Load saved theme
@@ -1306,6 +1308,11 @@ function initThemeSwitcher() {
             document.documentElement.setAttribute('data-theme', theme.id);
         }
         localStorage.setItem('theme', theme.id);
+        
+        // Update board colors if initialized
+        if (window.app && window.app.classicBoard) {
+            window.app.classicBoard.updateColors();
+        }
     }
     
     function updateLabel() {

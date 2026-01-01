@@ -92,6 +92,33 @@ class ClassicBoard {
         this.onMoveClick = callback;
     }
 
+    /**
+     * Update board colors from CSS variables
+     */
+    updateColors() {
+        const style = getComputedStyle(document.documentElement);
+        const getVar = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
+
+        this.colors = {
+            board: getVar('--board-bg', '#0f172a'),
+            pit: getVar('--pit-bg', '#1e293b'),
+            pitBorder: getVar('--border-accent', '#00f2ff'),
+            tuzduk: getVar('--tuzduk-bg', 'rgba(255, 204, 0, 0.4)'),
+            kumalak: getVar('--text-primary', '#e2e8f0'),
+            kumalakBorder: '#000000',
+            kumalakHighlight: '#ffffff',
+            text: getVar('--accent-primary', '#00f2ff'),
+            textLight: getVar('--text-secondary', '#94a3b8'),
+            lastMove: getVar('--accent-orange', '#ff8800'),
+            playable: getVar('--border-color', 'rgba(0, 242, 255, 0.4)'),
+            redMarker: getVar('--accent-error', '#ff0055')
+        };
+        
+        if (this.gameState) {
+            this.render(this.gameState);
+        }
+    }
+
     render(state) {
         if (!state) return;
         this.gameState = state;
