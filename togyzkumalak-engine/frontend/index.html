@@ -245,6 +245,21 @@
                             <span>Авто-анализ</span>
                         </label>
                     </div>
+                    
+                    <!-- Voice Controls -->
+                    <div class="voice-controls" id="voiceControls">
+                        <button id="btnVoiceToggle" class="btn btn-icon voice-on" title="Включить/выключить голос">
+                            🔊
+                        </button>
+                        <button id="btnVoicePause" class="btn btn-icon" title="Пауза/Продолжить" disabled>
+                            ⏸️
+                        </button>
+                        <button id="btnVoiceRecord" class="btn btn-icon" title="Говорить с AI (удерживайте)">
+                            🎤
+                        </button>
+                        <span class="voice-status" id="voiceStatus"></span>
+                    </div>
+                    
                     <div class="analysis-content" id="analysisContent">
                         <p class="placeholder">Нажмите "Анализировать" для получения анализа от Gemini.</p>
                     </div>
@@ -1631,6 +1646,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/api.js"></script>
     <script src="js/board-classic.js"></script>
+    <script src="js/voice.js"></script>
     <script src="js/app.js"></script>
     <script src="js/replay.js"></script>
     <script src="js/training.js"></script>

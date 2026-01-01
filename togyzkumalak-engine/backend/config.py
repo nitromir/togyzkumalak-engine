@@ -66,9 +66,18 @@ class GeminiConfig:
     """Gemini API configuration."""
     api_key: Optional[str] = None
     model: str = "gemini-3-flash-preview"
+    tts_model: str = "gemini-2.5-flash-preview-tts"  # TTS model for voice
     max_tokens: int = 4000  # Increased for longer analysis output
     temperature: float = 0.5  # Balanced: creative but focused (was 0.7)
     thinking_level: str = "HIGH"  # HIGH thinking for better analysis
+
+
+@dataclass
+class GroqConfig:
+    """Groq API configuration for STT."""
+    api_key: Optional[str] = None
+    stt_model: str = "whisper-large-v3-turbo"
+    api_url: str = "https://api.groq.com/openai/v1/audio/transcriptions"
 
 
 # Global config instances
@@ -83,4 +92,10 @@ _gemini_api_key = os.environ.get("GEMINI_API_KEY")
 if not _gemini_api_key:
     print("[WARNING] GEMINI_API_KEY environment variable not set. Gemini features will be disabled.")
 gemini_config = GeminiConfig(api_key=_gemini_api_key)
+
+# Groq API key for STT
+_groq_api_key = os.environ.get("GROQ_API_KEY")
+if not _groq_api_key:
+    print("[WARNING] GROQ_API_KEY environment variable not set. Voice input will be disabled.")
+groq_config = GroqConfig(api_key=_groq_api_key)
 

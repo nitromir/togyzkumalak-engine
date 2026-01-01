@@ -448,6 +448,90 @@ class GeminiAnalyzer:
         except Exception as e:
             yield f"Error during suggestion: {str(e)}"
 
+    async def voice_conversation_stream(
+        self,
+        user_query: str,
+        previous_analysis: str,
+        board_state: Dict,
+        move_history: List[Dict] = None
+    ):
+        """
+        Handle voice conversation - user asks a follow-up question about the game.
+        Streams response with context of previous analysis.
+        """
+        if not self.client:
+            yield "Gemini не настроен."
+            return
+        
+        position_text = self._format_position(board_state)
+        history_text = self._format_move_history(move_history or [])
+        
+        prompt = f"""{self.SYSTEM_PROMPT}
+
+═══ ТЕКУЩАЯ ПОЗИЦИЯ ═══
+{position_text}
+
+{history_text}
+
+═══ ПРЕДЫДУЩИЙ АНАЛИЗ ═══
+{previous_analysis if previous_analysis else "Анализ ещё не проводился."}
+
+═══ ВОПРОС ПОЛЬЗОВАТЕЛЯ ═══
+🎤 {user_query}
+
+═══ ЗАДАНИЕ ═══
+Ответь на вопрос пользователя, учитывая контекст позиции и предыдущего анализа.
+Отвечай кратко и по существу. Если вопрос касается конкретного хода - объясни его.
+Если вопрос общий о стратегии - дай краткий совет."""
+        
+        try:
+            gen_cfg = self._build_generate_config(
+                max_output_tokens=1500,
+                temperature=0.5,
+            )
+            
+            import queue
+            import threading
+            
+            chunk_queue: queue.Queue = queue.Queue()
+            error_container = {"error": None}
+            
+            def stream_worker():
+                try:
+                    response_stream = self.client.models.generate_content_stream(
+                        model=self.model,
+                        contents=prompt,
+                        config=gen_cfg
+                    )
+                    for chunk in response_stream:
+                        text = self._response_to_text(chunk)
+                        if text:
+                            chunk_queue.put(text)
+                except Exception as e:
+                    error_container["error"] = str(e)
+                finally:
+                    chunk_queue.put(None)
+            
+            worker = threading.Thread(target=stream_worker, daemon=True)
+            worker.start()
+            
+            while True:
+                try:
+                    chunk = chunk_queue.get_nowait()
+                except queue.Empty:
+                    await asyncio.sleep(0.01)
+                    continue
+                
+                if chunk is None:
+                    if error_container["error"]:
+                        yield f"Ошибка: {error_container['error']}"
+                    break
+                
+                yield chunk
+                    
+        except Exception as e:
+            yield f"Ошибка: {str(e)}"
+
     
     async def comment_move(
         self,

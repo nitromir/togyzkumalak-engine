@@ -26,6 +26,7 @@ from .game_manager import game_manager, TogyzkumalakBoard, GameStatus
 from .ai_engine import ai_engine
 from .elo_system import elo_system
 from .gemini_analyzer import gemini_analyzer
+from .voice_service import voice_service
 from .gym_training import training_manager, TrainingConfig
 from .gemini_battle import gemini_battle_manager, BattleConfig
 from .metrics_collector import metrics_collector
@@ -362,6 +363,80 @@ async def get_move_probabilities(game_id: str, level: int = 3, model: Optional[s
 
 
 # =============================================================================
+# Voice API (TTS & STT)
+# =============================================================================
+
+from fastapi import UploadFile, File
+from fastapi.responses import StreamingResponse
+import base64
+
+@app.get("/api/voice/status")
+async def voice_status():
+    """Check voice services availability."""
+    return {
+        "tts_available": voice_service.is_tts_available(),
+        "stt_available": voice_service.is_stt_available(),
+        "tts_model": voice_service.tts_model if voice_service.is_tts_available() else None,
+        "stt_model": voice_service.stt_model if voice_service.is_stt_available() else None,
+    }
+
+
+@app.post("/api/voice/tts")
+async def text_to_speech(text: str):
+    """Convert text to speech. Returns base64-encoded PCM audio."""
+    if not voice_service.is_tts_available():
+        raise HTTPException(status_code=503, detail="TTS service not available")
+    
+    audio_data = await voice_service.text_to_speech(text)
+    if audio_data is None:
+        raise HTTPException(status_code=500, detail="TTS generation failed")
+    
+    # Return base64-encoded audio
+    return {
+        "audio": base64.b64encode(audio_data).decode('utf-8'),
+        "format": "pcm",
+        "sample_rate": 24000,
+        "channels": 1,
+        "bit_depth": 16
+    }
+
+
+@app.post("/api/voice/tts/stream")
+async def text_to_speech_stream(text: str):
+    """Stream text-to-speech audio. Returns chunked PCM audio."""
+    if not voice_service.is_tts_available():
+        raise HTTPException(status_code=503, detail="TTS service not available")
+    
+    async def generate():
+        async for chunk in voice_service.text_to_speech_stream(text):
+            # Yield base64 chunk with newline delimiter
+            yield base64.b64encode(chunk).decode('utf-8') + "\n"
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+        headers={"X-Audio-Format": "pcm;rate=24000;channels=1;bits=16"}
+    )
+
+
+@app.post("/api/voice/stt")
+async def speech_to_text(file: UploadFile = File(...), language: str = "ru"):
+    """Convert speech to text using Groq Whisper."""
+    if not voice_service.is_stt_available():
+        raise HTTPException(status_code=503, detail="STT service not available")
+    
+    # Read audio file
+    audio_data = await file.read()
+    
+    # Transcribe
+    text = await voice_service.speech_to_text(audio_data, language)
+    if text is None:
+        raise HTTPException(status_code=500, detail="STT transcription failed")
+    
+    return {"text": text, "language": language}
+
+
+# =============================================================================
 # WebSocket Endpoint
 # =============================================================================
 
@@ -474,6 +549,26 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                         full_text += chunk
                         await websocket.send_json({"type": "suggestion_chunk", "chunk": chunk})
                     await websocket.send_json({"type": "suggestion_end", "full_text": full_text})
+            
+            elif data["type"] == "voice_query":
+                # Handle voice conversation with AI
+                board = game_manager.get_board(game_id)
+                if board:
+                    board_state = board.get_state_dict()
+                    board_state["legal_moves"] = board.get_legal_moves()
+                    history = game_manager.get_move_history(game_id)
+                    
+                    user_query = data.get("query", "")
+                    context = data.get("context", "")
+                    
+                    await websocket.send_json({"type": "analysis_start"})
+                    full_text = ""
+                    async for chunk in gemini_analyzer.voice_conversation_stream(
+                        user_query, context, board_state, history
+                    ):
+                        full_text += chunk
+                        await websocket.send_json({"type": "analysis_chunk", "chunk": chunk})
+                    await websocket.send_json({"type": "analysis_end", "full_text": full_text})
             
             elif data["type"] == "resign":
                 game = game_manager.get_game(game_id)

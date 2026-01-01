@@ -135,8 +135,36 @@ class TogyzkumalakApp {
             whiteKumalaks: document.getElementById('whiteKumalaks'),
             blackKumalaks: document.getElementById('blackKumalaks'),
             leftAvatar: document.getElementById('leftAvatar'),
-            rightAvatar: document.getElementById('rightAvatar')
+            rightAvatar: document.getElementById('rightAvatar'),
+            
+            // Voice controls
+            voiceToggle: document.getElementById('btnVoiceToggle'),
+            voicePause: document.getElementById('btnVoicePause'),
+            voiceRecord: document.getElementById('btnVoiceRecord'),
+            voiceStatus: document.getElementById('voiceStatus')
         };
+        
+        // Initialize voice service
+        this.initVoiceService();
+    }
+    
+    /**
+     * Initialize voice service with UI elements
+     */
+    initVoiceService() {
+        if (typeof voiceService !== 'undefined') {
+            voiceService.init({
+                toggleBtn: this.elements.voiceToggle,
+                pauseBtn: this.elements.voicePause,
+                recordBtn: this.elements.voiceRecord,
+                statusEl: this.elements.voiceStatus
+            });
+            
+            // Set callback for voice input
+            voiceService.setVoiceInputCallback((userText, context) => {
+                this.handleVoiceInput(userText, context);
+            });
+        }
     }
 
     /**
@@ -416,6 +444,10 @@ class TogyzkumalakApp {
                 this.elements.btnAnalyze.disabled = false;
                 // Final render to ensure formatting is correct
                 this.elements.analysisContent.querySelector('.analysis-result').innerHTML = this.formatAnalysis(data.full_text);
+                // Speak the analysis
+                if (typeof voiceService !== 'undefined' && data.full_text) {
+                    voiceService.speak(data.full_text);
+                }
                 break;
                 
             case 'suggestion_start':
@@ -434,6 +466,10 @@ class TogyzkumalakApp {
                 this.isStreaming = false;
                 this.elements.btnSuggest.disabled = false;
                 this.elements.analysisContent.querySelector('.suggestion-result').innerHTML = this.formatAnalysis(data.full_text);
+                // Speak the suggestion
+                if (typeof voiceService !== 'undefined' && data.full_text) {
+                    voiceService.speak(data.full_text);
+                }
                 break;
                 
             case 'game_over':
@@ -901,6 +937,35 @@ class TogyzkumalakApp {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    /**
+     * Handle voice input from user - send to AI with context
+     */
+    async handleVoiceInput(userText, lastAnalysisContext) {
+        if (!userText || !this.gameId) return;
+        
+        console.log('[Voice] User asked:', userText);
+        
+        // Show user's question in analysis panel
+        const userQuestionHtml = `
+            <div class="voice-question">
+                <span class="voice-icon">🎤</span>
+                <span class="voice-text">"${this.escapeHtml(userText)}"</span>
+            </div>
+            <div class="analysis-result"><span class="chunk-loading"></span></div>
+        `;
+        this.elements.analysisContent.innerHTML = userQuestionHtml;
+        
+        // Send voice query via WebSocket with context
+        if (gameAPI.ws && gameAPI.ws.readyState === WebSocket.OPEN) {
+            gameAPI.ws.send(JSON.stringify({
+                type: 'voice_query',
+                query: userText,
+                context: lastAnalysisContext || '',
+                game_id: this.gameId
+            }));
+        }
     }
 
     triggerBoardGlow() {
