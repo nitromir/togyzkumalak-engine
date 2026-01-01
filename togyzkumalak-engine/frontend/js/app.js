@@ -430,6 +430,8 @@ class TogyzkumalakApp {
             case 'analysis_start':
                 this.isStreaming = true;
                 this.userScrolling = false;
+                this.ttsBuffer = '';  // Buffer for progressive TTS
+                this.ttsSentIndex = 0;  // Track what we've sent to TTS
                 // Remove preloader, prepare for streaming content
                 this.elements.analysisContent.innerHTML = '<div class="analysis-result"><span class="chunk-loading"></span></div>';
                 this.elements.btnAnalyze.disabled = true;
@@ -437,6 +439,8 @@ class TogyzkumalakApp {
                 
             case 'analysis_chunk':
                 this.appendAnalysisChunk(data.chunk);
+                // Progressive TTS: accumulate and send sentences
+                this.processProgressiveTTS(data.chunk);
                 break;
                 
             case 'analysis_end':
@@ -444,15 +448,15 @@ class TogyzkumalakApp {
                 this.elements.btnAnalyze.disabled = false;
                 // Final render to ensure formatting is correct
                 this.elements.analysisContent.querySelector('.analysis-result').innerHTML = this.formatAnalysis(data.full_text);
-                // Speak the analysis
-                if (typeof voiceService !== 'undefined' && data.full_text) {
-                    voiceService.speak(data.full_text);
-                }
+                // Flush remaining buffer to TTS
+                this.flushTTSBuffer();
                 break;
                 
             case 'suggestion_start':
                 this.isStreaming = true;
                 this.userScrolling = false;
+                this.ttsBuffer = '';  // Buffer for progressive TTS
+                this.ttsSentIndex = 0;  // Track what we've sent to TTS
                 // Remove preloader, prepare for streaming content
                 this.elements.analysisContent.innerHTML = '<div class="suggestion-result"><span class="chunk-loading"></span></div>';
                 this.elements.btnSuggest.disabled = true;
@@ -460,16 +464,16 @@ class TogyzkumalakApp {
                 
             case 'suggestion_chunk':
                 this.appendAnalysisChunk(data.chunk);
+                // Progressive TTS: accumulate and send sentences
+                this.processProgressiveTTS(data.chunk);
                 break;
                 
             case 'suggestion_end':
                 this.isStreaming = false;
                 this.elements.btnSuggest.disabled = false;
                 this.elements.analysisContent.querySelector('.suggestion-result').innerHTML = this.formatAnalysis(data.full_text);
-                // Speak the suggestion
-                if (typeof voiceService !== 'undefined' && data.full_text) {
-                    voiceService.speak(data.full_text);
-                }
+                // Flush remaining buffer to TTS
+                this.flushTTSBuffer();
                 break;
                 
             case 'game_over':
@@ -507,6 +511,52 @@ class TogyzkumalakApp {
         if (!this.userScrolling) {
             this.elements.analysisContent.scrollTop = this.elements.analysisContent.scrollHeight;
         }
+    }
+
+    /**
+     * Process progressive TTS - send sentences to TTS as they complete.
+     */
+    processProgressiveTTS(chunk) {
+        if (typeof voiceService === 'undefined' || !voiceService.isVoiceEnabled) return;
+        
+        this.ttsBuffer = (this.ttsBuffer || '') + chunk;
+        
+        // Look for sentence endings: . ! ? or newline after text
+        const sentenceEndings = /[.!?。！？]\s*|\n\n/g;
+        let lastEnd = 0;
+        let match;
+        
+        // Only start looking for endings after some text is accumulated
+        if (this.ttsBuffer.length - this.ttsSentIndex < 20) return;
+
+        while ((match = sentenceEndings.exec(this.ttsBuffer)) !== null) {
+            const sentenceEnd = match.index + match[0].length;
+            if (sentenceEnd > this.ttsSentIndex) {
+                // Extract sentence from last sent position to this ending
+                const sentence = this.ttsBuffer.substring(this.ttsSentIndex, sentenceEnd).trim();
+                if (sentence.length > 5) {
+                    voiceService.queueSpeak(sentence);
+                }
+                this.ttsSentIndex = sentenceEnd;
+            }
+        }
+    }
+
+    /**
+     * Flush remaining TTS buffer at end of stream.
+     */
+    flushTTSBuffer() {
+        if (typeof voiceService === 'undefined' || !voiceService.isVoiceEnabled) return;
+        
+        // Send any remaining text that wasn't a complete sentence
+        const remaining = (this.ttsBuffer || '').substring(this.ttsSentIndex || 0).trim();
+        if (remaining.length > 2) {
+            voiceService.queueSpeak(remaining);
+        }
+        
+        // Reset
+        this.ttsBuffer = '';
+        this.ttsSentIndex = 0;
     }
 
     /**
@@ -958,8 +1008,8 @@ class TogyzkumalakApp {
         this.elements.analysisContent.innerHTML = userQuestionHtml;
         
         // Send voice query via WebSocket with context
-        if (gameAPI.ws && gameAPI.ws.readyState === WebSocket.OPEN) {
-            gameAPI.ws.send(JSON.stringify({
+        if (api.ws && api.ws.readyState === WebSocket.OPEN) {
+            api.ws.send(JSON.stringify({
                 type: 'voice_query',
                 query: userText,
                 context: lastAnalysisContext || '',

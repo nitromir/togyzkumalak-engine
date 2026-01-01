@@ -15,7 +15,7 @@ import psutil
 import psutil
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -382,7 +382,7 @@ async def voice_status():
 
 
 @app.post("/api/voice/tts")
-async def text_to_speech(text: str):
+async def text_to_speech(text: str = Form(...)):
     """Convert text to speech. Returns base64-encoded PCM audio."""
     if not voice_service.is_tts_available():
         raise HTTPException(status_code=503, detail="TTS service not available")
@@ -402,7 +402,7 @@ async def text_to_speech(text: str):
 
 
 @app.post("/api/voice/tts/stream")
-async def text_to_speech_stream(text: str):
+async def text_to_speech_stream(text: str = Form(...)):
     """Stream text-to-speech audio. Returns chunked PCM audio."""
     if not voice_service.is_tts_available():
         raise HTTPException(status_code=503, detail="TTS service not available")

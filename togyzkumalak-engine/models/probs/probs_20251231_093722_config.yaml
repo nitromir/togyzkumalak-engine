@@ -1,0 +1,39 @@
+name: probs_togyzkumalak
+env:
+  name: togyzkumalak
+  n_max_episode_steps: 200
+cmd: train
+infra:
+  log: mem
+  device: cpu
+  sub_processes_cnt: 4
+  self_play_threads: 4
+  mem_max_episodes: 10000
+train:
+  n_high_level_iterations: 100
+  v_train_episodes: 500
+  q_train_episodes: 250
+  q_dataset_episodes_sub_iter: 1
+  dataset_drop_ratio: 0.5
+  checkpoints_dir: C:/Users/Admin/Documents/Toguzkumalak/gym-togyzkumalak-master/togyzkumalak-engine/models/probs/checkpoints
+  train_batch_size: 64
+  self_learning_batch_size: 64
+  get_q_dataset_batch_size: 64
+  num_q_s_a_calls: 30
+  max_depth: 50
+  alphazero_move_num_sampling_moves: 5
+  q_add_hardest_nodes_per_step: 5
+evaluate:
+  evaluate_n_games: 40
+  randomize_n_turns: 2
+  enemy:
+    kind: one_step_lookahead
+model:
+  value:
+    class: ValueModelTK_v1
+    learning_rate: 0.0003
+    weight_decay: 0.0001
+  self_learner:
+    class: SelfLearningModelTK_v1
+    learning_rate: 0.0003
+    weight_decay: 0.0001
