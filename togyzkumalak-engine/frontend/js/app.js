@@ -1286,7 +1286,7 @@ function initThemeSwitcher() {
         { id: 'default', name: 'Киберпанк' },
         { id: 'purple', name: 'Пурпур' },
         { id: 'coffee', name: 'Кофе' },
-        { id: 'light', name: 'Светлая' }
+        { id: 'green', name: 'Лесная' }
     ];
     
     // Load saved theme
