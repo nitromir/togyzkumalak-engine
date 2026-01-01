@@ -118,8 +118,9 @@ class TogyzkumalakAPI {
     /**
      * Get move probabilities for visualization.
      */
-    async getMoveProbabilities(level = 3) {
-        return await this.request('GET', `/ai/probabilities/${this.gameId}?level=${level}`);
+    async getMoveProbabilities(level = 3, model = 'auto') {
+        const url = `/ai/probabilities/${this.gameId}?level=${level}` + (model !== 'auto' ? `&model=${model}` : '');
+        return await this.request('GET', url);
     }
 
     /**

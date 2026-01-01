@@ -35,7 +35,11 @@ class ClassicBoard {
         this.humanColor = 'white';
         this.onMoveClick = null;
         this.lastMove = null;
-        this.probabilities = null; // Map of pitIndex -> float (0-1)
+        this.multiProbabilities = {
+            polynet: null,
+            alphazero: null,
+            probs: null
+        };
         this.showProbabilities = true;
         
         this.init();
@@ -48,11 +52,24 @@ class ClassicBoard {
         }
     }
 
-    setProbabilities(probs) {
-        this.probabilities = probs;
+    setProbabilities(modelKey, probs) {
+        if (typeof modelKey === 'string' && probs !== undefined) {
+            this.multiProbabilities[modelKey] = probs;
+        } else {
+            // Legacy support or clearing all
+            this.multiProbabilities.polynet = modelKey; // modelKey is probs object
+            this.multiProbabilities.alphazero = null;
+            this.multiProbabilities.probs = null;
+        }
+        
         if (this.gameState) {
             this.render(this.gameState);
         }
+    }
+
+    clearProbabilities() {
+        this.multiProbabilities = { polynet: null, alphazero: null, probs: null };
+        if (this.gameState) this.render(this.gameState);
     }
 
     highlightLastMove(index, player) {
@@ -150,30 +167,48 @@ class ClassicBoard {
                 ctx.strokeRect(x - 4, y - 4, this.pitWidth + 8, this.pitHeight + 8);
             }
 
-            // Draw Confidence Bar (Probabilities)
-            if (this.showProbabilities && this.probabilities && this.probabilities[pitIndex] !== undefined && player === this.humanColor) {
-                const prob = this.probabilities[pitIndex];
-                if (prob > 0.01) {
-                    const barHeight = Math.max(2, this.pitHeight * prob);
-                    const barY = y + this.pitHeight - barHeight;
-                    
-                    ctx.fillStyle = prob > 0.5 ? '#10b981' : (prob > 0.2 ? '#f59e0b' : '#6366f1');
-                    ctx.globalAlpha = 0.6;
-                    // Place bar into the gap area between pits (or inside the last pit to avoid clipping)
-                    const isLastCol = i === 8;
-                    const barX = isLastCol
-                        ? (x + this.pitWidth - 8)
-                        : (x + this.pitWidth + (this.gap / 2) - 3);
-                    ctx.fillRect(barX, barY, 6, barHeight);
-                    ctx.globalAlpha = 1.0;
-                    
-                    // Percentage text
-                    ctx.fillStyle = this.colors.textLight;
-                    ctx.font = '9px Segoe UI';
-                    ctx.textAlign = 'left';
-                    const textX = isLastCol ? (x + this.pitWidth - 32) : (barX + 10);
-                    ctx.fillText(`${Math.round(prob * 100)}%`, textX, barY + barHeight/2 + 4);
-                }
+            // Draw Confidence Bars (Probabilities)
+            if (this.showProbabilities && player === this.humanColor) {
+                const models = [
+                    { key: 'polynet', color: '#00f2ff', label: 'P' },
+                    { key: 'alphazero', color: '#7000ff', label: 'A' },
+                    { key: 'probs', color: '#ff8800', label: 'B' }
+                ];
+                
+                models.forEach((model, idx) => {
+                    const probs = this.multiProbabilities[model.key];
+                    if (probs && probs[pitIndex] !== undefined) {
+                        const prob = probs[pitIndex];
+                        if (prob > 0.01) {
+                            const barWidth = 5;
+                            const barHeight = Math.max(2, this.pitHeight * prob);
+                            const barY = y + this.pitHeight - barHeight;
+                            
+                            // Place bars into the gap area
+                            const isLastCol = i === 8;
+                            const spacing = 2;
+                            const totalWidth = models.length * barWidth + (models.length - 1) * spacing;
+                            
+                            const baseX = isLastCol
+                                ? (x + this.pitWidth - totalWidth - 5)
+                                : (x + this.pitWidth + (this.gap / 2) - (totalWidth / 2));
+                            
+                            const barX = baseX + idx * (barWidth + spacing);
+                            
+                            ctx.fillStyle = model.color;
+                            ctx.globalAlpha = 0.8;
+                            ctx.fillRect(barX, barY, barWidth, barHeight);
+                            
+                            // Add small label at bottom of bar
+                            ctx.globalAlpha = 1.0;
+                            if (prob > 0.1) {
+                                ctx.font = '7px monospace';
+                                ctx.textAlign = 'center';
+                                ctx.fillText(model.label, barX + barWidth/2, y + this.pitHeight + 8);
+                            }
+                        }
+                    }
+                });
             }
         }
     }
@@ -338,17 +373,37 @@ class ClassicBoard {
 
     handleClick(e) {
         if (!this.onMoveClick || !this.gameState) return;
-        
+
         const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Check only bottom pits (player's pits) - updated Y range
-        if (y >= 280 && y <= 400) {
+        // Only allow clicks on human's row and only when it's their turn
+        // NOTE: this.gameState here is the *board* object (from backend), not the full game state.
+        const isTurn = this.gameState.current_player === this.humanColor;
+        const isFinished = !!this.gameState.is_finished;
+        if (!isTurn || isFinished) return;
+
+        // Determine which row is clickable based on human color
+        const isBottomRow = this.humanColor === 'white';
+        const rowYMin = isBottomRow ? 280 : 50;
+        const rowYMax = isBottomRow ? 400 : 170; // 50 + pitHeight(120)
+
+        if (y >= rowYMin && y <= rowYMax) {
             for (let i = 0; i < 9; i++) {
                 const pitX = this.padding + i * (this.pitWidth + this.gap);
                 if (x >= pitX && x <= pitX + this.pitWidth) {
-                    this.onMoveClick(i + 1);
+                    // Map click column to pit index in state arrays
+                    // Bottom (white) row: left->right is 1..9
+                    // Top (black) row: left->right is 9..1 (reversed)
+                    const pitIndex = isBottomRow ? i : (8 - i);
+                    const legalMoves = Array.isArray(this.gameState.legal_moves) ? this.gameState.legal_moves : [];
+                    const pitsArr = isBottomRow ? this.gameState.white_pits : this.gameState.black_pits;
+                    const pitValue = Array.isArray(pitsArr) ? pitsArr[pitIndex] : null;
+                    const canPlay = legalMoves.includes(pitIndex) && (typeof pitValue === 'number' ? pitValue > 0 : true);
+
+                    if (!canPlay) return;
+                    this.onMoveClick(pitIndex + 1);
                     break;
                 }
             }

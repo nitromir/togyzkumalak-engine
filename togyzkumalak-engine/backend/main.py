@@ -32,6 +32,7 @@ from .metrics_collector import metrics_collector
 from .schema_ab_testing import ab_test_manager
 from .wandb_integration import wandb_tracker
 from .task_manager import az_task_manager
+from .probs_task_manager import probs_task_manager
 
 
 # Engine directory (for file paths)
@@ -147,8 +148,8 @@ async def create_game(request: NewGameRequest):
     if request.player_color not in ["white", "black"]:
         raise HTTPException(status_code=400, detail="Invalid player color")
     
-    if request.ai_level not in range(1, 7):
-        raise HTTPException(status_code=400, detail="AI level must be 1-6")
+    if request.ai_level not in range(1, 8):
+        raise HTTPException(status_code=400, detail="AI level must be 1-7")
     
     game = game_manager.create_game(
         human_color=request.player_color,
@@ -213,12 +214,17 @@ async def make_move(game_id: str, request: MoveRequest):
     if state["status"] == "in_progress":
         board = game_manager.get_board(game_id)
         if board.current_player != game.human_color:
-            ai_move, thinking_time = ai_engine.get_move(board, game.ai_level)
-            success, state = game_manager.make_move(game_id, ai_move, thinking_time)
-            state["ai_move"] = {
-                "move": int(ai_move),
-                "thinking_time_ms": int(thinking_time)
-            }
+            try:
+                ai_move, thinking_time = ai_engine.get_move(board, game.ai_level)
+                success, state = game_manager.make_move(game_id, ai_move, thinking_time)
+                state["ai_move"] = {
+                    "move": int(ai_move),
+                    "thinking_time_ms": int(thinking_time)
+                }
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"AI move failed: {str(e)}")
     
     # Handle game end
     if state["status"] == "finished":
@@ -316,25 +322,42 @@ async def get_ai_levels():
             {"level": 3, "name": "Intermediate", "elo": 1500, "description": "Neural network (basic)"},
             {"level": 4, "name": "Advanced", "elo": 1800, "description": "Neural network (deep)"},
             {"level": 5, "name": "Expert", "elo": 2100, "description": "Best available model"},
-            {"level": 6, "name": "Gemini AI", "elo": 2400, "description": "Google Gemini LLM opponent"}
+            {"level": 6, "name": "Gemini AI", "elo": 2400, "description": "Google Gemini LLM opponent"},
+            {"level": 7, "name": "PROBS AI", "elo": 2200, "description": "PROBS algorithm (Beam Search)"}
         ]
     }
 
 
 @app.get("/api/ai/probabilities/{game_id}")
-async def get_move_probabilities(game_id: str, level: int = 3):
+async def get_move_probabilities(game_id: str, level: int = 3, model: Optional[str] = None):
     """Get AI move probability distribution for visualization."""
+    # #region agent log
+    import time
+    try:
+        with open(r"c:\Users\Admin\Documents\Toguzkumalak\debug_final.log", "a") as f:
+            f.write(f"API hit for {model} at {time.time()}\n")
+    except: pass
+    # #endregion
     board = game_manager.get_board(game_id)
     if not board:
         raise HTTPException(status_code=404, detail="Game not found")
     
-    probs = ai_engine.get_move_probabilities(board, level)
+    probs = ai_engine.get_move_probabilities(board, level, model_type=model)
     evaluation = ai_engine.evaluate_position(board)
-    
+
+    # Ensure JSON-friendly types and stable shape (list[9]) for frontend
+    try:
+        if isinstance(probs, dict):
+            probs_out = [float(probs.get(str(i), probs.get(i, 0.0))) for i in range(9)]
+        else:
+            probs_out = [float(probs[i]) for i in range(9)]
+    except Exception:
+        probs_out = [0.0] * 9
+
     return {
-        "probabilities": probs,
-        "evaluation": evaluation,
-        "legal_moves": board.get_legal_moves()
+        "probabilities": probs_out,
+        "evaluation": float(evaluation) if hasattr(evaluation, "__float__") else evaluation,
+        "legal_moves": [int(m) for m in board.get_legal_moves()]
     }
 
 
@@ -414,17 +437,43 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                 board = game_manager.get_board(game_id)
                 if board:
                     board_state = board.get_state_dict()
+                    board_state["legal_moves"] = board.get_legal_moves()
                     history = game_manager.get_move_history(game_id)
-                    analysis = await gemini_analyzer.analyze_position(board_state, history)
-                    await websocket.send_json({"type": "analysis", "data": analysis})
+                    
+                    # Get probabilities from all models
+                    model_probs = {
+                        "polynet": ai_engine.get_move_probabilities(board, model_type="polynet"),
+                        "alphazero": ai_engine.get_move_probabilities(board, model_type="alphazero"),
+                        "probs": ai_engine.get_move_probabilities(board, model_type="probs")
+                    }
+                    
+                    await websocket.send_json({"type": "analysis_start"})
+                    full_text = ""
+                    async for chunk in gemini_analyzer.analyze_position_stream(board_state, history, model_probs):
+                        full_text += chunk
+                        await websocket.send_json({"type": "analysis_chunk", "chunk": chunk})
+                    await websocket.send_json({"type": "analysis_end", "full_text": full_text})
             
             elif data["type"] == "request_suggestion":
                 board = game_manager.get_board(game_id)
                 if board:
                     board_state = board.get_state_dict()
+                    board_state["legal_moves"] = board.get_legal_moves()
                     history = game_manager.get_move_history(game_id)
-                    suggestion = await gemini_analyzer.suggest_move(board_state, history)
-                    await websocket.send_json({"type": "suggestion", "data": suggestion})
+                    
+                    # Get probabilities from all models
+                    model_probs = {
+                        "polynet": ai_engine.get_move_probabilities(board, model_type="polynet"),
+                        "alphazero": ai_engine.get_move_probabilities(board, model_type="alphazero"),
+                        "probs": ai_engine.get_move_probabilities(board, model_type="probs")
+                    }
+                    
+                    await websocket.send_json({"type": "suggestion_start"})
+                    full_text = ""
+                    async for chunk in gemini_analyzer.suggest_move_stream(board_state, history, model_probs):
+                        full_text += chunk
+                        await websocket.send_json({"type": "suggestion_chunk", "chunk": chunk})
+                    await websocket.send_json({"type": "suggestion_end", "full_text": full_text})
             
             elif data["type"] == "resign":
                 game = game_manager.get_game(game_id)
@@ -519,10 +568,12 @@ class TrainingConfigRequest(BaseModel):
 class GeminiBattleRequest(BaseModel):
     """Request to start a Gemini battle session."""
     num_games: int = 10
-    model_level: int = 5
+    player1: str = "active"
+    player2: str = "gemini"
     gemini_timeout: int = 30
     save_replays: bool = True
-    generate_summaries: bool = True
+    model_level: int = 5 # Legacy support
+    generate_summaries: bool = True # Legacy support
 
 
 class AlphaZeroTrainingRequest(BaseModel):
@@ -1072,10 +1123,10 @@ async def start_gemini_battle(request: GeminiBattleRequest):
     try:
         config = BattleConfig(
             num_games=request.num_games,
-            model_level=request.model_level,
+            player1=request.player1,
+            player2=request.player2,
             gemini_timeout=request.gemini_timeout,
-            save_replays=request.save_replays,
-            generate_summaries=request.generate_summaries
+            save_replays=request.save_replays
         )
         
         session_id = gemini_battle_manager.create_session(config)
@@ -1167,17 +1218,9 @@ async def export_gemini_training_data():
     Export Gemini battle games to training data format.
     Converts all saved game logs to transitions for training.
     """
-    # #region agent log
-    import json as _json; _log_path = r"c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log"
-    def _dbg(hyp, msg, data): open(_log_path, 'a').write(_json.dumps({"hypothesisId": hyp, "location": "main.py:export_gemini", "message": msg, "data": data, "timestamp": __import__('time').time()}) + '\n')
-    # #endregion
     try:
         # Fix: games are in gemini_battles/games subdirectory
         games_dir = os.path.join(gemini_battle_manager.logs_dir, "gemini_battles", "games")
-        
-        # #region agent log
-        _dbg("H8", "Games dir check", {"dir": games_dir, "exists": os.path.exists(games_dir), "logs_dir": gemini_battle_manager.logs_dir})
-        # #endregion
         
         if not os.path.exists(games_dir):
             return {"status": "no_data", "message": "No Gemini battle games found", "games_exported": 0}
@@ -2441,9 +2484,223 @@ async def get_alphazero_logs(task_id: Optional[str] = None, lines: int = 200):
         }
 
 
+# =============================================================================
+# PROBS Training API Endpoints
+# =============================================================================
+
+class PROBSTrainingRequest(BaseModel):
+    n_high_level_iterations: int = 10
+    v_train_episodes: int = 5
+    q_train_episodes: int = 5
+    mem_max_episodes: int = 500
+    train_batch_size: int = 32
+    self_learning_batch_size: int = 32
+    num_q_s_a_calls: int = 10
+    max_depth: int = 8
+    self_play_threads: int = 2
+    sub_processes_cnt: int = 0
+    evaluate_n_games: int = 5
+    device: str = "cpu"
+    use_boost: bool = False
+    initial_checkpoint: Optional[str] = None
+
+
+@app.post("/api/training/probs/start")
+async def start_probs_training(request: PROBSTrainingRequest):
+    """Start PROBS training session."""
+    try:
+        task_id = probs_task_manager.start_training(request.dict())
+        return {"task_id": task_id, "status": "started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/probs/sessions")
+async def list_probs_sessions():
+    """List all PROBS training sessions."""
+    return {"sessions": probs_task_manager.list_tasks()}
+
+
+@app.get("/api/training/probs/sessions/{task_id}")
+async def get_probs_status(task_id: str):
+    """Get status of a PROBS training session."""
+    status = probs_task_manager.get_status(task_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return status
+
+
+@app.post("/api/training/probs/sessions/{task_id}/stop")
+async def stop_probs_training(task_id: str):
+    """Stop a PROBS training session."""
+    success = probs_task_manager.stop_task(task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"status": "stopping"}
+
+
+@app.get("/api/training/probs/checkpoints")
+async def list_probs_checkpoints():
+    """List all PROBS checkpoints."""
+    try:
+        checkpoints = probs_task_manager.get_checkpoints()
+        return {"checkpoints": checkpoints, "total": len(checkpoints)}
+    except Exception as e:
+        return {"checkpoints": [], "total": 0, "error": str(e)}
+
+
+@app.post("/api/training/probs/checkpoints/{checkpoint_name}/load")
+async def load_probs_checkpoint(checkpoint_name: str):
+    """Load a specific PROBS checkpoint for gameplay."""
+    try:
+        checkpoint_file = checkpoint_name if checkpoint_name.endswith('.ckpt') else f"{checkpoint_name}.ckpt"
+        checkpoint_path = os.path.join(engine_dir, "models", "probs", "checkpoints", checkpoint_file)
+        
+        if not os.path.exists(checkpoint_path):
+            raise HTTPException(status_code=404, detail=f"Checkpoint not found: {checkpoint_file}")
+        
+        success = probs_task_manager.load_checkpoint(checkpoint_path)
+        if success:
+            # Also update the ai_engine
+            ai_engine.probs_model_keeper = probs_task_manager.get_loaded_model()
+            return {"status": "success", "loaded": checkpoint_file}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to load checkpoint")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/probs/checkpoints/{checkpoint_name}/download")
+async def download_probs_checkpoint(checkpoint_name: str):
+    """Download a PROBS checkpoint file."""
+    try:
+        checkpoint_file = checkpoint_name if checkpoint_name.endswith('.ckpt') else f"{checkpoint_name}.ckpt"
+        checkpoint_path = os.path.join(engine_dir, "models", "probs", "checkpoints", checkpoint_file)
+        
+        if not os.path.exists(checkpoint_path):
+            raise HTTPException(status_code=404, detail=f"Checkpoint not found: {checkpoint_file}")
+        
+        return FileResponse(
+            path=checkpoint_path,
+            filename=checkpoint_file,
+            media_type="application/octet-stream"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/probs/model-info")
+async def get_probs_model_info():
+    """Get info about currently loaded PROBS model."""
+    return {
+        "loaded": probs_task_manager.is_model_loaded(),
+        "checkpoints_available": len(probs_task_manager.get_checkpoints()),
+        "model_info": ai_engine.get_model_info(7)
+    }
+
+
+@app.get("/api/training/probs/logs")
+async def get_probs_logs(lines: int = 200):
+    """Get training logs for PROBS."""
+    try:
+        log_path = os.path.join(engine_dir, "probs_training.log")
+        if not os.path.exists(log_path):
+            return {"output": [], "status": "no_log"}
+        
+        with open(log_path, 'r', encoding='utf-8') as f:
+            all_lines = f.readlines()
+            return {"output": [line.strip() for line in all_lines[-lines:]], "status": "ok"}
+    except Exception as e:
+        return {"output": [], "status": "error", "error": str(e)}
+
+
 @app.get("/api/system/git-status")
 async def get_git_status():
     """Get current git status and last commit info."""
+# ... (rest of the function)
+
+# =============================================================================
+# Checkpoint Sync API
+# =============================================================================
+
+class SyncConfigRequest(BaseModel):
+    remote_url: str = "http://localhost"
+    ports: List[int] = [8000, 8080]
+    interval: int = 30
+    enabled: bool = True
+
+@app.get("/api/sync/status")
+async def get_sync_status():
+    """Get current synchronization status."""
+    status_file = os.path.join(os.path.dirname(engine_dir), "sync_status.json")
+    config_file = os.path.join(os.path.dirname(engine_dir), "sync_config.json")
+    
+    status = {"status": "inactive", "last_sync": None, "server": None}
+    if os.path.exists(status_file):
+        try:
+            with open(status_file, "r") as f:
+                status = json.load(f)
+        except: pass
+        
+    config = {"enabled": False, "remote_url": "", "ports": []}
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                config = json.load(f)
+        except: pass
+        
+    # Check if process is running
+    is_running = False
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        if proc.info['cmdline'] and 'sync_checkpoints.py' in ' '.join(proc.info['cmdline']):
+            is_running = True
+            break
+            
+    return {
+        "is_running": is_running,
+        "config": config,
+        "status": status
+    }
+
+@app.post("/api/sync/config")
+async def update_sync_config(request: SyncConfigRequest):
+    """Update sync configuration."""
+    config_file = os.path.join(os.path.dirname(engine_dir), "sync_config.json")
+    with open(config_file, "w") as f:
+        json.dump(request.dict(), f, indent=4)
+        
+    # Restart sync process if needed
+    if request.enabled:
+        # Kill existing
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            if proc.info['cmdline'] and 'sync_checkpoints.py' in ' '.join(proc.info['cmdline']):
+                os.kill(proc.info['pid'], signal.SIGTERM)
+        
+        # Start new
+        sync_script = os.path.join(os.path.dirname(engine_dir), "sync_checkpoints.py")
+        subprocess.Popen([sys.executable, sync_script], start_new_session=True)
+        
+    return {"status": "success", "config": request.dict()}
+
+@app.post("/api/sync/restart")
+async def restart_sync():
+    """Force restart the sync process."""
+    # Kill existing
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        if proc.info['cmdline'] and 'sync_checkpoints.py' in ' '.join(proc.info['cmdline']):
+            try:
+                os.kill(proc.info['pid'], signal.SIGTERM)
+            except: pass
+    
+    # Start new
+    sync_script = os.path.join(os.path.dirname(engine_dir), "sync_checkpoints.py")
+    subprocess.Popen([sys.executable, sync_script], start_new_session=True)
+    return {"status": "restarted"}
+
     try:
         repo_root = os.path.dirname(os.path.dirname(engine_dir))
         git_dir = os.path.join(repo_root, ".git")

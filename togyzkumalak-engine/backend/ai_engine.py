@@ -3,11 +3,13 @@ AI Engine for Togyzkumalak.
 
 Provides multiple AI levels from random to neural network-based.
 Level 6 uses Google Gemini LLM for gameplay.
+Level 7 uses PROBS (Predict Result of Beam Search) algorithm.
 """
 
 import asyncio
 import os
 import random
+import sys
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -17,6 +19,17 @@ import torch.nn as nn
 
 from .config import ai_config
 from .game_manager import TogyzkumalakBoard
+
+# Add PROBS path for imports
+PROBS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 
+    "../../../probs-main/python_impl_generic"))
+if not os.path.exists(PROBS_PATH):
+    # Try one more level just in case of different deploy structures
+    PROBS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 
+        "../../../../probs-main/python_impl_generic"))
+
+if PROBS_PATH not in sys.path:
+    sys.path.insert(0, PROBS_PATH)
 
 
 class PolicyNetwork(nn.Module):
@@ -53,6 +66,7 @@ class AIEngine:
     4. Advanced NN - Deeper network with better training
     5. Expert NN - Best available model
     6. Gemini AI - Google Gemini LLM opponent
+    7. PROBS AI - Predict Result of Beam Search algorithm
     """
     
     def __init__(self):
@@ -63,6 +77,8 @@ class AIEngine:
         self.alphazero_model = None  # AlphaZero network for MCTS-based play
         self.use_mcts = False  # Whether to use MCTS with AlphaZero model
         self.mcts_cache = {}  # Cache for MCTS objects per level
+        self.probs_agent = None  # PROBS agent for level 7
+        self.probs_model_keeper = None  # PROBS model keeper
         self._load_models()
     
     def _load_models(self):
@@ -92,6 +108,22 @@ class AIEngine:
             
             self.models[level] = model
         
+        # Load AlphaZero model if available
+        az_path = os.path.join(ai_config.model_dir, "alphazero", "best.pth.tar")
+        if os.path.exists(az_path):
+            try:
+                from .alphazero_trainer import TogyzkumalakGame, AlphaZeroNetwork
+                game = TogyzkumalakGame()
+                az_net = AlphaZeroNetwork(128, 256, 9) # Default params
+                checkpoint = torch.load(az_path, map_location=self.device)
+                az_net.load_state_dict(checkpoint['state_dict'])
+                az_net.to(self.device)
+                az_net.eval()
+                self.alphazero_model = az_net
+                print("[AI] Loaded AlphaZero model from best.pth.tar")
+            except Exception as e:
+                print(f"[AI] Failed to load AlphaZero model: {e}")
+
         # Auto-load latest human-trained model for level 5
         self._load_latest_human_model()
     
@@ -137,6 +169,17 @@ class AIEngine:
     
     def get_model_info(self, level: int = 5) -> Dict:
         """Get information about the currently active model for a given level."""
+        # Special case for PROBS
+        if level == 7:
+            return {
+                "name": "PROBS",
+                "level": 7,
+                "type": "probs",
+                "architecture": "PROBS (Value + Q-Value)",
+                "use_mcts": False,
+                "has_probs": self.probs_model_keeper is not None
+            }
+        
         model = self.models.get(level)
         model_type = "default"
         architecture = "PolicyNetwork"
@@ -156,7 +199,8 @@ class AIEngine:
             "type": model_type,
             "architecture": architecture,
             "use_mcts": self.use_mcts and model_type == "alphazero",
-            "has_alphazero": self.alphazero_model is not None
+            "has_alphazero": self.alphazero_model is not None,
+            "has_probs": self.probs_model_keeper is not None
         }
     
     def get_move(
@@ -188,6 +232,8 @@ class AIEngine:
             move = self._heuristic_move(board, legal_moves)
         elif level == 6:
             move = self._gemini_move(board, legal_moves)
+        elif level == 7:
+            move = self._probs_move(board, legal_moves)
         else:
             move = self._neural_move(board, legal_moves, level)
         
@@ -197,7 +243,7 @@ class AIEngine:
             time.sleep((thinking_time_ms - elapsed) / 1000)
             elapsed = thinking_time_ms
         
-        return move + 1, int(elapsed)  # Convert to 1-based
+        return int(move) + 1, int(elapsed)  # Convert to 1-based, ensure Python int
     
     def _random_move(self, legal_moves: List[int]) -> int:
         """Level 1: Random move selection."""
@@ -441,21 +487,131 @@ class AIEngine:
             print(f"[ERROR] Gemini move failed: {e}, falling back to heuristic")
             return self._heuristic_move(board, legal_moves)
     
+    def _probs_move(
+        self,
+        board: TogyzkumalakBoard,
+        legal_moves: List[int]
+    ) -> int:
+        """Level 7: PROBS (Predict Result of Beam Search) move selection with Beam Search."""
+        try:
+            # Lazy-load PROBS components
+            if self.probs_model_keeper is None:
+                self._load_probs_model()
+            
+            if self.probs_model_keeper is None:
+                print("[WARNING] PROBS model not available, falling back to heuristic")
+                return self._heuristic_move(board, legal_moves)
+            
+            # Import PROBS components
+            original_cwd = os.getcwd()
+            os.chdir(PROBS_PATH)
+            
+            try:
+                from probs_impl import probs_impl_common
+                from environments.togyzkumalak_env import TogyzkumalakEnv
+                
+                # Check if we need to create/update the agent
+                # We use SelfLearningAgent_TreeScan for deep search (Level 7)
+                if self.probs_agent is None or not isinstance(self.probs_agent, probs_impl_common.SelfLearningAgent_TreeScan):
+                    # Configure search parameters - make Level 7 strong
+                    # 60 nodes and 0.5s is usually enough to be very strong
+                    self.probs_agent = probs_impl_common.SelfLearningAgent_TreeScan(
+                        "PROBS_Level7",
+                        model_keeper=self.probs_model_keeper,
+                        device=str(self.device),
+                        action_time_budget=0.8,  # 0.8 seconds per move
+                        expand_tree_budget=100,  # Expand up to 100 nodes
+                        batch_size=32            # Batch size for NN inference
+                    )
+                
+                # Create PROBS environment from current board state
+                env = TogyzkumalakEnv()
+                env.board = np.array(board.fields, dtype=np.float32)
+                # Ensure correct player encoding (1 for white, -1 for black)
+                env.player = 1 if board.current_player == "white" else -1
+                env.done = False
+                
+                # Use the agent to get action via Beam Search
+                move = self.probs_agent.get_action(env)
+                
+                # Validate move
+                if move not in legal_moves:
+                    print(f"[PROBS] Agent suggested illegal move {move}, choosing best legal")
+                    # Fallback to one-shot if search failed or suggested illegal
+                    q_values = probs_impl_common.get_q_a_single_state(
+                        self.probs_model_keeper.models['self_learner'],
+                        env,
+                        str(self.device)
+                    )
+                    mask = np.zeros(9)
+                    for m in legal_moves: mask[m] = 1
+                    move = int(np.argmax(q_values * mask + (1 - mask) * (-1e9)))
+
+                print(f"[PROBS] Search Move: {move} (Nodes: {self.probs_agent.last_search_nodes_cnt}, Time: {self.probs_agent.last_search_time:.2f}s)")
+                return int(move)  # Ensure Python int for JSON serialization
+                
+            finally:
+                os.chdir(original_cwd)
+            
+        except Exception as e:
+            print(f"[ERROR] PROBS move search failed: {e}, falling back to heuristic")
+            import traceback
+            traceback.print_exc()
+            return self._heuristic_move(board, legal_moves)
+            
+        except Exception as e:
+            print(f"[ERROR] PROBS move failed: {e}, falling back to heuristic")
+            import traceback
+            traceback.print_exc()
+            return self._heuristic_move(board, legal_moves)
+    
+    def _load_probs_model(self):
+        """Load PROBS model from checkpoint."""
+        try:
+            from .probs_task_manager import probs_task_manager
+            
+            # Check if model is already loaded in task manager
+            if probs_task_manager.is_model_loaded():
+                self.probs_model_keeper = probs_task_manager.get_loaded_model()
+                print("[PROBS] Using model from task manager")
+                return
+            
+            # Try to load best or latest checkpoint
+            checkpoints = probs_task_manager.get_checkpoints()
+            if checkpoints:
+                # Always take the first one (latest) as it is most likely to exist and be valid
+                target = checkpoints[0]
+                
+                if target and os.path.exists(target['path']):
+                    if probs_task_manager.load_checkpoint(target['path'], str(self.device)):
+                        self.probs_model_keeper = probs_task_manager.get_loaded_model()
+                        print(f"[PROBS] Loaded checkpoint: {target['filename']}")
+                        return
+            
+            print("[PROBS] No valid checkpoint available")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to load PROBS model: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def get_move_probabilities(
         self,
         board: TogyzkumalakBoard,
-        level: int = 3
+        level: int = 3,
+        model_type: str = None
     ) -> Dict[int, float]:
         """Get move probabilities for visualization."""
-        # For Gemini level (6), use Gemini API for probabilities
-        if level == 6:
+
+        # 1. GEMINI
+        if model_type == 'gemini' or (model_type is None and level == 6):
             try:
                 from .gemini_analyzer import gemini_analyzer
                 if not gemini_analyzer.is_available():
                     legal_moves = board.get_legal_moves()
                     return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
                 
-                # Use current event loop if available, else create new one
+                # Use current event loop if available
                 try:
                     loop = asyncio.get_event_loop()
                 except RuntimeError:
@@ -469,47 +625,92 @@ class AIEngine:
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor() as pool:
                         future = pool.submit(
-                            lambda: asyncio.run(
-                                gemini_analyzer.get_move_probabilities(board_state)
-                            )
+                            lambda: asyncio.run(gemini_analyzer.get_move_probabilities(board_state))
                         )
                         return future.result(timeout=30)
                 else:
-                    return loop.run_until_complete(
-                        gemini_analyzer.get_move_probabilities(board_state)
-                    )
+                    return loop.run_until_complete(gemini_analyzer.get_move_probabilities(board_state))
             except Exception as e:
                 print(f"[ERROR] Gemini probabilities failed: {e}")
                 legal_moves = board.get_legal_moves()
                 return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
 
-        # Use AlphaZero MCTS probabilities if enabled and model is loaded
-        if self.alphazero_model is not None and self.use_mcts:
+        # 2. PROBS
+        if model_type == 'probs' or (model_type is None and level == 7):
             try:
-                # We need to ensure MCTS is initialized for this level
-                # _alphazero_mcts_move handles this
-                from .alphazero_trainer import TogyzkumalakGame
+                if self.probs_model_keeper is None:
+                    self._load_probs_model()
                 
-                # Convert board to AlphaZero format
+                if self.probs_model_keeper is not None:
+                    original_cwd = os.getcwd()
+                    os.chdir(PROBS_PATH)
+                    try:
+                        from probs_impl import probs_impl_common
+                        from environments.togyzkumalak_env import TogyzkumalakEnv
+                        
+                        env = TogyzkumalakEnv()
+                        env.board = np.array(board.fields, dtype=np.float32)
+                        env.player = 1 if board.current_player == "white" else -1
+                        
+                        q_values = probs_impl_common.get_q_a_single_state(
+                            self.probs_model_keeper.models['self_learner'],
+                            env,
+                            str(self.device)
+                        )
+                        
+                        legal_moves = board.get_legal_moves()
+                        mask = np.zeros(9)
+                        for m in legal_moves:
+                            mask[m] = 1
+                        
+                        # Softmax for probabilities
+                        # Using lower temperature to make differences more visible
+                        # Standard deviation of Q-values is often small, so we need high sensitivity
+                        temperature = 0.05
+                        exp_q = np.exp((q_values - np.max(q_values)) / temperature)
+                        masked_exp_q = exp_q * mask
+                        
+                        if masked_exp_q.sum() > 0:
+                            probs = masked_exp_q / masked_exp_q.sum()
+                            return {i: float(probs[i]) for i in range(9)}
+                    finally:
+                        os.chdir(original_cwd)
+            except Exception as e:
+                print(f"[ERROR] PROBS probabilities failed: {e}")
+            
+            # Fallback if specific PROBS request failed
+            if model_type == 'probs':
+                legal_moves = board.get_legal_moves()
+                return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
+
+        # 3. ALPHAZERO (MCTS)
+        if model_type == 'alphazero' or (self.alphazero_model is not None and self.use_mcts and model_type is None):
+            try:
+                from .alphazero_trainer import TogyzkumalakGame
                 game = TogyzkumalakGame()
                 az_board = np.array(board.fields, dtype=np.float32)
                 player = 1 if board.current_player == "white" else -1
                 canonical = game.getCanonicalForm(az_board, player)
                 
-                # Ensure MCTS exists for this level (or use level 5 sims for better analysis)
-                self._alphazero_mcts_move(board, board.get_legal_moves(), level)
-                mcts = self.mcts_cache[level]
+                # Use level 5 sims for analysis
+                self._alphazero_mcts_move(board, board.get_legal_moves(), 5)
+                mcts = self.mcts_cache.get(5)
                 
-                print(f"[AI] MCTS Probability calculation for Level {level}")
-                
-                # Get probabilities from MCTS (temp=1 for full distribution)
-                action_probs = mcts.getActionProb(canonical, temp=1.0)
-                
-                return {i: float(action_probs[i]) for i in range(9)}
+                if mcts:
+                    action_probs = mcts.getActionProb(canonical, temp=1.0)
+                    return {i: float(action_probs[i]) for i in range(9)}
             except Exception as e:
                 print(f"[WARNING] AlphaZero MCTS probabilities failed: {e}")
 
-        model = self.models.get(level)
+        # 4. POLYNET / GYM MODELS (Default)
+        target_level = level
+        # If model_type is explicitly polynet, use level 5 if target level not found
+        # Or if we fell through from level 7
+        if model_type == 'polynet' or level == 7:
+            target_level = 5
+            
+        model = self.models.get(target_level) or self.models.get(5)
+        
         if not model:
             legal_moves = board.get_legal_moves()
             return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
@@ -528,6 +729,8 @@ class AIEngine:
         masked_probs = action_probs * mask
         if masked_probs.sum() > 0:
             masked_probs = masked_probs / masked_probs.sum()
+        else:
+            return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
         
         return {i: float(masked_probs[i]) for i in range(9)}
     
@@ -700,4 +903,3 @@ class AIEngine:
 
 # Global AI engine instance
 ai_engine = AIEngine()
-

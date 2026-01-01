@@ -24,7 +24,7 @@ class TogyzkumalakAlphaZeroGame(AlphaZeroGameBase):
     def get_observation(self, board):
         """Helper to convert raw fields to NN input observation (128-dim)."""
         if isinstance(board, np.ndarray):
-        temp_board = TogyzkumalakBoard(board.tolist())
+            temp_board = TogyzkumalakBoard(board.tolist())
         else:
             temp_board = TogyzkumalakBoard(list(board))
         return temp_board.to_observation()

@@ -79,64 +79,54 @@
     
     async function loadAvailableModels() {
         try {
-            const response = await fetch('/api/training/models');
-            if (response.ok) {
-                const data = await response.json();
+            // Load AlphaZero checkpoints
+            const resAz = await fetch('/api/training/alphazero/checkpoints');
+            const dataAz = await resAz.json();
+            
+            // Load PROBS checkpoints
+            const resProbs = await fetch('/api/training/probs/checkpoints');
+            const dataProbs = await resProbs.json();
+            
+            const populateGroups = (selectEl) => {
+                if (!selectEl) return;
                 
-                // Helper to populate a select
-                const populateSelect = (selectEl, currentVal) => {
-                    if (!selectEl) return;
-                    
-                    selectEl.innerHTML = '<option value="default">🌐 Стандартная (Level 5)</option>';
-                    
-                    data.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model.name;
-                        const typeIcon = model.type === 'alphazero' ? '🦾' : '🧠';
-                        option.textContent = `${typeIcon} ${model.name}`;
-                        selectEl.appendChild(option);
-                    });
-                    
-                    if (currentVal && Array.from(selectEl.options).some(o => o.value === currentVal)) {
-                        selectEl.value = currentVal;
-                    }
-                };
+                const currentVal = selectEl.value;
                 
-                // Populate both model selects
-                populateSelect(elements.modelSelect, elements.modelSelect?.value);
-                populateSelect(elements.model2Select, elements.model2Select?.value);
-            }
+                const probsList = selectEl.querySelector('#arenaProbsList1, #arenaProbsList2');
+                const azList = selectEl.querySelector('#arenaAzList1, #arenaAzList2');
+                
+                // We need to find them by id inside the specific select
+                const myProbsGroup = selectEl.querySelector('optgroup[label*="PROBS"]');
+                const myAzGroup = selectEl.querySelector('optgroup[label*="AlphaZero"]');
+
+                if (myProbsGroup) {
+                    myProbsGroup.innerHTML = (dataProbs.checkpoints || []).map(cp => 
+                        `<option value="probs:${cp.filename}">${cp.is_best ? '⭐ ' : ''}${cp.filename}</option>`
+                    ).join('');
+                }
+                
+                if (myAzGroup) {
+                    myAzGroup.innerHTML = (dataAz.checkpoints || []).map(cp => 
+                        `<option value="az:${cp.name}">${cp.name}</option>`
+                    ).join('');
+                }
+                
+                if (currentVal) selectEl.value = currentVal;
+            };
+            
+            populateGroups(elements.modelSelect);
+            populateGroups(elements.model2Select);
+            
         } catch (e) {
             console.error('Error loading models for VS Arena:', e);
         }
     }
 
     async function handleModelChange() {
-        const modelName = elements.modelSelect.value;
-        if (!modelName || modelName === 'default') {
-            console.log('Using default model level 5');
-            return;
-        }
-
-        try {
-            elements.modelSelect.disabled = true;
-            const response = await fetch(`/api/training/models/${modelName}/load`, {
-                method: 'POST'
-            });
-
-            if (response.ok) {
-                console.log(`[Gemini Battle] Successfully loaded model: ${modelName}`);
-                // Notify other modules if needed
-            } else {
-                throw new Error('Failed to load model');
-            }
-        } catch (e) {
-            console.error('Error changing model for Gemini Battle:', e);
-            alert('Ошибка при смене модели: ' + e.message);
-            elements.modelSelect.value = 'default';
-        } finally {
-            elements.modelSelect.disabled = false;
-        }
+        // We don't necessarily want to load the model into AIEngine immediately 
+        // when changing in Arena setup, but we could.
+        // For now, let's just log it.
+        console.log(`[Arena] Model selection changed: ${elements.modelSelect.value} vs ${elements.model2Select.value}`);
     }
     
     async function startBattle(config) {
@@ -233,35 +223,42 @@
         const chartHeight = height - padding.top - padding.bottom;
         
         // Scale functions
-        const xScale = (i) => padding.left + (i / (values.length - 1)) * chartWidth;
-        const yScale = (v) => padding.top + chartHeight - ((v - min_elo) / (max_elo - min_elo)) * chartHeight;
+        const xScale = (i) => padding.left + (i / Math.max(1, values.length - 1)) * chartWidth;
+        const yScale = (v) => {
+            const range = max_elo - min_elo;
+            if (range === 0) return padding.top + chartHeight / 2;
+            return padding.top + chartHeight - ((v - min_elo) / range) * chartHeight;
+        };
         
         // Draw threshold lines
-        ctx.setLineDash([5, 5]);
-        ctx.lineWidth = 1;
-        thresholds.forEach(t => {
-            if (t.value >= min_elo && t.value <= max_elo) {
-                const y = yScale(t.value);
-                
-                // Line color based on level
-                if (t.value >= 2200) ctx.strokeStyle = '#fbbf24';
-                else if (t.value >= 2000) ctx.strokeStyle = '#f97316';
-                else if (t.value >= 1800) ctx.strokeStyle = '#ef4444';
-                else if (t.value >= 1400) ctx.strokeStyle = '#10b981';
-                else ctx.strokeStyle = '#6b7280';
-                
-                ctx.beginPath();
-                ctx.moveTo(padding.left, y);
-                ctx.lineTo(width - padding.right, y);
-                ctx.stroke();
-                
-                // Label
-                ctx.fillStyle = ctx.strokeStyle;
-                ctx.font = '10px "JetBrains Mono", monospace';
-                ctx.textAlign = 'right';
-                ctx.fillText(t.label, width - padding.right - 5, y - 3);
-            }
-        });
+        if (thresholds && Array.isArray(thresholds)) {
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 1;
+            thresholds.forEach(t => {
+                if (t.value >= min_elo && t.value <= max_elo) {
+                    const y = yScale(t.value);
+                    
+                    // Line color based on level
+                    if (t.value >= 2400) ctx.strokeStyle = '#fbbf24'; // GM
+                    else if (t.value >= 2200) ctx.strokeStyle = '#f59e0b'; // IM
+                    else if (t.value >= 2000) ctx.strokeStyle = '#f97316'; // Master
+                    else if (t.value >= 1800) ctx.strokeStyle = '#ef4444'; // KMS
+                    else if (t.value >= 1400) ctx.strokeStyle = '#10b981'; // Club
+                    else ctx.strokeStyle = '#6b7280';
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(padding.left, y);
+                    ctx.lineTo(width - padding.right, y);
+                    ctx.stroke();
+                    
+                    // Label
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.font = '10px "JetBrains Mono", monospace';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(t.label, width - padding.right - 5, y - 3);
+                }
+            });
+        }
         
         ctx.setLineDash([]);
         
@@ -369,6 +366,19 @@
                 break;
         }
         
+        // Update matchup display
+        const p1Name = (data.player1_type || 'Player 1').replace('az:', 'AZ_').replace('probs:', 'PROBS_');
+        const p2Name = (data.player2_type || 'Player 2').replace('az:', 'AZ_').replace('probs:', 'PROBS_');
+        const matchupEl = document.getElementById('arenaMatchupDisplay');
+        if (matchupEl) matchupEl.textContent = `${p1Name} vs ${p2Name}`;
+
+        const sidesEl = document.getElementById('currentGameSides');
+        if (sidesEl && data.status === 'running') {
+            const p1Color = data.player1_color || 'white';
+            const p2Color = p1Color === 'white' ? 'black' : 'white';
+            sidesEl.innerHTML = `<span style="color:white">⚪ ${p1Color === 'white' ? p1Name : p2Name}</span> vs <span style="color:#aaa">⚫ ${p1Color === 'black' ? p1Name : p2Name}</span>`;
+        }
+
         elements.status.innerHTML = `<p class="status-text ${statusClass}">${statusText}</p>`;
         
         // Update progress bar
@@ -378,6 +388,13 @@
         
         // Update stats
         elements.statsContainer.classList.remove('hidden');
+        
+        // Update labels based on player types
+        const l1 = document.getElementById('labelP1Wins');
+        const l2 = document.getElementById('labelP2Wins');
+        if (l1) l1.textContent = `Побед ${p1Name.substring(0,12)}:`;
+        if (l2) l2.textContent = `Побед ${p2Name.substring(0,12)}:`;
+
         elements.modelElo.textContent = data.model_elo;
         elements.modelCategory.textContent = `(${data.model_category})`;
         elements.modelWins.textContent = data.model_wins;
@@ -529,12 +546,16 @@
     // =========================================================================
     
     async function handleStartBattle() {
+        const p1 = elements.modelSelect.value;
+        const p2 = elements.model2Select.value;
+        const numGames = parseInt(elements.numGames.value) || 10;
+        
         const config = {
-            num_games: parseInt(elements.numGames.value) || 10,
-            model_level: parseInt(elements.modelLevel.value) || 5,
+            player1: p1,
+            player2: p2,
+            num_games: numGames,
             gemini_timeout: parseInt(elements.timeout.value) || 30,
-            save_replays: elements.saveReplays.checked,
-            generate_summaries: elements.generateSummaries.checked
+            save_replays: elements.saveReplays.checked
         };
         
         try {

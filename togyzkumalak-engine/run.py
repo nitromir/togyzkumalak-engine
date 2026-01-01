@@ -50,35 +50,35 @@ def main():
     if not is_remote():
         Timer(1.5, lambda: open_browser(f"http://localhost:{port}")).start()
     
-    print("=" * 60)
-    print("  TOGYZKUMALAK ENGINE")
-    print("  AI-Powered Toguz Kumalak Game")
-    print("=" * 60)
-    print()
-    print(f"  Server URL: http://{host}:{port}")
-    print(f"  Environment: {'Docker' if is_docker() else 'Remote' if is_remote() else 'Local'}")
-    print("  Press Ctrl+C to stop")
-    print()
+    # print("=" * 60)
+    # print("  TOGYZKUMALAK ENGINE")
+    # print("  AI-Powered Toguz Kumalak Game")
+    # print("=" * 60)
+    # print()
+    # print(f"  Server URL: http://{host}:{port}")
+    # print(f"  Environment: {'Docker' if is_docker() else 'Remote' if is_remote() else 'Local'}")
+    # print("  Press Ctrl+C to stop")
+    # print()
     
     # Check for CUDA
-    try:
-        import torch
-        if torch.cuda.is_available():
-            gpu_count = torch.cuda.device_count()
-            gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
-            print(f"  CUDA: Available ({gpu_count}x {gpu_name})")
-        else:
-            print("  CUDA: Not available (CPU mode)")
-    except ImportError:
-        print("  CUDA: PyTorch not available")
+    # try:
+    #    import torch
+    #    if torch.cuda.is_available():
+    #        gpu_count = torch.cuda.device_count()
+    #        gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
+    #        print(f"  CUDA: Available ({gpu_count}x {gpu_name})")
+    #    else:
+    #        print("  CUDA: Not available (CPU mode)")
+    # except ImportError:
+    #    print("  CUDA: PyTorch not available")
     
     # Check for Gemini API key
-    if os.environ.get("GEMINI_API_KEY"):
-        print("  Gemini API: Configured")
-    else:
-        print("  Gemini API: Not configured (set GEMINI_API_KEY for analysis)")
+    # if os.environ.get("GEMINI_API_KEY"):
+    #    print("  Gemini API: Configured")
+    # else:
+    #    print("  Gemini API: Not configured (set GEMINI_API_KEY for analysis)")
     print()
-    print("=" * 60)
+    # print("=" * 60)
     
     uvicorn.run(
         "backend.main:app",

@@ -58,7 +58,7 @@ for i in range(20):
 
 print("\n🔥 4. ЗАПУСКАЕМ ОБУЧЕНИЕ (4 GPU / BLITZ)...")
 try:
-    # Оптимальные параметры для 4x 4090:
+    # Оптимальные параметры для 4x 4090 и процессора на 24 потока:
     config = {
         "numIters": 100,
         "numEps": 440,        # 11 игр на каждый из 40 воркеров
@@ -71,6 +71,33 @@ try:
     }
     r = requests.post('http://localhost:8000/api/training/alphazero/start', json=config)
     print(f"✅ СТАТУС ЗАПУСКА: {r.json()}")
+
+---
+ import requests
+
+payload = {
+    "numIters": 100,
+    "numEps": 1280,
+    "numMCTSSims": 100,
+    "batch_size": 1024,
+    "epochs": 15,
+    "num_workers": 96,
+    "num_parallel_games": 96,
+    "resume_from_checkpoint": True
+}
+
+try:
+    r = requests.post('http://localhost:8000/api/training/alphazero/start', json=payload)
+    print("🚀 ПОДЖАРКА НАЧАЛАСЬ:", r.json())
+except Exception as e:
+    print("❌ ОШИБКА:", e)
+
+    ---
+увидеть прожарку
+cd /workspace/togyzkumalak-engine/togyzkumalak-engine/deploy
+python monitor.py
+---
+
     
     # Ждем немного и проверяем логи загрузки модели
     time.sleep(5)

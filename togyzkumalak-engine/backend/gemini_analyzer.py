@@ -36,6 +36,25 @@ class GeminiAnalyzer:
         9: "Маңдай"
     }
     
+    # Model display names in Russian
+    MODEL_NAMES = {
+        "polynet": "ПолиНет (базовая сеть)",
+        "alphazero": "АльфаЗеро (MCTS)",
+        "probs": "ПРОБС (Beam Search)"
+    }
+    
+    # System prompt for consistent persona
+    SYSTEM_PROMPT = """Ты — гроссмейстер и тренер по Тогыз Кумалаку (Тоғыз Құмалақ) с 20-летним опытом.
+Твоя задача — давать глубокий стратегический анализ позиций и объяснять тактические нюансы игры.
+
+ПРАВИЛА:
+- Отвечай ТОЛЬКО на русском языке
+- Используй казахские названия лунок (Арт, Тектұрмас, Ат өтпес, Атсыратар, Бел, Белбасар, Қандықақпан, Көкмойын, Маңдай)
+- Будь конкретен: указывай номера лунок и точные расчёты
+- Объясняй логику, а не просто констатируй факты
+- Учитывай данные нейросетей, но критически их оценивай"""
+
+    
     def __init__(self):
         self.client = None
         self.model = gemini_config.model
@@ -105,126 +124,205 @@ class GeminiAnalyzer:
             return ""
     
     def _format_position(self, board_state: Dict) -> str:
-        """Format board position for LLM consumption."""
+        """Format board position for LLM consumption - fully in Russian."""
         lines = []
-        lines.append("=== TOGYZKUMALAK POSITION ===")
+        lines.append("═══ ТЕКУЩАЯ ПОЗИЦИЯ ═══")
         lines.append("")
         
         # Black side (top) - reverse order for display
         black_pits = board_state.get("black_pits", [9]*9)
-        lines.append(f"ҚАРА (Black/Қостаушы):")
-        lines.append(f"  Pits: [9←1] {list(reversed(black_pits))}")
-        lines.append(f"  Қазан: {board_state.get('black_kazan', 0)}")
+        black_kazan = board_state.get('black_kazan', 0)
+        lines.append(f"ЧЁРНЫЕ (Қара/Қостаушы):")
+        lines.append(f"  Лунки [9←1]: {list(reversed(black_pits))}")
+        lines.append(f"  Казан: {black_kazan} кумалаков")
         
         # White side (bottom)
         white_pits = board_state.get("white_pits", [9]*9)
+        white_kazan = board_state.get('white_kazan', 0)
         lines.append("")
-        lines.append(f"АҚ (White/Бастаушы):")
-        lines.append(f"  Pits: [1→9] {white_pits}")
-        lines.append(f"  Қазан: {board_state.get('white_kazan', 0)}")
+        lines.append(f"БЕЛЫЕ (Ақ/Бастаушы):")
+        lines.append(f"  Лунки [1→9]: {white_pits}")
+        lines.append(f"  Казан: {white_kazan} кумалаков")
+        
+        # Material balance
+        lines.append("")
+        diff = white_kazan - black_kazan
+        if diff > 0:
+            lines.append(f"📊 Материал: белые +{diff}")
+        elif diff < 0:
+            lines.append(f"📊 Материал: чёрные +{abs(diff)}")
+        else:
+            lines.append("📊 Материал: равенство")
+        
+        # Victory progress
+        lines.append(f"   До победы: белым нужно {82 - white_kazan}, чёрным нужно {82 - black_kazan}")
         
         # Tuzduk info
-        lines.append("")
         white_tuzduk = board_state.get("white_tuzduk", 0)
         black_tuzduk = board_state.get("black_tuzduk", 0)
+        if white_tuzduk > 0 or black_tuzduk > 0:
+            lines.append("")
+            lines.append("🏴 ТУЗДЫКИ:")
         if white_tuzduk > 0:
-            lines.append(f"* White has TUZDUK at Black's pit {white_tuzduk} ({self.HOLE_NAMES.get(white_tuzduk, '')})")
+            lines.append(f"  • У белых туздык на лунке {white_tuzduk} чёрных ({self.HOLE_NAMES.get(white_tuzduk, '')})")
         if black_tuzduk > 0:
-            lines.append(f"* Black has TUZDUK at White's pit {black_tuzduk} ({self.HOLE_NAMES.get(black_tuzduk, '')})")
+            lines.append(f"  • У чёрных туздык на лунке {black_tuzduk} белых ({self.HOLE_NAMES.get(black_tuzduk, '')})")
         
         # Current player and legal moves
         lines.append("")
         current = board_state.get("current_player", "white")
-        lines.append(f"Current player: {current.upper()}")
+        current_ru = "БЕЛЫЕ" if current == "white" else "ЧЁРНЫЕ"
+        lines.append(f"🎯 Ход: {current_ru}")
         
         legal = board_state.get("legal_moves", list(range(9)))
-        lines.append(f"Legal moves: {[m+1 for m in legal]}")
+        legal_with_names = [f"{m+1} ({self.HOLE_NAMES.get(m+1, '')})" for m in legal]
+        lines.append(f"   Доступные ходы: {', '.join(legal_with_names)}")
         
         return "\n".join(lines)
     
     def _format_move_history(self, moves: List[Dict]) -> str:
-        """Format move history for context."""
+        """Format move history for context - in Russian."""
         if not moves:
-            return "No moves played yet."
+            return "История ходов: партия только началась."
         
-        lines = ["Move history:"]
-        for i, move in enumerate(moves):
-            move_num = i + 1
+        lines = ["📜 ИСТОРИЯ ХОДОВ (последние 20):"]
+        # Get last 20 moves
+        recent_moves = moves[-20:] if len(moves) > 20 else moves
+        start_idx = len(moves) - len(recent_moves)
+        
+        for i, move in enumerate(recent_moves):
+            move_num = start_idx + i + 1
             player = move.get("player", "?")
+            player_ru = "Б" if player.lower().startswith("w") else "Ч"
             notation = move.get("notation", str(move.get("move", "?")))
-            lines.append(f"  {move_num}. {player[0].upper()}: {notation}")
+            lines.append(f"  {move_num}. {player_ru}: лунка {notation}")
         
-        return "\n".join(lines[-20:])  # Last 20 moves
+        return "\n".join(lines)
     
-    def _build_analysis_prompt(self, position_text: str, history_text: str) -> str:
-        """Build the analysis prompt in Russian."""
-        return f"""Вы — эксперт по игре Тогыз Кумалак (Тоғыз Құмалақ).
-Проанализируйте следующую позицию и дайте стратегический совет.
+    def _format_ai_data(self, model_probs: Dict[str, Dict[int, float]]) -> str:
+        """Format AI model probabilities for LLM consumption - in Russian."""
+        if not model_probs:
+            return ""
+        
+        lines = ["", "🤖 ОЦЕНКИ НЕЙРОСЕТЕЙ:"]
+        for model_name, probs in model_probs.items():
+            if not probs:
+                continue
+            
+            # Get display name in Russian
+            display_name = self.MODEL_NAMES.get(model_name, model_name)
+            
+            # Get top 3 moves for each model
+            sorted_moves = sorted(probs.items(), key=lambda x: x[1], reverse=True)[:3]
+            if not sorted_moves or sorted_moves[0][1] < 0.01:
+                lines.append(f"  • {display_name}: нет данных")
+                continue
+                
+            moves_parts = []
+            for m, p in sorted_moves:
+                if p > 0.01:  # Only show moves with >1% probability
+                    hole_name = self.HOLE_NAMES.get(m + 1, "")
+                    moves_parts.append(f"лунка {m+1} ({hole_name}) — {p*100:.0f}%")
+            
+            if moves_parts:
+                lines.append(f"  • {display_name}:")
+                lines.append(f"    Топ ходы: {', '.join(moves_parts)}")
+        
+        # Add consensus note if models agree
+        if len(model_probs) >= 2:
+            top_moves = []
+            for probs in model_probs.values():
+                if probs:
+                    best = max(probs.items(), key=lambda x: x[1])
+                    if best[1] > 0.2:  # Only count if confident
+                        top_moves.append(best[0])
+            
+            if len(top_moves) >= 2 and len(set(top_moves)) == 1:
+                agreed_move = top_moves[0] + 1
+                lines.append(f"  ⚡ Консенсус: все сети выбирают лунку {agreed_move} ({self.HOLE_NAMES.get(agreed_move, '')})")
+        
+        return "\n".join(lines)
 
-ОТВЕЧАЙТЕ СТРОГО НА РУССКОМ ЯЗЫКЕ.
-
-{position_text}
+    def _build_analysis_prompt(self, position_text: str, history_text: str, ai_data_text: str = "") -> str:
+        """Build the analysis prompt - optimized for Russian output."""
+        
+        # Build the user message with all context
+        user_message = f"""{position_text}
 
 {history_text}
+{ai_data_text}
 
-Пожалуйста, предоставьте анализ в следующем формате:
+═══ ЗАДАНИЕ ═══
+Проанализируй эту позицию как опытный тренер. 
 
-**ОЦЕНКА:** Оцените позицию от -10 (черные выигрывают) до +10 (белые выигрывают). Пример: "+2.5 (небольшое преимущество белых)"
+СТРУКТУРА ОТВЕТА (строго соблюдай):
 
-**ЛУЧШИЙ ХОД:** Рекомендуйте лучший ход (номер лунки 1-9) для текущего игрока с обоснованием.
+## 📊 ОЦЕНКА
+Числовая оценка от -10 до +10 с кратким пояснением.
+Пример: «+3.5 — белые имеют стабильное преимущество благодаря туздыку и материальному перевесу»
 
-**КЛЮЧЕВЫЕ ФАКТОРЫ:** Перечислите 2-3 ключевых стратегических фактора в этой позиции.
+## 🔍 СТРАТЕГИЧЕСКИЙ РАЗБОР  
+- Кто владеет инициативой и почему?
+- Какие лунки являются ключевыми в данной позиции?
+- Какая тактика оптимальна: атака, защита, накопление?
 
-**УГРОЗЫ:** Любые тактические угрозы, о которых должен знать текущий игрок.
+## 🎯 КЛЮЧЕВЫЕ ФАКТОРЫ
+Перечисли 2-3 конкретных фактора, определяющих оценку позиции.
 
-Пишите кратко, но содержательно. Используйте казахские названия лунок, где это уместно."""
+## ⚠️ УГРОЗЫ И ВОЗМОЖНОСТИ
+Что нужно учитывать ходящему игроку? Есть ли форсированные продолжения?
 
-    def _build_suggest_prompt(self, position_text: str, legal_moves: List[int]) -> str:
-        """Build the move suggestion prompt in Russian - optimized for quick response."""
-        return f"""Вы — эксперт по Тогыз Кумалак. 
+⛔ ВАЖНО: НЕ рекомендуй конкретный ход! Твоя задача — объяснить позицию, а не играть за игрока."""
 
-ВАЖНО: Начните ответ СРАЗУ с рекомендации в формате ниже, без вступления!
+        return f"{self.SYSTEM_PROMPT}\n\n{user_message}"
 
-{position_text}
+    def _build_suggest_prompt(self, position_text: str, legal_moves: List[int], ai_data_text: str = "") -> str:
+        """Build the move suggestion prompt - optimized for actionable advice."""
+        
+        user_message = f"""{position_text}
+{ai_data_text}
 
-Доступные ходы: {legal_moves}
+═══ ЗАДАНИЕ ═══
+Выбери ОДИН лучший ход и обоснуй выбор.
 
-ОТВЕТЬТЕ СТРОГО В ЭТОМ ФОРМАТЕ:
+СТРУКТУРА ОТВЕТА:
 
-**РЕКОМЕНДУЕМЫЙ ХОД:** [число 1-9]
+## 🎯 РЕКОМЕНДУЕМЫЙ ХОД: [число от 1 до 9]
 
-**ОБОСНОВАНИЕ:** Краткое объяснение (2-3 предложения).
+## 💡 ПОЧЕМУ ЭТОТ ХОД?
+Объясни в 3-4 предложениях:
+- Куда приземлится последний кумалак?
+- Будет ли захват? Сколько кумалаков попадёт в казан?
+- Как это влияет на позицию?
+- Совпадает ли это с мнением нейросетей?
 
-**АНАЛИЗ ХОДОВ:**
-- Ход X: куда приземлится, захват?
-- Ход Y: ...
+## 📋 АЛЬТЕРНАТИВЫ
+Кратко разбери 1-2 других хода из списка {legal_moves}:
+- Ход X: плюсы и минусы
+- Ход Y: плюсы и минусы
 
-Отвечайте на русском языке."""
+Начни ответ СРАЗУ с «## 🎯 РЕКОМЕНДУЕМЫЙ ХОД:» без вступлений."""
 
-    async def analyze_position(
+        return f"{self.SYSTEM_PROMPT}\n\n{user_message}"
+
+    async def analyze_position_stream(
         self,
         board_state: Dict,
-        move_history: List[Dict] = None
-    ) -> Dict:
+        move_history: List[Dict] = None,
+        model_probs: Dict[str, Dict[int, float]] = None
+    ):
         """
-        Analyze the current position.
-        
-        Args:
-            board_state: Dictionary with white_pits, black_pits, kazans, tuzduk, etc.
-            move_history: List of previous moves
-        
-        Returns:
-            Dictionary with evaluation, analysis text, etc.
+        Analyze the current position and yield text chunks (streaming).
+        Uses a queue to properly async iterate over synchronous Gemini stream.
         """
         if not self.client:
-            return {
-                "available": False,
-                "error": "Gemini not configured. Set GEMINI_API_KEY environment variable."
-            }
+            yield "Gemini not configured."
+            return
         
         position_text = self._format_position(board_state)
         history_text = self._format_move_history(move_history or [])
-        prompt = self._build_analysis_prompt(position_text, history_text)
+        ai_data_text = self._format_ai_data(model_probs or {})
+        prompt = self._build_analysis_prompt(position_text, history_text, ai_data_text)
         
         try:
             gen_cfg = self._build_generate_config(
@@ -232,127 +330,124 @@ class GeminiAnalyzer:
                 temperature=gemini_config.temperature,
             )
 
-            # Use run_in_executor for sync SDK call in async context
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=gen_cfg
-                )
-            )
-
-            text = self._response_to_text(response)
+            # Use async queue to bridge sync stream to async generator
+            import queue
+            import threading
             
-            # #region agent log
-            import json, time
-            with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json.dumps({"location":"gemini_analyzer.py:202", "message":"Gemini Analysis Raw Output", "data":{"raw_text":text, "len":len(text)}, "timestamp":int(time.time()*1000), "sessionId":"debug-session", "hypothesisId":"G"}) + "\n")
-            # #endregion
-
-            return {
-                "available": True,
-                "analysis": text,
-                "position": position_text,
-                "model": self.model
-            }
+            chunk_queue: queue.Queue = queue.Queue()
+            error_container = {"error": None}
+            
+            def stream_worker():
+                """Worker thread to consume sync stream and put chunks in queue."""
+                try:
+                    response_stream = self.client.models.generate_content_stream(
+                        model=self.model,
+                        contents=prompt,
+                        config=gen_cfg
+                    )
+                    for chunk in response_stream:
+                        text = self._response_to_text(chunk)
+                        if text:
+                            chunk_queue.put(text)
+                except Exception as e:
+                    error_container["error"] = str(e)
+                finally:
+                    chunk_queue.put(None)  # Signal end of stream
+            
+            # Start worker thread
+            worker = threading.Thread(target=stream_worker, daemon=True)
+            worker.start()
+            
+            # Async consume from queue
+            while True:
+                # Non-blocking check with short sleep to yield control
+                try:
+                    chunk = chunk_queue.get_nowait()
+                except queue.Empty:
+                    await asyncio.sleep(0.01)  # Yield control to event loop
+                    continue
+                
+                if chunk is None:  # End of stream
+                    if error_container["error"]:
+                        yield f"Error: {error_container['error']}"
+                    break
+                
+                yield chunk
+                    
         except Exception as e:
-            return {
-                "available": False,
-                "error": str(e)
-            }
-    
-    async def suggest_move(
+            yield f"Error during analysis: {str(e)}"
+
+    async def suggest_move_stream(
         self,
         board_state: Dict,
-        move_history: List[Dict] = None
-    ) -> Dict:
+        move_history: List[Dict] = None,
+        model_probs: Dict[str, Dict[int, float]] = None
+    ):
         """
-        Get a move suggestion with explanation.
-        
-        Returns:
-            Dictionary with suggested_move (1-9) and explanation
+        Get a move suggestion with explanation (streaming).
+        Uses a queue to properly async iterate over synchronous Gemini stream.
         """
         if not self.client:
-            return {
-                "available": False,
-                "error": "Gemini not configured"
-            }
+            yield "Gemini not configured."
+            return
         
         position_text = self._format_position(board_state)
         legal_moves = [m + 1 for m in board_state.get("legal_moves", list(range(9)))]
-        prompt = self._build_suggest_prompt(position_text, legal_moves)
+        ai_data_text = self._format_ai_data(model_probs or {})
+        prompt = self._build_suggest_prompt(position_text, legal_moves, ai_data_text)
         
         try:
             gen_cfg = self._build_generate_config(
-                max_output_tokens=1200,
+                max_output_tokens=2000,
                 temperature=0.3,
             )
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=gen_cfg
-                )
-            )
             
-            text = self._response_to_text(response)
+            # Use async queue to bridge sync stream to async generator
+            import queue
+            import threading
             
-            # #region agent log
-            import json, time
-            with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                f.write(json.dumps({"location":"gemini_analyzer.py:250", "message":"Gemini Suggestion Raw Output", "data":{"raw_text":text, "len":len(text), "legal_moves":legal_moves}, "timestamp":int(time.time()*1000), "sessionId":"debug-session", "hypothesisId":"E"}) + "\n")
-            # #endregion
-
-            suggested_move = None
+            chunk_queue: queue.Queue = queue.Queue()
+            error_container = {"error": None}
             
-            # Try to extract move number (English and Russian keys)
-            search_keys = ["RECOMMENDED MOVE:", "РЕКОМЕНДУЕМЫЙ ХОД:"]
-            for key in search_keys:
-                if f"{key}**" in text:
-                    parts = text.split(f"{key}**")
-                    if len(parts) > 1:
-                        import re
-                        match = re.search(r'(\d)', parts[1])
-                        if match:
-                            num = int(match.group(1))
-                            if num in legal_moves:
-                                suggested_move = num
-                                break
-                if key in text:
-                    parts = text.split(key)
-                    if len(parts) > 1:
-                        import re
-                        match = re.search(r'(\d)', parts[1])
-                        if match:
-                            num = int(match.group(1))
-                            if num in legal_moves:
-                                suggested_move = num
-                                break
+            def stream_worker():
+                """Worker thread to consume sync stream and put chunks in queue."""
+                try:
+                    response_stream = self.client.models.generate_content_stream(
+                        model=self.model,
+                        contents=prompt,
+                        config=gen_cfg
+                    )
+                    for chunk in response_stream:
+                        text = self._response_to_text(chunk)
+                        if text:
+                            chunk_queue.put(text)
+                except Exception as e:
+                    error_container["error"] = str(e)
+                finally:
+                    chunk_queue.put(None)  # Signal end of stream
             
-            # Fallback extraction if suggested_move still None
-            if not suggested_move:
-                import re
-                match = re.search(r'(?:RECOMMENDED MOVE|РЕКОМЕНДУЕМЫЙ ХОД)[:\*\s]+(\d)', text)
-                if match:
-                    num = int(match.group(1))
-                    if num in legal_moves:
-                        suggested_move = num
+            # Start worker thread
+            worker = threading.Thread(target=stream_worker, daemon=True)
+            worker.start()
             
-            return {
-                "available": True,
-                "suggested_move": suggested_move,
-                "explanation": text,
-                "legal_moves": legal_moves
-            }
+            # Async consume from queue
+            while True:
+                try:
+                    chunk = chunk_queue.get_nowait()
+                except queue.Empty:
+                    await asyncio.sleep(0.01)  # Yield control to event loop
+                    continue
+                
+                if chunk is None:  # End of stream
+                    if error_container["error"]:
+                        yield f"Error: {error_container['error']}"
+                    break
+                
+                yield chunk
+                    
         except Exception as e:
-            return {
-                "available": False,
-                "error": str(e)
-            }
+            yield f"Error during suggestion: {str(e)}"
+
     
     async def comment_move(
         self,
@@ -362,7 +457,7 @@ class GeminiAnalyzer:
         player: str
     ) -> Dict:
         """
-        Provide commentary on a move that was just played.
+        Provide commentary on a move that was just played - in Russian.
         """
         if not self.client:
             return {
@@ -372,32 +467,43 @@ class GeminiAnalyzer:
         
         # Calculate changes
         if player == "white":
-            kazan_gain = board_after.get("white_kazan", 0) - board_before.get("white_kazan", 0)
+            kazan_before = board_before.get("white_kazan", 0)
+            kazan_after = board_after.get("white_kazan", 0)
+            player_ru = "Белые"
         else:
-            kazan_gain = board_after.get("black_kazan", 0) - board_before.get("black_kazan", 0)
+            kazan_before = board_before.get("black_kazan", 0)
+            kazan_after = board_after.get("black_kazan", 0)
+            player_ru = "Чёрные"
+        
+        kazan_gain = kazan_after - kazan_before
+        hole_name = self.HOLE_NAMES.get(move, "")
         
         before_text = self._format_position(board_before)
         after_text = self._format_position(board_after)
         
-        prompt = f"""{player.upper()} played move {move} (pit {self.HOLE_NAMES.get(move, move)}).
+        prompt = f"""{self.SYSTEM_PROMPT}
 
-BEFORE:
+═══ КОММЕНТАРИЙ К ХОДУ ═══
+
+{player_ru} сыграли лунку {move} ({hole_name}).
+
+ПОЗИЦИЯ ДО ХОДА:
 {before_text}
 
-AFTER:
+ПОЗИЦИЯ ПОСЛЕ ХОДА:
 {after_text}
 
-Kazan gained: {kazan_gain}
+Захвачено кумалаков: {kazan_gain}
 
-Provide brief commentary (2-3 sentences):
-- Was it a good move?
-- What did it accomplish?
-- Any missed opportunities?"""
+ЗАДАНИЕ: Дай краткий комментарий (2-3 предложения):
+1. Насколько хорош этот ход? (отлично / хорошо / нормально / сомнительно / ошибка)
+2. Чего добился игрок этим ходом?
+3. Был ли лучший вариант?"""
 
         try:
             gen_cfg = self._build_generate_config(
                 max_output_tokens=500,
-                temperature=0.5,
+                temperature=0.4,
             )
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
@@ -436,26 +542,25 @@ Provide brief commentary (2-3 sentences):
 
         position_text = self._format_position(board_state)
         legal_moves = [m + 1 for m in board_state.get("legal_moves", list(range(9)))]
+        legal_with_names = [f"{m} ({self.HOLE_NAMES.get(m, '')})" for m in legal_moves]
         
-        prompt = f"""{position_text}
+        prompt = f"""Ты — гроссмейстер Тогыз Кумалака. Оцени вероятность того, что каждый ход является лучшим.
 
-Вы — гроссмейстер Тогыз Кумалак. Оцените вероятность того, что каждый из доступных ходов является наилучшим в данной позиции.
-ДОСТУПНЫЕ ХОДЫ: {legal_moves}
+{position_text}
 
-ОТВЕТЬТЕ СТРОГО В ФОРМАТЕ JSON, где ключи — номера лунок (1-9), а значения — вероятность (от 0 до 1). 
-Сумма всех вероятностей должна быть равна 1.0.
+ДОСТУПНЫЕ ХОДЫ: {', '.join(legal_with_names)}
 
-Пример ответа:
-{{
-  "1": 0.1,
-  "2": 0.8,
-  "5": 0.1
-}}"""
+ОТВЕТЬ СТРОГО В JSON-ФОРМАТЕ. Ключи — номера лунок, значения — вероятности (сумма = 1.0).
+
+Пример:
+{{"3": 0.6, "5": 0.25, "7": 0.15}}
+
+Только JSON, без пояснений."""
 
         try:
             from google.genai import types
             gen_cfg = types.GenerateContentConfig(
-                max_output_tokens=300,
+                max_output_tokens=200,
                 temperature=0.1,
                 response_mime_type="application/json"
             )

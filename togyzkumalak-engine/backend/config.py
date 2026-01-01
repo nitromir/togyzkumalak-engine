@@ -67,7 +67,7 @@ class GeminiConfig:
     api_key: Optional[str] = None
     model: str = "gemini-3-flash-preview"
     max_tokens: int = 4000  # Increased for longer analysis output
-    temperature: float = 0.7
+    temperature: float = 0.5  # Balanced: creative but focused (was 0.7)
     thinking_level: str = "HIGH"  # HIGH thinking for better analysis
 
 
@@ -77,8 +77,10 @@ ai_config = AIConfig()
 elo_config = ELOConfig()
 server_config = ServerConfig()
 
-# Gemini API key from environment or hardcoded for testing
+# Gemini API key from environment variable (REQUIRED)
 import os
-_gemini_api_key = os.environ.get("GEMINI_API_KEY", "AIzaSyBGdpw3KuRFiLzxNIPjCMphUzlInLLx-Pk")
+_gemini_api_key = os.environ.get("GEMINI_API_KEY")
+if not _gemini_api_key:
+    print("[WARNING] GEMINI_API_KEY environment variable not set. Gemini features will be disabled.")
 gemini_config = GeminiConfig(api_key=_gemini_api_key)
 

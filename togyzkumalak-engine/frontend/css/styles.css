@@ -63,9 +63,8 @@ body {
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden; /* No global scroll */
+    overflow-x: hidden; /* Убираем горизонтальный скролл */
+    width: 100%;
 }
 
 .tech-grid {
@@ -107,9 +106,10 @@ body::after {
 .app-container {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    width: 100vw;
+    min-height: 100vh;
+    width: 100%; /* Убираем 100vw для предотвращения горизонтального скролла */
     position: relative;
+    padding-bottom: 40px; /* Space at the bottom */
 }
 
 .header {
@@ -186,7 +186,6 @@ body::after {
     width: 100%;
     max-width: 1800px;
     margin: 0 auto;
-    overflow: hidden; /* Content must handle its own overflow */
 }
 
 /* If setup panel is active, hide sidebar and center setup */
@@ -410,8 +409,6 @@ body::after {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    height: 100%;
-    overflow: hidden;
 }
 
 .history-panel {
@@ -433,15 +430,190 @@ body::after {
     flex-direction: column;
 }
 
+.analysis-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.auto-analysis-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.auto-analysis-toggle input {
+    cursor: pointer;
+}
+
 .analysis-content {
     flex: 1;
     overflow-y: auto;
-    padding-right: 8px;
-    font-size: 13px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 242, 255, 0.1);
+    font-size: 15px; /* One step larger than 13px */
+    line-height: 1.6;
     min-height: 0;
-    max-height: 300px; /* Ensure scrollable within side panel */
     word-wrap: break-word;
-    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    white-space: normal; /* Changed from pre-wrap to avoid double breaks with <br> */
+    transition: all 0.3s ease;
+}
+
+.analysis-content .analysis-result,
+.analysis-content .suggestion-result {
+    display: block;
+    width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.analysis-content strong {
+    color: var(--accent-primary);
+}
+
+.analysis-content .analysis-heading {
+    display: block;
+    margin: 16px 0 8px 0;
+    padding: 8px 12px;
+    background: linear-gradient(90deg, rgba(0, 242, 255, 0.1), transparent);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: 0 6px 6px 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-primary);
+}
+
+.analysis-content .analysis-heading:first-child {
+    margin-top: 0;
+}
+
+.analysis-content .analysis-heading.highlight {
+    background: linear-gradient(90deg, rgba(255, 204, 0, 0.15), transparent);
+    border-left-color: var(--accent-gold);
+    color: var(--accent-gold);
+}
+
+.analysis-content .analysis-heading.warning {
+    background: linear-gradient(90deg, rgba(255, 136, 0, 0.15), transparent);
+    border-left-color: var(--accent-orange);
+    color: var(--accent-orange);
+}
+
+.analysis-content .chunk-loading {
+    display: inline-block;
+    width: 8px;
+    height: 15px;
+    background: var(--accent-primary);
+    margin-left: 4px;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* Analysis Preloader */
+.analysis-preloader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 30px 20px;
+}
+
+.preloader-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(0, 242, 255, 0.2);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.preloader-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Ensure placeholder text is visible */
+.analysis-content .placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+/* ============================================
+   GAME CONTROLS - 3 ROW LAYOUT
+   ============================================ */
+
+.game-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 10px 15px;
+    align-items: center;
+    justify-items: center;
+    width: 100%;
+    max-width: 900px;
+    margin-top: 15px;
+    padding: 15px 20px;
+    background: rgba(30, 41, 59, 0.6);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+/* Row 1: Undo and New Game buttons */
+.game-controls #btnUndo {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+}
+
+.game-controls #btnNewGame {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+}
+
+/* Row 2: Confidence controls and legend */
+.game-controls .confidence-selector-group {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: end;
+}
+
+.game-controls .confidence-legend {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+}
+
+/* Row 3: Resign button centered */
+.game-controls #btnResign {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: center;
+    margin-top: 5px;
+}
+
+/* Make last-move info styled nicely */
+.last-move {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 10px;
+    text-align: center;
 }
 
 /* =============================================================================
@@ -2566,10 +2738,10 @@ body::after {
 /* Checkpoints list */
 .checkpoints-section { margin-top: 16px; }
 .checkpoints-section h4 { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
-.checkpoints-list { display: flex; flex-direction: column; gap: 6px; max-height: 400px; overflow-y: auto; }
+.checkpoints-list { display: flex; flex-direction: column; gap: 6px; }
 .checkpoint-item {
-    display: grid;
-    grid-template-columns: 40px 100px 1fr auto;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
     gap: 12px;
     padding: 10px 14px;
@@ -3344,4 +3516,281 @@ body::after {
 .replay-btn:hover .replay-model {
     opacity: 1;
     color: var(--accent-primary);
+}
+
+.confidence-selector-group {
+    display: flex;
+    gap: 0;
+    align-items: center;
+}
+
+.confidence-selector-group #btnToggleConfidence {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.confidence-select {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 10px;
+    height: 100%;
+}
+
+.confidence-select:hover {
+    background: var(--bg-hover);
+}
+
+.confidence-legend {
+    display: flex;
+    gap: 15px;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 10px;
+}
+
+/* ============================================
+   SYNC DASHBOARD STYLES
+   ============================================ */
+
+.sync-panel {
+    grid-column: span 2;
+    background: rgba(0, 242, 255, 0.05);
+    border: 1px solid rgba(0, 242, 255, 0.2);
+}
+
+.sync-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+}
+
+.sync-indicator .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.sync-indicator.active .dot {
+    background: #22c55e;
+    box-shadow: 0 0 10px #22c55e;
+}
+
+.sync-indicator.disconnected .dot {
+    background: #ef4444;
+}
+
+.sync-last-time {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.sync-config-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.sync-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* ============================================
+   GLOBAL SCROLL STYLES
+   ============================================ */
+
+.app-container {
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
+}
+
+.main-content {
+    height: auto !important;
+    overflow: visible !important;
+}
+
+.panel {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+.side-panel {
+    height: auto !important;
+    overflow: visible !important;
+}
+
+.move-list, .analysis-content, .checkpoints-list, .replay-list, .sessions-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* Принудительно включаем скролл на body */
+html, body {
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+}
+
+.checkpoint-item.best {
+    border: 2px solid var(--accent-gold) !important;
+    background: rgba(255, 204, 0, 0.15) !important;
+    box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
+}
+
+.checkpoint-item.best .cp-name {
+    color: var(--accent-gold);
+    font-weight: 800;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-item .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.dot.polynet { background: #00f2ff; }
+.dot.alphazero { background: #7000ff; }
+.dot.probs { background: #ff8800; }
+
+/* ============================================
+   PROBS TRAINING DASHBOARD
+   ============================================ */
+
+.probs-panel {
+    grid-column: span 2;
+}
+
+.probs-info-banner {
+    padding: 12px 16px;
+    background: rgba(255, 136, 0, 0.1);
+    border: 1px solid rgba(255, 136, 0, 0.3);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+
+.probs-info-banner p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.probs-config-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.probs-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.probs-progress-section {
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.probs-progress-section h3 {
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.probs-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.probs-stat-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.probs-stat-item .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.probs-stat-item .value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent-orange);
+}
+
+.probs-checkpoints-section {
+    margin-top: 20px;
+}
+
+.probs-checkpoints-section h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+}
+
+/* Level PROBS button style */
+.level-btn.level-probs {
+    border-color: rgba(255, 136, 0, 0.4);
+    background: rgba(255, 136, 0, 0.1);
+}
+
+.level-btn.level-probs:hover {
+    border-color: rgba(255, 136, 0, 0.8);
+    background: rgba(255, 136, 0, 0.2);
+    box-shadow: 0 0 15px rgba(255, 136, 0, 0.3);
+}
+
+.level-btn.level-probs.active {
+    border-color: var(--accent-orange);
+    background: rgba(255, 136, 0, 0.3);
+}
+
+@media (max-width: 1200px) {
+    .probs-config-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .probs-panel {
+        grid-column: span 1;
+    }
+    
+    .probs-config-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .probs-stats-grid {
+        grid-template-columns: 1fr;
+    }
 }

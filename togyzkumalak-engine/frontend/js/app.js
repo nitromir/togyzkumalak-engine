@@ -12,6 +12,14 @@ class TogyzkumalakApp {
         this.aiLevel = 3;
         this.isMyTurn = false;
         this.confidenceEnabled = true;
+        this.confidenceModel = 'all'; // Default: Show all three
+        this.autoAnalyzeEnabled = true;
+        this.isStreaming = false;
+        this.userScrolling = false;
+        
+        // Board ready state - prevents misclicks while board is loading
+        this.isBoardReady = false;
+        this.isProcessingMove = false;
         
         // Board renderer (Classic only)
         this.classicBoard = null;
@@ -31,6 +39,7 @@ class TogyzkumalakApp {
         this.initBoard();
         this.loadEloStats();
         this.loadConfidenceSetting();  // Apply saved preference at startup
+        this.loadAutoAnalyzeSetting(); // Load auto-analyze preference
         this.loadActiveModelInfo();    // Load active model info for setup panel
     }
     
@@ -90,6 +99,7 @@ class TogyzkumalakApp {
             btnNewGame: document.getElementById('btnNewGame'),
             btnResign: document.getElementById('btnResign'),
             btnToggleConfidence: document.getElementById('btnToggleConfidence'),
+            selectConfidenceModel: document.getElementById('selectConfidenceModel'),
             
             // Move history
             moveList: document.getElementById('moveList'),
@@ -98,6 +108,7 @@ class TogyzkumalakApp {
             btnAnalyze: document.getElementById('btnAnalyze'),
             btnSuggest: document.getElementById('btnSuggest'),
             analysisContent: document.getElementById('analysisContent'),
+            checkAutoAnalyze: document.getElementById('checkAutoAnalyze'),
             
             // ELO stats
             currentElo: document.getElementById('currentElo'),
@@ -158,9 +169,30 @@ class TogyzkumalakApp {
         this.elements.btnResign.addEventListener('click', () => this.resign());
         this.elements.btnToggleConfidence?.addEventListener('click', () => this.toggleConfidence());
         
+        this.elements.selectConfidenceModel?.addEventListener('change', (e) => {
+            this.confidenceModel = e.target.value;
+            localStorage.setItem('confidenceModel', this.confidenceModel);
+            this.updateBoard(this.gameState); // Refresh probabilities immediately
+        });
+        
         // Analysis
         this.elements.btnAnalyze.addEventListener('click', () => this.analyzePosition());
         this.elements.btnSuggest.addEventListener('click', () => this.suggestMove());
+        this.elements.checkAutoAnalyze?.addEventListener('change', (e) => {
+            this.autoAnalyzeEnabled = e.target.checked;
+            localStorage.setItem('autoAnalyzeEnabled', this.autoAnalyzeEnabled ? '1' : '0');
+        });
+
+        // User scroll detection for analysis
+        this.elements.analysisContent?.addEventListener('scroll', () => {
+            const el = this.elements.analysisContent;
+            // If user scrolled up, set userScrolling to true
+            if (el.scrollHeight - el.scrollTop - el.clientHeight > 20) {
+                this.userScrolling = true;
+            } else {
+                this.userScrolling = false;
+            }
+        });
         
         // Modal
         this.elements.btnPlayAgain.addEventListener('click', () => {
@@ -187,10 +219,32 @@ class TogyzkumalakApp {
             if (saved === '0' || saved === '1') {
                 this.confidenceEnabled = saved === '1';
             }
+            
+            const savedModel = localStorage.getItem('confidenceModel');
+            if (savedModel) {
+                this.confidenceModel = savedModel;
+                if (this.elements.selectConfidenceModel) {
+                    this.elements.selectConfidenceModel.value = savedModel;
+                }
+            }
         } catch (e) {
             // ignore
         }
         this.applyConfidenceSetting();
+    }
+
+    loadAutoAnalyzeSetting() {
+        try {
+            const saved = localStorage.getItem('autoAnalyzeEnabled');
+            if (saved === '0' || saved === '1') {
+                this.autoAnalyzeEnabled = saved === '1';
+                if (this.elements.checkAutoAnalyze) {
+                    this.elements.checkAutoAnalyze.checked = this.autoAnalyzeEnabled;
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
     }
 
     applyConfidenceSetting() {
@@ -250,10 +304,17 @@ class TogyzkumalakApp {
             this.elements.btnStartGame.disabled = true;
             this.elements.btnStartGame.textContent = 'Starting...';
             
+            // Block board interactions while loading
+            this.isBoardReady = false;
+            this.isProcessingMove = false;
+            
             const response = await api.createGame(this.playerColor, this.aiLevel);
             
             this.gameId = response.game_id;
             this.gameState = response;
+            
+            // Connect WebSocket
+            api.connectWebSocket(this.gameId, (data) => this.handleWSMessage(data));
             
             // Store AI model info
             this.currentAiModel = response.ai_model || null;
@@ -278,10 +339,13 @@ class TogyzkumalakApp {
             
             // Clear move history
             this.elements.moveList.innerHTML = '';
-            this.elements.analysisContent.innerHTML = '<p class="placeholder">Click "Analyze Position" to get Gemini\'s analysis.</p>';
+            this.elements.analysisContent.innerHTML = '<p class="placeholder">Нажмите "Анализировать" для получения анализа от Gemini.</p>';
             
             // Render board
-            this.updateBoard(response);
+            await this.updateBoard(response);
+            
+            // Board is now ready for interaction
+            this.isBoardReady = true;
             
         } catch (error) {
             console.error('Failed to start game:', error);
@@ -291,44 +355,121 @@ class TogyzkumalakApp {
             this.elements.btnStartGame.textContent = '▶️ Start Game';
         }
     }
-    
+
     /**
-     * Update player labels with model info
+     * Handle WebSocket messages.
      */
-    updatePlayerLabels() {
-        const modelInfo = this.currentAiModel || {};
-        const modelName = modelInfo.name || 'default';
-        const modelType = modelInfo.type || 'default';
-        const useMcts = modelInfo.use_mcts || false;
+    async handleWSMessage(data) {
+        console.log('[WS] Message received:', data.type);
         
-        // Format AI label
-        let aiLabel;
-        if (modelType === 'alphazero') {
-            aiLabel = `🦾 ${modelName}${useMcts ? ' +MCTS' : ''}`;
-        } else if (modelType === 'gym') {
-            aiLabel = `🧠 ${modelName}`;
-        } else {
-            aiLabel = `🤖 AI Lv${this.aiLevel}`;
+        switch (data.type) {
+            case 'game_state':
+                this.gameState = data.data;
+                this.updateBoard(this.gameState);
+                break;
+                
+            case 'move_made':
+                this.gameState = data.data;
+                this.isProcessingMove = false; // Reset processing flag
+                this.updateBoard(this.gameState);
+                this.triggerBoardGlow();
+                await this.updateMoveHistory();
+                break;
+                
+            case 'ai_thinking':
+                this.showAIThinking();
+                break;
+                
+            case 'ai_move':
+                this.hideAIThinking();
+                this.gameState = data.data;
+                this.isProcessingMove = false; // Reset processing flag
+                this.updateBoard(this.gameState);
+                this.triggerBoardGlow();
+                
+                // Highlight AI move
+                const aiPlayer = this.playerColor === 'white' ? 'black' : 'white';
+                this.classicBoard.highlightLastMove(data.move, aiPlayer);
+                
+                await this.updateMoveHistory();
+                
+                // Automatic analysis if enabled
+                if (this.autoAnalyzeEnabled && this.gameState.status === 'in_progress') {
+                    this.analyzePosition();
+                }
+                break;
+                
+            case 'analysis_start':
+                this.isStreaming = true;
+                this.userScrolling = false;
+                // Remove preloader, prepare for streaming content
+                this.elements.analysisContent.innerHTML = '<div class="analysis-result"><span class="chunk-loading"></span></div>';
+                this.elements.btnAnalyze.disabled = true;
+                break;
+                
+            case 'analysis_chunk':
+                this.appendAnalysisChunk(data.chunk);
+                break;
+                
+            case 'analysis_end':
+                this.isStreaming = false;
+                this.elements.btnAnalyze.disabled = false;
+                // Final render to ensure formatting is correct
+                this.elements.analysisContent.querySelector('.analysis-result').innerHTML = this.formatAnalysis(data.full_text);
+                break;
+                
+            case 'suggestion_start':
+                this.isStreaming = true;
+                this.userScrolling = false;
+                // Remove preloader, prepare for streaming content
+                this.elements.analysisContent.innerHTML = '<div class="suggestion-result"><span class="chunk-loading"></span></div>';
+                this.elements.btnSuggest.disabled = true;
+                break;
+                
+            case 'suggestion_chunk':
+                this.appendAnalysisChunk(data.chunk);
+                break;
+                
+            case 'suggestion_end':
+                this.isStreaming = false;
+                this.elements.btnSuggest.disabled = false;
+                this.elements.analysisContent.querySelector('.suggestion-result').innerHTML = this.formatAnalysis(data.full_text);
+                break;
+                
+            case 'game_over':
+                this.handleGameOver(data);
+                break;
+                
+            case 'error':
+                console.error('[WS] Server error:', data.message);
+                alert('Error: ' + data.message);
+                break;
         }
+    }
+
+    /**
+     * Append chunk to analysis content and scroll.
+     */
+    appendAnalysisChunk(chunk) {
+        const resultEl = this.elements.analysisContent.querySelector('.analysis-result, .suggestion-result');
+        if (!resultEl) return;
         
-        // Truncate long names
-        if (aiLabel.length > 25) {
-            aiLabel = aiLabel.substring(0, 22) + '...';
-        }
+        // Remove existing cursor if any
+        const cursor = resultEl.querySelector('.chunk-loading');
+        if (cursor) cursor.remove();
         
-        if (this.playerColor === 'white') {
-            document.querySelector('.player-white .player-label').textContent = '⚪ АҚ (You)';
-            document.querySelector('.player-black .player-label').textContent = `⚫ ${aiLabel}`;
-        } else {
-            document.querySelector('.player-white .player-label').textContent = `⚪ ${aiLabel}`;
-            document.querySelector('.player-black .player-label').textContent = '⚫ ҚАРА (You)';
-        }
+        // Add chunk
+        const textNode = document.createTextNode(chunk);
+        resultEl.appendChild(textNode);
         
-        // Update model info display if element exists
-        const modelInfoEl = document.getElementById('currentModelInfo');
-        if (modelInfoEl) {
-            modelInfoEl.textContent = aiLabel;
-            modelInfoEl.title = `Model: ${modelName}\nType: ${modelType}\nMCTS: ${useMcts ? 'On' : 'Off'}`;
+        // Re-add cursor
+        const newCursor = document.createElement('span');
+        newCursor.className = 'chunk-loading';
+        resultEl.appendChild(newCursor);
+        
+        // Auto-scroll if user hasn't intervened
+        if (!this.userScrolling) {
+            this.elements.analysisContent.scrollTop = this.elements.analysisContent.scrollHeight;
         }
     }
 
@@ -338,46 +479,35 @@ class TogyzkumalakApp {
     async makeMove(move) {
         if (!this.gameId) return;
         
-        try {
-            // Disable board during move
-            this.isMyTurn = false;
-            
-            const response = await api.makeMove(move);
-            
-            // Update state
-            this.gameState = response;
-            this.updateBoard(response);
-            this.triggerBoardGlow();
-            
-            // Add to move history
-            await this.updateMoveHistory();
-            
-            // Check for AI move
-            if (response.ai_move) {
-                this.showAIThinking();
-                
-                // Small delay to show thinking animation
-                await new Promise(resolve => setTimeout(resolve, 300));
-                
-                this.hideAIThinking();
-                
-                // Highlight AI move
-                const aiPlayer = this.playerColor === 'white' ? 'black' : 'white';
-                this.classicBoard.highlightLastMove(response.ai_move.move, aiPlayer);
-                
-                // Update history again after AI move
-                await this.updateMoveHistory();
-            }
-            
-            // Check for game over
-            if (response.status === 'finished') {
-                this.handleGameOver(response);
-            }
-            
-        } catch (error) {
-            console.error('Failed to make move:', error);
-            alert('Invalid move: ' + error.message);
+        // Block moves if board is not ready (still loading)
+        if (!this.isBoardReady) {
+            console.warn('[App] Ignoring move: board not ready yet');
+            return;
         }
+        
+        // Block if already processing a move
+        if (this.isProcessingMove) {
+            console.warn('[App] Ignoring move: already processing a move');
+            return;
+        }
+        
+        // Block moves if not our turn or game is finished
+        if (!this.isMyTurn || this.gameState?.status !== 'in_progress') {
+            console.warn('[App] Ignoring move: not our turn or game finished');
+            return;
+        }
+        
+        // Set processing flag to prevent double clicks
+        this.isProcessingMove = true;
+        this.isMyTurn = false;
+        
+        // Use WebSocket for move
+        api.makeMoveWS(move);
+        
+        // Reset processing flag after a short delay (will be properly reset on WS response)
+        setTimeout(() => {
+            this.isProcessingMove = false;
+        }, 500);
     }
 
     /**
@@ -408,15 +538,30 @@ class TogyzkumalakApp {
         // Fetch and show move probabilities if enabled and it's user turn
         if (this.confidenceEnabled && this.isMyTurn && state.status === 'in_progress') {
             try {
-                const probResponse = await api.getMoveProbabilities(this.aiLevel);
-                if (probResponse && probResponse.probabilities) {
-                    this.classicBoard.setProbabilities(probResponse.probabilities);
+                // Clear old ones first
+                this.classicBoard.clearProbabilities();
+                
+                let modelsToFetch = [];
+                if (this.confidenceModel === 'all') {
+                    modelsToFetch = ['polynet', 'alphazero', 'probs'];
+                } else {
+                    modelsToFetch = [this.confidenceModel];
                 }
+                
+                const requests = modelsToFetch.map(m => api.getMoveProbabilities(this.aiLevel, m));
+                const results = await Promise.all(requests);
+                
+                results.forEach((res, idx) => {
+                    if (res && res.probabilities) {
+                        const modelKey = modelsToFetch[idx] === 'auto' ? 'polynet' : modelsToFetch[idx];
+                        this.classicBoard.setProbabilities(modelKey, res.probabilities);
+                    }
+                });
             } catch (e) {
-                console.warn('Could not fetch probabilities:', e);
+                console.warn('Could not fetch multi-probabilities:', e);
             }
         } else {
-            this.classicBoard.setProbabilities(null);
+            this.classicBoard.clearProbabilities();
         }
     }
 
@@ -466,6 +611,36 @@ class TogyzkumalakApp {
             const icon = document.createElement('div');
             icon.className = 'score-kumalak-icon';
             container.appendChild(icon);
+        }
+    }
+
+    /**
+     * Update player labels in info bar based on player color and AI model.
+     */
+    updatePlayerLabels() {
+        const playerBlackLabel = document.querySelector('.player-black .player-label');
+        const playerWhiteLabel = document.querySelector('.player-white .player-label');
+        
+        if (!playerBlackLabel || !playerWhiteLabel) return;
+        
+        // Get AI model display name
+        let aiName = 'AI';
+        if (this.aiLevel === 6) {
+            aiName = 'Gemini';
+        } else if (this.aiLevel === 7) {
+            aiName = 'PROBS';
+        } else if (this.currentAiModel && this.currentAiModel.name) {
+            aiName = this.currentAiModel.name;
+        } else {
+            aiName = `AI L${this.aiLevel}`;
+        }
+        
+        if (this.playerColor === 'white') {
+            playerWhiteLabel.textContent = '⚪ АҚ (Вы)';
+            playerBlackLabel.textContent = `⚫ ҚАРА (${aiName})`;
+        } else {
+            playerBlackLabel.textContent = '⚫ ҚАРА (Вы)';
+            playerWhiteLabel.textContent = `⚪ АҚ (${aiName})`;
         }
     }
 
@@ -641,31 +816,19 @@ class TogyzkumalakApp {
     async analyzePosition() {
         if (!this.gameId) return;
         
-        this.elements.analysisContent.innerHTML = '<p>Analyzing position...</p>';
+        // Reset scroll position and state
+        this.userScrolling = false;
+        this.elements.analysisContent.innerHTML = `
+            <div class="analysis-result">
+                <div class="analysis-preloader">
+                    <span class="preloader-spinner"></span>
+                    <span class="preloader-text">Анализирую позицию...</span>
+                </div>
+            </div>`;
         this.elements.btnAnalyze.disabled = true;
         
-        try {
-            const response = await api.analyzePosition();
-            
-            if (response.available) {
-                this.elements.analysisContent.innerHTML = `
-                    <div class="analysis-result">
-                        ${this.formatAnalysis(response.analysis)}
-                    </div>
-                `;
-            } else {
-                this.elements.analysisContent.innerHTML = `
-                    <p class="error">${response.error || 'Analysis not available'}</p>
-                    <p class="placeholder">Configure GEMINI_API_KEY to enable AI analysis.</p>
-                `;
-            }
-        } catch (error) {
-            this.elements.analysisContent.innerHTML = `
-                <p class="error">Failed to analyze: ${error.message}</p>
-            `;
-        } finally {
-            this.elements.btnAnalyze.disabled = false;
-        }
+        // Use WebSocket for streaming analysis
+        api.requestAnalysisWS();
     }
 
     /**
@@ -674,33 +837,19 @@ class TogyzkumalakApp {
     async suggestMove() {
         if (!this.gameId) return;
         
-        this.elements.analysisContent.innerHTML = '<p>Getting suggestion...</p>';
+        // Reset scroll position and state
+        this.userScrolling = false;
+        this.elements.analysisContent.innerHTML = `
+            <div class="suggestion-result">
+                <div class="analysis-preloader">
+                    <span class="preloader-spinner"></span>
+                    <span class="preloader-text">Ищу лучший ход...</span>
+                </div>
+            </div>`;
         this.elements.btnSuggest.disabled = true;
         
-        try {
-            const response = await api.suggestMove();
-            
-            if (response.available) {
-                const moveLabel = response.suggested_move ? response.suggested_move : '?';
-                
-                this.elements.analysisContent.innerHTML = `
-                    <div class="suggestion-result">
-                        <p><strong>Рекомендуемый ход: ${moveLabel}</strong></p>
-                        <p>${this.formatAnalysis(response.explanation)}</p>
-                    </div>
-                `;
-            } else {
-                this.elements.analysisContent.innerHTML = `
-                    <p class="error">${response.error || 'Suggestion not available'}</p>
-                `;
-            }
-        } catch (error) {
-            this.elements.analysisContent.innerHTML = `
-                <p class="error">Failed to get suggestion: ${error.message}</p>
-            `;
-        } finally {
-            this.elements.btnSuggest.disabled = false;
-        }
+        // Use WebSocket for streaming suggestion
+        api.requestSuggestionWS();
     }
 
     /**
@@ -714,19 +863,35 @@ class TogyzkumalakApp {
         const escaped = this.escapeHtml(text);
 
         return escaped
+            // Handle markdown ## headings first (new format)
+            .replace(/^## (📊.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
+            .replace(/^## (🔍.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
+            .replace(/^## (🎯.*?)$/gm, '<h4 class="analysis-heading highlight">$1</h4>')
+            .replace(/^## (⚠️.*?)$/gm, '<h4 class="analysis-heading warning">$1</h4>')
+            .replace(/^## (💡.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
+            .replace(/^## (📋.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
+            // Newlines to breaks
             .replace(/\n/g, '<br>')
+            // Bold text
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/EVALUATION:/g, '<strong>📊 EVALUATION:</strong>')
+            // Legacy format support
+            .replace(/EVALUATION:/g, '<strong>📊 ОЦЕНКА:</strong>')
             .replace(/ОЦЕНКА:/g, '<strong>📊 ОЦЕНКА:</strong>')
-            .replace(/BEST MOVE:/g, '<strong>🎯 BEST MOVE:</strong>')
-            .replace(/ЛУЧШИЙ ХОД:/g, '<strong>🎯 ЛУЧШИЙ ХОД:</strong>')
+            .replace(/BEST MOVE:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
+            .replace(/ЛУЧШИЙ ХОД:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
             .replace(/РЕКОМЕНДУЕМЫЙ ХОД:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
             .replace(/ОБОСНОВАНИЕ:/g, '<strong>💡 ОБОСНОВАНИЕ:</strong>')
-            .replace(/KEY FACTORS:/g, '<strong>🔑 KEY FACTORS:</strong>')
+            .replace(/ПОЧЕМУ ЭТОТ ХОД\?/g, '<strong>💡 ПОЧЕМУ ЭТОТ ХОД?</strong>')
+            .replace(/KEY FACTORS:/g, '<strong>🔑 КЛЮЧЕВЫЕ ФАКТОРЫ:</strong>')
             .replace(/КЛЮЧЕВЫЕ ФАКТОРЫ:/g, '<strong>🔑 КЛЮЧЕВЫЕ ФАКТОРЫ:</strong>')
-            .replace(/WARNING:/g, '<strong>⚠️ WARNING:</strong>')
+            .replace(/STRATEGIC ANALYSIS:/g, '<strong>🔍 СТРАТЕГИЧЕСКИЙ РАЗБОР:</strong>')
+            .replace(/СТРАТЕГИЧЕСКИЙ АНАЛИЗ:/g, '<strong>🔍 СТРАТЕГИЧЕСКИЙ РАЗБОР:</strong>')
+            .replace(/СТРАТЕГИЧЕСКИЙ РАЗБОР:/g, '<strong>🔍 СТРАТЕГИЧЕСКИЙ РАЗБОР:</strong>')
+            .replace(/WARNING:/g, '<strong>⚠️ УГРОЗЫ:</strong>')
             .replace(/УГРОЗЫ:/g, '<strong>⚠️ УГРОЗЫ:</strong>')
-            .replace(/АНАЛИЗ ХОДОВ:/g, '<strong>📝 АНАЛИЗ ХОДОВ:</strong>');
+            .replace(/УГРОЗЫ И ВОЗМОЖНОСТИ:/g, '<strong>⚠️ УГРОЗЫ И ВОЗМОЖНОСТИ:</strong>')
+            .replace(/АНАЛИЗ ХОДОВ:/g, '<strong>📝 АНАЛИЗ ХОДОВ:</strong>')
+            .replace(/АЛЬТЕРНАТИВЫ:/g, '<strong>📋 АЛЬТЕРНАТИВЫ:</strong>');
     }
 
     escapeHtml(text) {

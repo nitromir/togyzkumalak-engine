@@ -15,31 +15,18 @@ class TrainingController {
     }
 
     init() {
-        // Configuration controls
+        // ... (existing buttons)
         document.getElementById('btnStartTraining').addEventListener('click', () => this.startTraining());
         
-        // Data management buttons
-        document.getElementById('btnParseData')?.addEventListener('click', () => this.parseData());
-        document.getElementById('btnTrainOnHuman')?.addEventListener('click', () => this.trainOnHumanData());
+        // SYNC buttons
+        document.getElementById('btnSaveSyncConfig')?.addEventListener('click', () => this.saveSyncConfig());
+        document.getElementById('btnRestartSync')?.addEventListener('click', () => this.restartSync());
         
-        // File upload handler
-        document.getElementById('uploadTrainingFile')?.addEventListener('change', (e) => this.handleFileUpload(e));
-        
-        // FAQ modal
-        document.getElementById('btnOpenFaq')?.addEventListener('click', () => this.openFaqModal());
-        document.getElementById('closeFaqModal')?.addEventListener('click', () => this.closeFaqModal());
-        document.getElementById('faqModal')?.addEventListener('click', (e) => {
-            if (e.target.id === 'faqModal') this.closeFaqModal();
-        });
-        
-        // Load initial data
-        this.loadModels();
-        this.loadSessions();
-        this.loadDataStats();
-        this.loadTrainingFiles();
-        
-        // AlphaZero Initialization
+        // ... (rest of init)
+        this.initPROBS();
         this.initAlphaZero();
+        this.initSync();
+        this.initLogModal(); // Добавляем инициализацию модалки логов
         
         // Set up periodic refresh when training mode is active
         setInterval(() => {
@@ -47,8 +34,94 @@ class TrainingController {
                 this.loadModels();
                 this.loadSessions();
                 this.loadDataStats();
+                this.updateSyncStatus();
             }
         }, 5000);
+    }
+
+    /**
+     * SYNC Methods
+     */
+    initSync() {
+        this.updateSyncStatus();
+    }
+
+    async updateSyncStatus() {
+        try {
+            const response = await fetch('/api/sync/status');
+            if (!response.ok) return;
+            const data = await response.json();
+            
+            const indicator = document.getElementById('syncIndicator');
+            const lastTime = document.getElementById('syncLastTime');
+            const urlInput = document.getElementById('syncRemoteUrl');
+            const portsInput = document.getElementById('syncPorts');
+            
+            if (indicator) {
+                if (data.is_running && data.status.status === 'active') {
+                    indicator.className = 'sync-indicator active';
+                    indicator.querySelector('.text').textContent = `Синхронизация: АКТИВНА (${data.status.server})`;
+                } else {
+                    indicator.className = 'sync-indicator disconnected';
+                    indicator.querySelector('.text').textContent = data.is_running 
+                        ? 'Синхронизация: ОЖИДАНИЕ СЕРВЕРА' 
+                        : 'Синхронизация: ВЫКЛЮЧЕНА';
+                }
+            }
+            
+            if (lastTime && data.status.last_sync) {
+                const date = new Date(data.status.last_sync);
+                lastTime.textContent = `Последняя проверка: ${date.toLocaleTimeString()}`;
+            }
+            
+            // Fill inputs if they are empty
+            if (urlInput && !urlInput.value && data.config.remote_url) {
+                urlInput.value = data.config.remote_url;
+            }
+            if (portsInput && !portsInput.value && data.config.ports) {
+                portsInput.value = data.config.ports.join(', ');
+            }
+        } catch (e) {
+            console.error('Error updating sync status:', e);
+        }
+    }
+
+    async saveSyncConfig() {
+        const url = document.getElementById('syncRemoteUrl').value;
+        const portsStr = document.getElementById('syncPorts').value;
+        const ports = portsStr.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p));
+        
+        try {
+            const response = await fetch('/api/sync/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    remote_url: url,
+                    ports: ports,
+                    interval: 30,
+                    enabled: true
+                })
+            });
+            
+            if (response.ok) {
+                alert('✅ Настройки синхронизации сохранены и процесс запущен!');
+                this.updateSyncStatus();
+            }
+        } catch (e) {
+            alert('❌ Ошибка сохранения конфига: ' + e.message);
+        }
+    }
+
+    async restartSync() {
+        try {
+            const response = await fetch('/api/sync/restart', { method: 'POST' });
+            if (response.ok) {
+                alert('🔄 Процесс синхронизации перезапущен!');
+                this.updateSyncStatus();
+            }
+        } catch (e) {
+            alert('❌ Ошибка перезапуска: ' + e.message);
+        }
     }
 
     /**
@@ -488,6 +561,43 @@ class TrainingController {
         }
     }
 
+    initLogModal() {
+        const btnCloseLogs = document.getElementById('btnCloseTrainingLogs');
+        const btnRefreshLogs = document.getElementById('btnRefreshLogs');
+        const btnCopyLogs = document.getElementById('btnCopyLogs');
+        const logsModal = document.getElementById('trainingLogsModal');
+        
+        btnCloseLogs?.addEventListener('click', () => {
+            if (logsModal) logsModal.classList.add('hidden');
+        });
+        
+        btnRefreshLogs?.addEventListener('click', () => {
+            const titleEl = document.getElementById('trainingLogsTitle');
+            if (titleEl && titleEl.textContent.includes('PROBS')) {
+                this.loadPROBSLogs();
+            } else {
+                this.loadTrainingLogs();
+            }
+        });
+        
+        btnCopyLogs?.addEventListener('click', () => {
+            const content = document.getElementById('trainingLogsContent');
+            if (content) {
+                navigator.clipboard.writeText(content.textContent).then(() => {
+                    this.showNotification('📋 Логи скопированы в буфер обмена!');
+                }).catch(() => {
+                    alert('Не удалось скопировать логи');
+                });
+            }
+        });
+        
+        logsModal?.addEventListener('click', (e) => {
+            if (e.target === logsModal) {
+                logsModal.classList.add('hidden');
+            }
+        });
+    }
+
     /**
      * AlphaZero Methods
      */
@@ -513,34 +623,7 @@ class TrainingController {
         const btnShowLogs = document.getElementById('btnShowTrainingLogs');
         btnShowLogs?.addEventListener('click', () => this.showTrainingLogs());
         
-        // Logs modal handlers
-        const btnCloseLogs = document.getElementById('btnCloseTrainingLogs');
-        const btnRefreshLogs = document.getElementById('btnRefreshLogs');
-        const btnCopyLogs = document.getElementById('btnCopyLogs');
-        const logsModal = document.getElementById('trainingLogsModal');
-        
-        btnCloseLogs?.addEventListener('click', () => {
-            if (logsModal) logsModal.classList.add('hidden');
-        });
-        
-        btnRefreshLogs?.addEventListener('click', () => this.loadTrainingLogs());
-        
-        btnCopyLogs?.addEventListener('click', () => {
-            const content = document.getElementById('trainingLogsContent');
-            if (content) {
-                navigator.clipboard.writeText(content.textContent).then(() => {
-                    alert('Логи скопированы в буфер обмена!');
-                }).catch(() => {
-                    alert('Не удалось скопировать логи');
-                });
-            }
-        });
-        
-        logsModal?.addEventListener('click', (e) => {
-            if (e.target === logsModal) {
-                logsModal.classList.add('hidden');
-            }
-        });
+        this.initAlphaZeroCharts();
         
         // Optimal config modal handlers
         const btnApplyOptimal = document.getElementById('btnApplyOptimalConfig');
@@ -1136,6 +1219,354 @@ class TrainingController {
         console.log('[Training] AlphaZero charts initialized');
     }
 
+    /**
+     * PROBS Training Methods
+     */
+    initPROBS() {
+        this.probsTaskId = null;
+        this.probsPollInterval = null;
+        
+        const btnStart = document.getElementById('btnStartPROBS');
+        const btnStop = document.getElementById('btnStopPROBS');
+        const btnShowLogs = document.getElementById('btnShowPROBSLogs');
+        const btnMonster = document.getElementById('btnMonsterConfig');
+        
+        btnStart?.addEventListener('click', () => this.startPROBS());
+        btnStop?.addEventListener('click', () => this.stopPROBS());
+        btnShowLogs?.addEventListener('click', () => this.showPROBSLogs());
+        btnMonster?.addEventListener('click', () => this.applyMonsterConfig());
+        
+        this.loadPROBSCheckpoints();
+        this.checkActivePROBSTasks();
+    }
+    
+    showPROBSLogs() {
+        const modal = document.getElementById('trainingLogsModal'); // Reuse AlphaZero modal for now but change title
+        const titleEl = document.getElementById('trainingLogsTitle');
+        if (modal) {
+            if (titleEl) titleEl.textContent = '📋 Логи Обучения PROBS';
+            modal.classList.remove('hidden');
+            this.loadPROBSLogs();
+        }
+    }
+
+    applyMonsterConfig() {
+        if (!confirm('🔥 Применить настройки для МОНСТР-СЕРВЕРА (64 ядра, 4x GPU)?\n\nЭто радикально увеличит объемы данных и параллелизм.')) {
+            return;
+        }
+
+        const settings = {
+            'probsIters': 500,
+            'probsVEpisodes': 5000,
+            'probsQEpisodes': 2000,
+            'probsMemEpisodes': 50000,
+            'probsBatchSize': 512,
+            'probsQCalls': 60,
+            'probsMaxDepth': 100,
+            'probsThreads': 1, // При использовании CUDA всегда 1
+            'probsEvalGames': 100,
+            'probsProcesses': 32, // Задействуем 32 ядра для сбора Q-данных
+            'probsDevice': 'cuda'
+        };
+
+        for (const [id, value] of Object.entries(settings)) {
+            const el = document.getElementById(id);
+            if (el) el.value = value;
+        }
+
+        // Включаем Boosting
+        const boost = document.getElementById('probsUseBoost');
+        if (boost) boost.checked = true;
+
+        this.showNotification('🔥 Настройки МОНСТРА применены! Не забудьте нажать "Запустить PROBS".');
+    }
+
+    async loadPROBSLogs() {
+        const contentEl = document.getElementById('trainingLogsContent');
+        if (!contentEl) return;
+        
+        // Show current task status at top of logs if active
+        let statusPrefix = "";
+        if (this.probsTaskId) {
+            try {
+                const statusRes = await fetch(`/api/training/probs/sessions/${this.probsTaskId}`);
+                if (statusRes.ok) {
+                    const task = await statusRes.json();
+                    statusPrefix = `СТАТУС ЗАДАЧИ: ${task.status.toUpperCase()}\n` +
+                                   `Прогресс: ${task.progress.toFixed(1)}%\n` +
+                                   `Итерация: ${task.current_iteration} / ${task.total_iterations}\n` +
+                                   `----------------------------------------------------------------\n\n`;
+                }
+            } catch (e) {}
+        }
+
+        try {
+            const response = await fetch('/api/training/probs/logs?lines=300');
+            const data = await response.json();
+            
+            if (data.status === 'ok') {
+                contentEl.textContent = statusPrefix + data.output.join('\n');
+                // Scroll to bottom
+                contentEl.scrollTop = contentEl.scrollHeight;
+            } else if (data.status === 'no_log') {
+                contentEl.textContent = statusPrefix + 'Логов пока нет. Запустите обучение.';
+            } else {
+                contentEl.textContent = statusPrefix + 'Ошибка загрузки логов: ' + (data.error || 'неизвестная ошибка');
+            }
+        } catch (error) {
+            contentEl.textContent = statusPrefix + 'Ошибка сети при загрузке логов.';
+        }
+    }
+    
+    async checkActivePROBSTasks() {
+        try {
+            const response = await fetch('/api/training/probs/sessions');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const sessions = data.sessions || {};
+            
+            // Find first running task
+            const activeTaskId = Object.keys(sessions).find(id => sessions[id].status === 'running');
+            
+            if (activeTaskId) {
+                console.log('Detected active PROBS task:', activeTaskId);
+                this.probsTaskId = activeTaskId;
+                
+                const progressSection = document.getElementById('probsProgressSection');
+                if (progressSection) progressSection.classList.remove('hidden');
+                
+                const btnStop = document.getElementById('btnStopPROBS');
+                if (btnStop) btnStop.classList.remove('hidden');
+                
+                const btnStart = document.getElementById('btnStartPROBS');
+                if (btnStart) btnStart.disabled = true;
+                
+                this.startPROBSPolling();
+            }
+        } catch (error) {
+            console.error('Error checking active PROBS tasks:', error);
+        }
+    }
+    
+    async startPROBS() {
+        const config = {
+            n_high_level_iterations: parseInt(document.getElementById('probsIters')?.value) || 100,
+            v_train_episodes: parseInt(document.getElementById('probsVEpisodes')?.value) || 500,
+            q_train_episodes: parseInt(document.getElementById('probsQEpisodes')?.value) || 250,
+            mem_max_episodes: parseInt(document.getElementById('probsMemEpisodes')?.value) || 10000,
+            train_batch_size: parseInt(document.getElementById('probsBatchSize')?.value) || 64,
+            num_q_s_a_calls: parseInt(document.getElementById('probsQCalls')?.value) || 30,
+            max_depth: parseInt(document.getElementById('probsMaxDepth')?.value) || 50,
+            self_play_threads: parseInt(document.getElementById('probsThreads')?.value) || 4,
+            sub_processes_cnt: parseInt(document.getElementById('probsProcesses')?.value) || 4,
+            evaluate_n_games: parseInt(document.getElementById('probsEvalGames')?.value) || 20,
+            device: document.getElementById('probsDevice')?.value || 'cpu',
+            use_boost: document.getElementById('probsUseBoost')?.checked || false,
+            initial_checkpoint: document.getElementById('probsInitialCheckpoint')?.value || null
+        };
+        
+        try {
+            const btnStart = document.getElementById('btnStartPROBS');
+            if (btnStart) {
+                btnStart.disabled = true;
+                btnStart.textContent = '⏳ Запуск...';
+            }
+            
+            const response = await fetch('/api/training/probs/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Сервер вернул ошибку ${response.status}: ${errorText}`);
+            }
+            
+            const data = await response.json();
+            this.probsTaskId = data.task_id;
+            
+            const progressSection = document.getElementById('probsProgressSection');
+            if (progressSection) progressSection.classList.remove('hidden');
+            
+            const btnStop = document.getElementById('btnStopPROBS');
+            if (btnStop) btnStop.classList.remove('hidden');
+            
+            this.startPROBSPolling();
+            
+            alert('✅ Обучение PROBS запущено! Task ID: ' + data.task_id);
+            
+        } catch (error) {
+            console.error('Error starting PROBS:', error);
+            alert('Ошибка запуска PROBS: ' + error.message);
+            const btnStart = document.getElementById('btnStartPROBS');
+            if (btnStart) {
+                btnStart.disabled = false;
+                btnStart.textContent = '🚀 Запустить PROBS';
+            }
+        }
+    }
+    
+    startPROBSPolling() {
+        if (this.probsPollInterval) clearInterval(this.probsPollInterval);
+        this.probsPollInterval = setInterval(() => this.updatePROBSProgress(), 2000);
+    }
+    
+    async updatePROBSProgress() {
+        if (!this.probsTaskId) return;
+        
+        try {
+            const response = await fetch(`/api/training/probs/sessions/${this.probsTaskId}`);
+            if (!response.ok) return;
+            
+            const task = await response.json();
+            
+            // Update progress bar
+            const progressBar = document.getElementById('probsProgressBar');
+            const currentIter = document.getElementById('probsCurrentIter');
+            const statusText = document.getElementById('probsStatusText');
+            const elapsedTime = document.getElementById('probsElapsedTime');
+            
+            if (progressBar) progressBar.style.width = `${task.progress}%`;
+            if (currentIter) currentIter.textContent = `${task.current_iteration} / ${task.total_iterations}`;
+            if (statusText) statusText.textContent = task.status;
+            
+            // Auto-refresh logs if modal is open
+            const modal = document.getElementById('trainingLogsModal');
+            const titleEl = document.getElementById('trainingLogsTitle');
+            if (modal && !modal.classList.contains('hidden') && titleEl && titleEl.textContent.includes('PROBS')) {
+                this.loadPROBSLogs();
+            }
+
+            if (elapsedTime && task.elapsed_time) {
+                const mins = Math.floor(task.elapsed_time / 60);
+                const secs = Math.floor(task.elapsed_time % 60);
+                elapsedTime.textContent = `${mins}м ${secs}с`;
+            }
+            
+            if (task.status === 'completed' || task.status === 'error' || task.status === 'stopped') {
+                clearInterval(this.probsPollInterval);
+                document.getElementById('btnStartPROBS').disabled = false;
+                document.getElementById('btnStartPROBS').textContent = '🚀 Запустить PROBS';
+                document.getElementById('btnStopPROBS')?.classList.add('hidden');
+                
+                this.loadPROBSCheckpoints();
+                
+                if (task.status === 'completed') {
+                    this.showNotification('🎯 PROBS: Обучение завершено! Чекпоинты готовы.');
+                } else if (task.status === 'error') {
+                    this.showNotification('❌ PROBS: Ошибка обучения. ' + (task.error || ''));
+                }
+            }
+        } catch (error) {
+            console.error('Error polling PROBS:', error);
+        }
+    }
+    
+    async stopPROBS() {
+        if (!this.probsTaskId) return;
+        try {
+            const response = await fetch(`/api/training/probs/sessions/${this.probsTaskId}/stop`, { method: 'POST' });
+            if (response.ok) {
+                const statusText = document.getElementById('probsStatusText');
+                if (statusText) statusText.textContent = 'stopping';
+                this.showNotification('🛑 Запрос на остановку отправлен. Процесс завершится по окончании текущего шага.');
+            }
+        } catch (error) {
+            console.error('Error stopping PROBS:', error);
+            alert('Ошибка при остановке: ' + error.message);
+        }
+    }
+    
+    async loadPROBSCheckpoints() {
+        try {
+            const response = await fetch('/api/training/probs/checkpoints');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const container = document.getElementById('probsCheckpointsList');
+            
+            if (!container) return;
+            
+            if (!data.checkpoints || data.checkpoints.length === 0) {
+                container.innerHTML = '<p class="empty-text">Нет сохранённых чекпоинтов PROBS</p>';
+                return;
+            }
+            
+            container.innerHTML = data.checkpoints.slice(0, 10).map((cp, i) => `
+                <div class="checkpoint-item ${cp.is_best ? 'best' : ''}">
+                    <div class="cp-main-info">
+                        <span class="cp-rank">#${i + 1}</span>
+                        <span class="cp-name" style="${cp.is_best ? 'color: #ffcc00; font-weight: bold;' : ''}">${cp.filename} ${cp.is_best ? '👑 BEST' : ''}</span>
+                        <span class="cp-time">${new Date(cp.timestamp).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'})}</span>
+                    </div>
+                    <div class="cp-metrics">
+                        <span class="cp-size">${cp.size_mb} MB</span>
+                    </div>
+                    <div class="cp-actions">
+                        <button class="btn btn-tiny btn-primary" onclick="trainingController.loadPROBSCheckpoint('${cp.filename}')" title="Загрузить для игры">
+                            📦
+                        </button>
+                        <button class="btn btn-tiny btn-secondary" onclick="trainingController.downloadPROBSCheckpoint('${cp.filename}')" title="Скачать файл">
+                            💾
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            // Populate checkpoint selector for continuation
+            const select = document.getElementById('probsInitialCheckpoint');
+            if (select) {
+                const currentValue = select.value;
+                select.innerHTML = '<option value="">🆕 Новая модель (с нуля)</option>' + 
+                    data.checkpoints.map(cp => `<option value="${cp.filename}">${cp.is_best ? '⭐ ' : ''}${cp.filename}</option>`).join('');
+                select.value = currentValue;
+            }
+            
+        } catch (error) {
+            console.error('Error loading PROBS checkpoints:', error);
+        }
+    }
+    
+    async loadPROBSCheckpoint(filename) {
+        try {
+            const checkpointName = filename.replace('.ckpt', '');
+            const response = await fetch(`/api/training/probs/checkpoints/${checkpointName}/load`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                alert(`✅ Загружен PROBS чекпоинт: ${filename}\n\nТеперь можно играть против PROBS AI (уровень 7)!`);
+                this.loadPROBSCheckpoints();
+            } else {
+                throw new Error('Failed to load checkpoint');
+            }
+        } catch (e) {
+            console.error('Error loading PROBS checkpoint:', e);
+            alert('Ошибка загрузки чекпоинта: ' + e.message);
+        }
+    }
+    
+    async downloadPROBSCheckpoint(filename) {
+        try {
+            const checkpointName = filename.replace('.ckpt', '');
+            const url = `/api/training/probs/checkpoints/${checkpointName}/download`;
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            this.showNotification(`⬇️ Скачивание: ${filename}`);
+        } catch (e) {
+            console.error('Error downloading PROBS checkpoint:', e);
+            alert('Ошибка скачивания: ' + e.message);
+        }
+    }
+
     showNotification(message) {
         // Simple alert for now, can be upgraded to Toast
         alert(message);
@@ -1499,12 +1930,16 @@ class TrainingController {
     async loadGitStatus() {
         try {
             const response = await fetch('/api/system/git-status');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
             const data = await response.json();
             
             const statusInfo = document.getElementById('gitStatusInfo');
             if (!statusInfo) return;
             
-            if (!data.is_git_repo) {
+            // Check if data exists and has is_git_repo property
+            if (!data || !data.is_git_repo) {
                 statusInfo.innerHTML = `<span style="color: var(--text-secondary);">Не git репозиторий</span>`;
                 return;
             }
@@ -1532,7 +1967,7 @@ class TrainingController {
             console.error('Error loading git status:', error);
             const statusInfo = document.getElementById('gitStatusInfo');
             if (statusInfo) {
-                statusInfo.innerHTML = `<span style="color: #f44336;">Ошибка проверки статуса</span>`;
+                statusInfo.innerHTML = `<span style="color: var(--text-secondary);">Статус недоступен</span>`;
             }
         }
     }
@@ -1624,7 +2059,9 @@ class TrainingController {
      */
     showTrainingLogs() {
         const modal = document.getElementById('trainingLogsModal');
+        const titleEl = document.getElementById('trainingLogsTitle');
         if (modal) {
+            if (titleEl) titleEl.textContent = '📋 Логи Обучения AlphaZero';
             modal.classList.remove('hidden');
             this.loadTrainingLogs();
         }
