@@ -461,13 +461,36 @@ model:
                     mk.save_checkpoint(checkpoints_dir, f"iter_{i+1}")
                     log_print(f"Checkpoint saved: iter_{i+1}.ckpt")
             
-            # Финальное сохранение
-            mk.save_checkpoint(checkpoints_dir, "final")
-            log_print(f"Training completed. Final checkpoint saved.")
+            # Финальное сохранение - ТОЛЬКО если финальная модель не хуже лучшей
+            # Это предотвращает сохранение деградировавших моделей
+            should_save_final = True
+            if session_best_win_rate >= 0:
+                # Проверяем финальный win rate перед сохранением
+                final_win_rate = None
+                if isinstance(helpers.TENSORBOARD, helpers.MemorySummaryWriter):
+                    for key, vals in helpers.TENSORBOARD.points.items():
+                        if key == 'wins' and len(vals) > 0:
+                            final_win_rate = vals[-1]
+                            break
+                
+                if final_win_rate is not None:
+                    # Сохраняем финальную модель только если она не хуже лучшей более чем на 2%
+                    if final_win_rate < (session_best_win_rate - 0.02):
+                        should_save_final = False
+                        log_print(f"⚠️ Final model win rate {final_win_rate:.2%} is worse than best {session_best_win_rate:.2%}. Skipping final checkpoint.")
+                        log_print(f"💡 Use best_iter_* checkpoint instead: {self.best_checkpoint_name}")
+            
+            if should_save_final:
+                mk.save_checkpoint(checkpoints_dir, "final")
+                log_print(f"Training completed. Final checkpoint saved.")
+            else:
+                log_print(f"Training completed. Final checkpoint NOT saved (model degraded).")
+            
             if session_best_win_rate >= 0:
                 log_print(f"Best win rate in this session: {session_best_win_rate:.2%}")
             if self.best_metric >= 0:
                 log_print(f"Global best win rate: {self.best_metric:.2%}")
+                log_print(f"🏆 Best checkpoint: {self.best_checkpoint_name}")
             self._loaded_model = mk
             
         except Exception as e:
