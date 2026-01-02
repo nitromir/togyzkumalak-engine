@@ -372,7 +372,14 @@ model:
             )
 
             total = probs_config["train"]["n_high_level_iterations"]
-            best_win_rate = self.best_metric
+            
+            # Загружаем информацию о лучшем чекпойнте ПЕРЕД началом обучения
+            self._load_best_info()
+            
+            # Инициализируем best_win_rate для ТЕКУЩЕЙ сессии обучения
+            # Используем лучший результат из предыдущих сессий как baseline,
+            # но начинаем отслеживать лучший результат текущей сессии отдельно
+            session_best_win_rate = -1.0  # Лучший результат текущей сессии
             checkpoints_dir = os.path.join(self.models_dir, "checkpoints")
             os.makedirs(checkpoints_dir, exist_ok=True)
             
@@ -413,9 +420,26 @@ model:
                             current_win_rate = vals[-1]
                             log_print(f"Win rate vs {probs_config['evaluate']['enemy']['kind']}: {current_win_rate:.2%}")
                             
-                            # Сохраняем как лучшую только если есть значимое улучшение (> 1%)
-                            if current_win_rate > (best_win_rate + 0.01):
-                                best_win_rate = current_win_rate
+                            # Сохраняем как лучшую если:
+                            # 1. Это первый результат в сессии (session_best_win_rate == -1.0), ИЛИ
+                            # 2. Есть улучшение более чем на 1% относительно лучшего в текущей сессии, ИЛИ
+                            # 3. Есть улучшение более чем на 1% относительно глобального лучшего
+                            should_save = False
+                            if session_best_win_rate < 0:
+                                # Первый результат - всегда сохраняем
+                                should_save = True
+                                log_print(f"[FIRST] Saving first checkpoint with win rate {current_win_rate:.2%}")
+                            elif current_win_rate > (session_best_win_rate + 0.01):
+                                # Улучшение относительно текущей сессии
+                                should_save = True
+                                log_print(f"[SESSION BEST] Win rate improved from {session_best_win_rate:.2%} to {current_win_rate:.2%}")
+                            elif self.best_metric >= 0 and current_win_rate > (self.best_metric + 0.01):
+                                # Улучшение относительно глобального лучшего
+                                should_save = True
+                                log_print(f"[GLOBAL BEST] Win rate {current_win_rate:.2%} beats global best {self.best_metric:.2%}")
+                            
+                            if should_save:
+                                session_best_win_rate = current_win_rate
                                 ckpt_name = f"best_iter_{i+1}.ckpt"
                                 mk.save_checkpoint(checkpoints_dir, f"best_iter_{i+1}")
                                 self._save_best_info(ckpt_name, current_win_rate)
@@ -430,7 +454,10 @@ model:
             # Финальное сохранение
             mk.save_checkpoint(checkpoints_dir, "final")
             log_print(f"Training completed. Final checkpoint saved.")
-            log_print(f"Best win rate achieved: {best_win_rate:.2%}")
+            if session_best_win_rate >= 0:
+                log_print(f"Best win rate in this session: {session_best_win_rate:.2%}")
+            if self.best_metric >= 0:
+                log_print(f"Global best win rate: {self.best_metric:.2%}")
             self._loaded_model = mk
             
         except Exception as e:
