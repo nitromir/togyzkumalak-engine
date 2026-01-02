@@ -78,6 +78,16 @@ class PROBSTaskManager:
         with open(info_path, "w") as f:
             json.dump({"filename": filename, "metric": metric, "date": datetime.datetime.now().isoformat()}, f)
     
+    def get_best_info(self):
+        """Get best checkpoint info."""
+        if self.best_checkpoint_name and self.best_metric >= 0:
+            return {
+                "filename": self.best_checkpoint_name,
+                "metric": self.best_metric,
+                "date": datetime.datetime.now().isoformat()
+            }
+        return None
+    
     def start_training(self, config):
         if self.current_task and self.tasks.get(self.current_task, {}).get("status") == "running":
             raise Exception("Training already running")
@@ -184,7 +194,7 @@ class PROBSTaskManager:
         
         sys.path.insert(0, self.probs_dir)
         from probs_impl import probs_impl_common
-        cfg_model = {"value": {"class": "ValueModelTK_v1", "learning_rate": 0.001, "weight_decay": 0.0001}, "self_learner": {"class": "SelfLearningModelTK_v1", "learning_rate": 0.001, "weight_decay": 0.0001}}
+        cfg_model = {"value": {"class": "ValueModelTK_v1", "learning_rate": 0.0005, "weight_decay": 0.0001}, "self_learner": {"class": "SelfLearningModelTK_v1", "learning_rate": 0.0005, "weight_decay": 0.0001}}
         mk = probs_impl_common.create_model_keeper(cfg_model, "togyzkumalak")
         
         # If we loaded initial checkpoint, use its weights
@@ -516,7 +526,7 @@ model:
             sys.path.insert(0, self.probs_dir)
             import helpers
             from probs_impl import probs_impl_common
-            cfg = {"value": {"class": "ValueModelTK_v1", "learning_rate": 0.001, "weight_decay": 0.0001}, "self_learner": {"class": "SelfLearningModelTK_v1", "learning_rate": 0.001, "weight_decay": 0.0001}}
+            cfg = {"value": {"class": "ValueModelTK_v1", "learning_rate": 0.0005, "weight_decay": 0.0001}, "self_learner": {"class": "SelfLearningModelTK_v1", "learning_rate": 0.0005, "weight_decay": 0.0001}}
             orig = os.getcwd(); os.chdir(self.probs_dir)
             try:
                 mk = probs_impl_common.create_model_keeper(cfg, "togyzkumalak")
@@ -527,5 +537,59 @@ model:
     
     def get_loaded_model(self): return self._loaded_model
     def is_model_loaded(self): return self._loaded_model is not None
+    
+    def start_tournament(self, num_games=20):
+        """Start PROBS tournament in background subprocess."""
+        import subprocess
+        import threading
+        
+        tournament_id = f"probs_tournament_{int(time.time())}"
+        checkpoints_dir = os.path.join(self.models_dir, "checkpoints")
+        probs_dir = self.probs_dir
+        config_path = os.path.join(probs_dir, "configs", "train_togyzkumalak.yaml")
+        
+        # Запускаем турнир в отдельном процессе
+        def run_tournament():
+            try:
+                log_path = os.path.join(self.models_dir, f"{tournament_id}.log")
+                script_path = os.path.join(probs_dir, "probs_tournament.py")
+                
+                with open(log_path, "w") as log_file:
+                    process = subprocess.Popen(
+                        [sys.executable, script_path,
+                         "--checkpoints-dir", checkpoints_dir,
+                         "--config", config_path,
+                         "--games", str(num_games),
+                         "--device", "cuda"],
+                        stdout=log_file,
+                        stderr=subprocess.STDOUT,
+                        cwd=probs_dir
+                    )
+                    process.wait()
+                    
+                    # Читаем результаты
+                    results_path = os.path.join(checkpoints_dir, "tournament_results.json")
+                    if os.path.exists(results_path):
+                        with open(results_path, "r") as f:
+                            results = json.load(f)
+                            print(f"[PROBS Tournament] Completed: {results.get('leaderboard', [{}])[0]}")
+            except Exception as e:
+                print(f"[PROBS Tournament] Error: {e}")
+        
+        thread = threading.Thread(target=run_tournament, daemon=True)
+        thread.start()
+        
+        return tournament_id
+    
+    def get_tournament_results(self):
+        """Get latest tournament results."""
+        results_path = os.path.join(self.models_dir, "checkpoints", "tournament_results.json")
+        if os.path.exists(results_path):
+            try:
+                with open(results_path, "r") as f:
+                    return json.load(f)
+            except:
+                return None
+        return None
 
 probs_task_manager = PROBSTaskManager()

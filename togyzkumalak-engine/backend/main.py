@@ -2639,9 +2639,32 @@ async def list_probs_checkpoints():
     """List all PROBS checkpoints."""
     try:
         checkpoints = probs_task_manager.get_checkpoints()
-        return {"checkpoints": checkpoints, "total": len(checkpoints)}
+        best_info = probs_task_manager.get_best_info()
+        return {"checkpoints": checkpoints, "total": len(checkpoints), "best_checkpoint": best_info}
     except Exception as e:
         return {"checkpoints": [], "total": 0, "error": str(e)}
+
+
+@app.post("/api/training/probs/tournament/start")
+async def start_probs_tournament(num_games: int = 20):
+    """Start a PROBS tournament between all checkpoints."""
+    try:
+        tournament_id = probs_task_manager.start_tournament(num_games)
+        return {"task_id": tournament_id, "status": "started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/training/probs/tournament/results")
+async def get_probs_tournament_results():
+    """Get latest PROBS tournament results."""
+    try:
+        results = probs_task_manager.get_tournament_results()
+        if results:
+            return results
+        return {"error": "No tournament results found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/training/probs/checkpoints/{checkpoint_name}/load")

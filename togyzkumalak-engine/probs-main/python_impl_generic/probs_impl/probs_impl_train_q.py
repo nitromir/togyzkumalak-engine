@@ -419,7 +419,7 @@ def train_q_model(
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             # Gradient clipping для предотвращения gradient explosion
-            grad_norm = torch.nn.utils.clip_grad_norm_(self_learning_model.parameters(), max_norm=10.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(self_learning_model.parameters(), max_norm=5.0)
             optimizer.step()
 
             epoch_losses.append(loss.item())

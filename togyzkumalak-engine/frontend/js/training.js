@@ -610,10 +610,12 @@ class TrainingController {
         const btnStart = document.getElementById('btnStartAlphaZero');
         const btnStop = document.getElementById('btnStopAlphaZero');
         const btnOptimal = document.getElementById('btnLoadOptimalConfig');
+        const btnTournament = document.getElementById('btnStartAlphaZeroTournament');
         
         btnStart?.addEventListener('click', () => this.startAlphaZero());
         btnStop?.addEventListener('click', () => this.stopAlphaZero());
         btnOptimal?.addEventListener('click', () => this.loadOptimalConfig());
+        btnTournament?.addEventListener('click', () => this.startAlphaZeroTournament());
         
         // Training logs button (Always visible one)
         const btnShowLogsAlways = document.getElementById('btnShowTrainingLogsAlways');
@@ -1220,6 +1222,161 @@ class TrainingController {
     }
 
     /**
+     * AlphaZero Tournament Methods
+     */
+    async startAlphaZeroTournament() {
+        const numGames = parseInt(prompt('Количество игр в каждой паре (рекомендуется 20):', '20')) || 20;
+        
+        if (!confirm(`🏆 Запустить турнир AlphaZero "Все против всех"?\n\nКоличество игр в каждой паре: ${numGames}\n\nЭто может занять много времени!`)) {
+            return;
+        }
+        
+        try {
+            const btn = document.getElementById('btnStartAlphaZeroTournament');
+            btn.disabled = true;
+            btn.textContent = '⏳ Запуск турнира...';
+            
+            const response = await fetch(`/api/training/alphazero/tournament/start?num_games=${numGames}`, {
+                method: 'POST'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Ошибка: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('[AlphaZero Tournament] Started:', data);
+            
+            this.showNotification(`🏆 Турнир AlphaZero запущен!\n\nTask ID: ${data.task_id}\n\nРезультаты будут сохранены в tournament_results.json`);
+            
+            // Показываем логи
+            this.showTrainingLogs();
+            this.loadTrainingLogs();
+            
+            // Периодически проверяем результаты
+            const checkInterval = setInterval(async () => {
+                try {
+                    const statusRes = await fetch(`/api/training/alphazero/tournament/sessions/${data.task_id}`);
+                    if (statusRes.ok) {
+                        const status = await statusRes.json();
+                        if (status.status === 'completed') {
+                            clearInterval(checkInterval);
+                            btn.disabled = false;
+                            btn.textContent = '🏆 Турнир AlphaZero';
+                            this.showTournamentResults('alphazero', status);
+                        } else if (status.status === 'error') {
+                            clearInterval(checkInterval);
+                            btn.disabled = false;
+                            btn.textContent = '🏆 Турнир AlphaZero';
+                            alert(`❌ Ошибка турнира: ${status.get('error_message', 'Unknown error')}`);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error checking tournament status:', e);
+                }
+            }, 5000);
+            
+        } catch (error) {
+            console.error('Error starting AlphaZero tournament:', error);
+            alert('Ошибка запуска турнира: ' + error.message);
+            const btn = document.getElementById('btnStartAlphaZeroTournament');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🏆 Турнир AlphaZero';
+            }
+        }
+    }
+    
+    /**
+     * PROBS Tournament Methods
+     */
+    async startPROBSTournament() {
+        const numGames = parseInt(prompt('Количество игр в каждой паре (рекомендуется 20):', '20')) || 20;
+        
+        if (!confirm(`🏆 Запустить турнир PROBS "Все против всех"?\n\nКоличество игр в каждой паре: ${numGames}\n\nЭто может занять много времени!`)) {
+            return;
+        }
+        
+        try {
+            const btn = document.getElementById('btnStartPROBSTournament');
+            btn.disabled = true;
+            btn.textContent = '⏳ Запуск турнира...';
+            
+            const response = await fetch(`/api/training/probs/tournament/start?num_games=${numGames}`, {
+                method: 'POST'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Ошибка: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('[PROBS Tournament] Started:', data);
+            
+            this.showNotification(`🏆 Турнир PROBS запущен!\n\nTask ID: ${data.task_id}\n\nРезультаты будут сохранены в tournament_results.json`);
+            
+            // Показываем логи
+            this.showPROBSLogs();
+            
+            // Периодически проверяем результаты
+            const checkInterval = setInterval(async () => {
+                try {
+                    const resultsRes = await fetch('/api/training/probs/tournament/results');
+                    if (resultsRes.ok) {
+                        const results = await resultsRes.json();
+                        if (results.leaderboard && results.leaderboard.length > 0) {
+                            // Турнир завершен
+                            clearInterval(checkInterval);
+                            btn.disabled = false;
+                            btn.textContent = '🏆 Турнир PROBS';
+                            this.showTournamentResults('probs', results);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error checking tournament results:', e);
+                }
+            }, 10000);
+            
+        } catch (error) {
+            console.error('Error starting PROBS tournament:', error);
+            alert('Ошибка запуска турнира: ' + error.message);
+            const btn = document.getElementById('btnStartPROBSTournament');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🏆 Турнир PROBS';
+            }
+        }
+    }
+    
+    showTournamentResults(type, results) {
+        const leaderboard = results.leaderboard || [];
+        if (leaderboard.length === 0) {
+            alert('Результаты турнира пока не готовы.');
+            return;
+        }
+        
+        let message = `🏆 РЕЗУЛЬТАТЫ ТУРНИРА ${type.toUpperCase()}\n\n`;
+        message += `Продолжительность: ${results.duration_minutes?.toFixed(1) || 'N/A'} минут\n`;
+        message += `Чекпойнтов: ${results.num_checkpoints || leaderboard.length}\n`;
+        message += `Пар: ${results.num_pairs || 'N/A'}\n`;
+        message += `Игр в паре: ${results.games_per_pair || 'N/A'}\n\n`;
+        message += `ТОП-5:\n`;
+        
+        leaderboard.slice(0, 5).forEach((entry, idx) => {
+            message += `${idx + 1}. ${entry.checkpoint}\n`;
+            message += `   Побед: ${entry.wins}, Поражений: ${entry.losses}, Ничьих: ${entry.draws}\n`;
+            message += `   Очки: ${entry.score.toFixed(1)}, Win%: ${entry.win_percentage.toFixed(1)}%\n\n`;
+        });
+        
+        message += `\n🏆 ЧЕМПИОН: ${leaderboard[0].checkpoint}`;
+        
+        alert(message);
+        
+        // Логируем в консоль
+        console.log(`[${type.toUpperCase()} Tournament Results]`, results);
+    }
+
+    /**
      * PROBS Training Methods
      */
     initPROBS() {
@@ -1230,11 +1387,13 @@ class TrainingController {
         const btnStop = document.getElementById('btnStopPROBS');
         const btnShowLogs = document.getElementById('btnShowPROBSLogs');
         const btnMonster = document.getElementById('btnMonsterConfig');
+        const btnTournament = document.getElementById('btnStartPROBSTournament');
         
         btnStart?.addEventListener('click', () => this.startPROBS());
         btnStop?.addEventListener('click', () => this.stopPROBS());
         btnShowLogs?.addEventListener('click', () => this.showPROBSLogs());
         btnMonster?.addEventListener('click', () => this.applyMonsterConfig());
+        btnTournament?.addEventListener('click', () => this.startPROBSTournament());
         
         this.loadPROBSCheckpoints();
         this.checkActivePROBSTasks();
