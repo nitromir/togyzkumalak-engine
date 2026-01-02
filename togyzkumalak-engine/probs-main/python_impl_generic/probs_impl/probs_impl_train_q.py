@@ -402,15 +402,29 @@ def train_q_model(
     for epoch in range(num_epochs):
         epoch_losses = []
         for batch_input in dataloader:
-            # ВСЕГДА переносим данные на GPU (надежнее чем проверка device)
-            if isinstance(batch_input, tuple):
-                batch_input = tuple(x.to(device, non_blocking=True) if torch.is_tensor(x) else x for x in batch_input)
-            elif torch.is_tensor(batch_input):
-                batch_input = batch_input.to(device, non_blocking=True)
-
+            # Разделяем на inputs, actual_action_values и actions_mask
             inputs = batch_input[:-2]
             actual_action_values = batch_input[-2]   # (B, N_ACTIONS)
             actions_mask = batch_input[-1]         # (B, N_ACTIONS)
+            
+            # ВСЕГДА переносим ВСЕ данные на GPU явно (критично при num_workers > 0)
+            if isinstance(inputs, tuple):
+                inputs = tuple(x.to(device, non_blocking=True) if torch.is_tensor(x) else torch.tensor(x, device=device) for x in inputs)
+            elif torch.is_tensor(inputs):
+                inputs = (inputs.to(device, non_blocking=True),)
+            else:
+                inputs = tuple(torch.tensor(x, device=device) for x in inputs) if hasattr(inputs, '__iter__') else (torch.tensor(inputs, device=device),)
+            
+            # actual_action_values и actions_mask тоже на GPU
+            if torch.is_tensor(actual_action_values):
+                actual_action_values = actual_action_values.to(device, non_blocking=True)
+            else:
+                actual_action_values = torch.tensor(actual_action_values, device=device)
+            
+            if torch.is_tensor(actions_mask):
+                actions_mask = actions_mask.to(device, non_blocking=True)
+            else:
+                actions_mask = torch.tensor(actions_mask, device=device)
 
             pred_action_values = self_learning_model.forward(*inputs)
 
