@@ -162,9 +162,9 @@ python sync_checkpoints.py
 
 ---
 
-## 🏆 Арена для соревнований PROBS чекпойнтов
+## 🏆 Арена для соревнований PROBS чекпойнтов "Все против всех"
 
-Для сравнения двух PROBS чекпойнтов между собой используй скрипт `cross_arena.py`.
+Для проведения кругового турнира между всеми PROBS чекпойнтами используй скрипт `probs_tournament.py`.
 
 ### Запуск на удаленном сервере:
 
@@ -172,45 +172,68 @@ python sync_checkpoints.py
 # На удаленном сервере (в терминале или Jupyter)
 cd /workspace/togyzkumalak-engine/togyzkumalak-engine/probs-main/python_impl_generic
 
-# Сравнение двух PROBS чекпойнтов (например, best_iter_10.ckpt vs best_iter_20.ckpt)
-python cross_arena.py \
+# Турнир "все против всех" между всеми чекпойнтами
+python probs_tournament.py \
+    --checkpoints-dir ../../models/probs/checkpoints \
     --config configs/train_togyzkumalak.yaml \
-    --probs-checkpoint ../../models/probs/checkpoints/best_iter_10.ckpt \
-    --probs-checkpoint2 ../../models/probs/checkpoints/best_iter_20.ckpt \
     --games 20 \
     --device cuda
 
-# Или PROBS vs AlphaZero
-python cross_arena.py \
+# Или с подробным выводом каждой игры:
+python probs_tournament.py \
+    --checkpoints-dir ../../models/probs/checkpoints \
     --config configs/train_togyzkumalak.yaml \
-    --probs-checkpoint ../../models/probs/checkpoints/best_iter_10.ckpt \
-    --az-checkpoint ../../models/alphazero/best.pth.tar \
     --games 20 \
-    --device cuda
-
-# Или PROBS vs Random (для базовой проверки)
-python cross_arena.py \
-    --config configs/train_togyzkumalak.yaml \
-    --probs-checkpoint ../../models/probs/checkpoints/best_iter_10.ckpt \
-    --vs-random \
-    --games 20 \
-    --device cuda
+    --device cuda \
+    --verbose
 ```
 
 ### Параметры:
-- `--config` - путь к конфигу обучения (обычно `configs/train_togyzkumalak.yaml`)
-- `--probs-checkpoint` - путь к первому PROBS чекпойнту
-- `--probs-checkpoint2` - путь ко второму PROBS чекпойнту (для PROBS vs PROBS)
-- `--az-checkpoint` - путь к AlphaZero чекпойнту (для PROBS vs AlphaZero)
-- `--games` - количество игр (по умолчанию 10, рекомендуется 20-50 для стабильности)
-- `--device` - устройство (`cuda` или `cpu`, по умолчанию `cuda`)
+- `--checkpoints-dir` - путь к папке с чекпойнтами (по умолчанию: `../../models/probs/checkpoints`)
+- `--config` - путь к конфигу обучения (по умолчанию: `configs/train_togyzkumalak.yaml`)
+- `--games` - количество игр в каждой паре (по умолчанию: 20, т.е. 10 за белых и 10 за черных)
+- `--device` - устройство (`cuda` или `cpu`, по умолчанию: `cuda`)
+- `--output` - путь к файлу результатов JSON (по умолчанию: `tournament_results.json` в папке чекпойнтов)
 - `--verbose` - показывать ход каждой игры
-- `--vs-random` - играть против случайного агента
 
 ### Результаты:
-Скрипт выведет статистику:
+Скрипт выведет финальную таблицу лидеров и сохранит результаты в JSON:
 ```
-Results: best_iter_10.ckpt 12 wins, best_iter_20.ckpt 6 wins, 2 draws
+🏆 TOURNAMENT COMPLETE! (Duration: 45.2 minutes)
+
+📊 FINAL LEADERBOARD:
+
+Rank  Checkpoint                                          Wins     Losses   Draws    Score    Win%    
+------  --------------------------------------------------  --------  --------  --------  --------  --------
+1      best_iter_20.ckpt                                   45        12        3         46.5     77.5%
+2      best_iter_15.ckpt                                   38        18        4         40.0     63.3%
+...
+
+💾 Results saved to: ../../models/probs/checkpoints/tournament_results.json
+
+🏆 CHAMPION: best_iter_20.ckpt (Score: 46.5)
+```
+
+### Пример использования в Jupyter:
+
+```python
+# В Jupyter Notebook на удаленном сервере
+import subprocess
+import sys
+
+cd /workspace/togyzkumalak-engine/togyzkumalak-engine/probs-main/python_impl_generic
+
+result = subprocess.run([
+    sys.executable, 'probs_tournament.py',
+    '--checkpoints-dir', '../../models/probs/checkpoints',
+    '--config', 'configs/train_togyzkumalak.yaml',
+    '--games', '20',
+    '--device', 'cuda'
+], capture_output=True, text=True)
+
+print(result.stdout)
+if result.stderr:
+    print("Errors:", result.stderr)
 ```
 
 ---
