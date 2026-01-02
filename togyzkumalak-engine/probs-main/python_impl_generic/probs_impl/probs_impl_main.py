@@ -42,10 +42,22 @@ def worker(tasks_queue, results_queue, config, device, v_class_name, q_class_nam
 
         elif task == "get_q_dataset":
             n_subprocess_games = package
-            # print(f"Process {proc._identity}, pi={pi}, task is compute {n_subprocess_games} episodes")
-            dataset, stats = probs_impl_train_q.get_dataset(n_subprocess_games, value_model, self_learning_model, config, device)
-            # print(f"Process {proc._identity}, pi={pi}, computed {len(dataset)} rows, sending result")
-            results_queue.put_nowait((pi, "got_q_dataset", (dataset, stats)))
+            try:
+                # print(f"Process {proc._identity}, pi={pi}, task is compute {n_subprocess_games} episodes")
+                dataset, stats = probs_impl_train_q.get_dataset(n_subprocess_games, value_model, self_learning_model, config, device)
+                # print(f"Process {proc._identity}, pi={pi}, computed {len(dataset)} rows, sending result")
+                results_queue.put_nowait((pi, "got_q_dataset", (dataset, stats)))
+            except Exception as e:
+                # Отправляем ошибку в очередь вместо молчаливого падения
+                import traceback
+                error_msg = f"Worker {pi} (pid {os.getpid()}) crashed in get_q_dataset: {str(e)}\n{traceback.format_exc()}"
+                print(f"[ERROR] {error_msg}")
+                try:
+                    results_queue.put_nowait((pi, "error", error_msg))
+                except:
+                    # Если очередь переполнена, просто выводим ошибку
+                    print(f"[FATAL] Cannot send error to queue: {error_msg}")
+                    raise
 
         elif task == "stop":
             break
@@ -125,13 +137,21 @@ def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, 
             for task_i in range(sub_processes_cnt):
                 try:
                     pi, itemtype, package = results_queue.get(timeout=600)
-                except:
+                except Exception as e:
                     print(f"  [ERROR] Q-dataset worker timeout! Some workers might have crashed.")
+                    print(f"  [ERROR] Exception: {type(e).__name__}: {e}")
                     raise RuntimeError("Q-dataset workers timed out or crashed.")
+                
                 if itemtype == "got_q_dataset":
                     sub_dataset, sub_stats = package
                     dataset.extend(sub_dataset)
                     stats += sub_stats
+                elif itemtype == "error":
+                    # Получили ошибку от worker
+                    print(f"  [FATAL] Worker {pi} reported error: {package}")
+                    raise RuntimeError(f"Q-dataset worker {pi} crashed: {package}")
+                else:
+                    print(f"  [WARNING] Unexpected item type from worker {pi}: {itemtype}")
             
             if stats['depth_cnt'] > 0:
                 helpers.TENSORBOARD.append_scalar('beam_search_avg_depth', stats['depth_sum'] / stats['depth_cnt'])
