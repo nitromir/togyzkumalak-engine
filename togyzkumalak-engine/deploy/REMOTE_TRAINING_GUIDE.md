@@ -161,4 +161,57 @@ python sync_checkpoints.py
     *   `✅ Готово` — файл успешно скачан.
 
 ---
+
+## 🏆 Арена для соревнований PROBS чекпойнтов
+
+Для сравнения двух PROBS чекпойнтов между собой используй скрипт `cross_arena.py`.
+
+### Запуск на удаленном сервере:
+
+```bash
+# На удаленном сервере (в терминале или Jupyter)
+cd /workspace/togyzkumalak-engine/togyzkumalak-engine/probs-main/python_impl_generic
+
+# Сравнение двух PROBS чекпойнтов (например, best_iter_10.ckpt vs best_iter_20.ckpt)
+python cross_arena.py \
+    --config configs/train_togyzkumalak.yaml \
+    --probs-checkpoint ../../models/probs/checkpoints/best_iter_10.ckpt \
+    --probs-checkpoint2 ../../models/probs/checkpoints/best_iter_20.ckpt \
+    --games 20 \
+    --device cuda
+
+# Или PROBS vs AlphaZero
+python cross_arena.py \
+    --config configs/train_togyzkumalak.yaml \
+    --probs-checkpoint ../../models/probs/checkpoints/best_iter_10.ckpt \
+    --az-checkpoint ../../models/alphazero/best.pth.tar \
+    --games 20 \
+    --device cuda
+
+# Или PROBS vs Random (для базовой проверки)
+python cross_arena.py \
+    --config configs/train_togyzkumalak.yaml \
+    --probs-checkpoint ../../models/probs/checkpoints/best_iter_10.ckpt \
+    --vs-random \
+    --games 20 \
+    --device cuda
+```
+
+### Параметры:
+- `--config` - путь к конфигу обучения (обычно `configs/train_togyzkumalak.yaml`)
+- `--probs-checkpoint` - путь к первому PROBS чекпойнту
+- `--probs-checkpoint2` - путь ко второму PROBS чекпойнту (для PROBS vs PROBS)
+- `--az-checkpoint` - путь к AlphaZero чекпойнту (для PROBS vs AlphaZero)
+- `--games` - количество игр (по умолчанию 10, рекомендуется 20-50 для стабильности)
+- `--device` - устройство (`cuda` или `cpu`, по умолчанию `cuda`)
+- `--verbose` - показывать ход каждой игры
+- `--vs-random` - играть против случайного агента
+
+### Результаты:
+Скрипт выведет статистику:
+```
+Results: best_iter_10.ckpt 12 wins, best_iter_20.ckpt 6 wins, 2 draws
+```
+
+---
 *Обновлено: 30.12.2025. Архитектура: 256-256-128. Режим: 4 GPU Blitz.*
