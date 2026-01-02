@@ -462,10 +462,24 @@ model:
     def get_checkpoints(self):
         cks, d = [], os.path.join(self.models_dir, "checkpoints")
         if not os.path.exists(d): return cks
+        
+        # Загружаем метрики из best_info.json для отображения
+        best_metric_value = self.best_metric if self.best_metric > 0 else None
+        
         for f in os.listdir(d):
             if f.endswith(".ckpt"):
                 p = os.path.join(d, f); s = os.stat(p)
-                cks.append({"filename": f, "path": p, "size_mb": round(s.st_size / 1048576, 2), "timestamp": datetime.datetime.fromtimestamp(s.st_mtime).isoformat(), "is_best": f == self.best_checkpoint_name})
+                is_best = f == self.best_checkpoint_name
+                # Добавляем метрику только для лучшего чекпоинта
+                metric = best_metric_value if is_best else None
+                cks.append({
+                    "filename": f, 
+                    "path": p, 
+                    "size_mb": round(s.st_size / 1048576, 2), 
+                    "timestamp": datetime.datetime.fromtimestamp(s.st_mtime).isoformat(), 
+                    "is_best": is_best,
+                    "metric": metric  # Win rate для лучшего чекпоинта
+                })
         cks.sort(key=lambda x: x["timestamp"], reverse=True)
         return cks
     

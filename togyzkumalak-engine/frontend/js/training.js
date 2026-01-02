@@ -1519,9 +1519,30 @@ class TrainingController {
             const select = document.getElementById('probsInitialCheckpoint');
             if (select) {
                 const currentValue = select.value;
-                select.innerHTML = '<option value="">🆕 Новая модель (с нуля)</option>' + 
-                    data.checkpoints.map(cp => `<option value="${cp.filename}">${cp.is_best ? '⭐ ' : ''}${cp.filename}</option>`).join('');
-                select.value = currentValue;
+                // Формируем опции с метриками
+                const options = '<option value="">🆕 Новая модель (с нуля)</option>' + 
+                    data.checkpoints.map(cp => {
+                        let label = cp.filename;
+                        if (cp.is_best) {
+                            label = `⭐ ${label}`;
+                            if (cp.metric !== null && cp.metric !== undefined) {
+                                label += ` (Win rate: ${(cp.metric * 100).toFixed(1)}%)`;
+                            }
+                        }
+                        return `<option value="${cp.filename}">${label}</option>`;
+                    }).join('');
+                select.innerHTML = options;
+                
+                // Автоматически выбираем лучший чекпоинт, если ничего не выбрано
+                if (!currentValue) {
+                    const bestCheckpoint = data.checkpoints.find(cp => cp.is_best);
+                    if (bestCheckpoint) {
+                        select.value = bestCheckpoint.filename;
+                        console.log(`Auto-selected best checkpoint: ${bestCheckpoint.filename} (Win rate: ${(bestCheckpoint.metric * 100).toFixed(1)}%)`);
+                    }
+                } else {
+                    select.value = currentValue;
+                }
             }
             
         } catch (error) {
