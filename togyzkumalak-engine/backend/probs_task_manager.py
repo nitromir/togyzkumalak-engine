@@ -45,6 +45,7 @@ class PROBSTrainingConfig:
     initial_checkpoint: Optional[str] = None
     dataset_drop_ratio: float = 0.5              # Новый параметр: предотвращение переобучения
     alphazero_move_num_sampling_moves: int = 5   # Новый: сколько первых ходов сэмплируем
+    update_threshold: float = 0.50                # Минимальный win rate для принятия новой модели (как в AlphaZero)
 
 class PROBSTaskManager:
     def __init__(self):
@@ -249,6 +250,8 @@ class PROBSTaskManager:
         evaluate_n_games = config.get("evaluate_n_games", 20)
         # ВАЖНО: Используем one_step_lookahead вместо random для более адекватной оценки
         evaluate_enemy = config.get("evaluate_enemy", "one_step_lookahead")
+        # Порог для принятия новой модели (механизм отката)
+        update_threshold = config.get("update_threshold", 0.50)
         
         yaml_str = f"""name: probs_togyzkumalak
 env:
@@ -275,6 +278,7 @@ train:
   max_depth: {max_depth}
   alphazero_move_num_sampling_moves: {alphazero_move_num_sampling_moves}
   q_add_hardest_nodes_per_step: {q_add_hardest_nodes_per_step}
+  update_threshold: {update_threshold}
 evaluate:
   evaluate_n_games: {evaluate_n_games}
   randomize_n_turns: 2
@@ -390,8 +394,12 @@ model:
             # Используем лучший результат из предыдущих сессий как baseline,
             # но начинаем отслеживать лучший результат текущей сессии отдельно
             session_best_win_rate = -1.0  # Лучший результат текущей сессии
+            previous_win_rate = -1.0      # Win rate предыдущей итерации (для отката)
             checkpoints_dir = os.path.join(self.models_dir, "checkpoints")
             os.makedirs(checkpoints_dir, exist_ok=True)
+            
+            # Порог для принятия новой модели (из конфига или по умолчанию)
+            update_threshold = probs_config.get('train', {}).get('update_threshold', 0.50)
             
             for i in range(total):
                 if self.stop_requested: 
@@ -404,6 +412,13 @@ model:
                 self.tasks[task_id]["elapsed_time"] = time.time() - self.tasks[task_id]["start_time"]
                 
                 log_print(f"=== Iteration {i+1}/{total} ===")
+                
+                # МЕХАНИЗМ ОТКАТА: Сохраняем текущую модель перед обучением
+                # (как в AlphaZero - сохраняем в temp.pth.tar перед каждой итерацией)
+                temp_checkpoint_path = os.path.join(checkpoints_dir, f"temp_iter_{i+1}.ckpt")
+                if i > 0 or previous_win_rate >= 0:  # Сохраняем temp только если не первая итерация
+                    mk.save_checkpoint(checkpoints_dir, f"temp_iter_{i+1}")
+                    log_print(f"[ROLLBACK] Saved backup checkpoint: temp_iter_{i+1}.ckpt")
                 
                 # ГЛАВНОЕ: Модель обучается непрерывно, БЕЗ сброса весов!
                 # Это ключевое отличие от предыдущей "carousel" логики
@@ -424,36 +439,82 @@ model:
 
                 # Логируем и сохраняем метрики
                 current_win_rate = None
+                model_accepted = True  # Флаг принятия модели (для отката)
+                
                 if isinstance(helpers.TENSORBOARD, helpers.MemorySummaryWriter):
                     for key, vals in helpers.TENSORBOARD.points.items():
                         if key == 'wins' and len(vals) > 0:
                             current_win_rate = vals[-1]
                             log_print(f"Win rate vs {probs_config['evaluate']['enemy']['kind']}: {current_win_rate:.2%}")
                             
-                            # Сохраняем как лучшую если:
+                            # МЕХАНИЗМ ОТКАТА: Проверяем, нужно ли откатываться к предыдущей модели
+                            if previous_win_rate >= 0:
+                                # Сравниваем с предыдущей итерацией
+                                if current_win_rate < update_threshold:
+                                    # Win rate ниже порога - откатываемся
+                                    log_print(f"⚠️  REJECTING new model: win rate {current_win_rate:.2%} < threshold {update_threshold:.2%}")
+                                    model_accepted = False
+                                elif current_win_rate < (previous_win_rate - 0.02):
+                                    # Win rate упал более чем на 2% - откатываемся
+                                    log_print(f"⚠️  REJECTING new model: win rate dropped from {previous_win_rate:.2%} to {current_win_rate:.2%}")
+                                    model_accepted = False
+                                else:
+                                    log_print(f"✅ ACCEPTING new model: win rate {current_win_rate:.2%} >= {previous_win_rate:.2%}")
+                                    model_accepted = True
+                            
+                            # Если модель отклонена - откатываемся к предыдущей
+                            if not model_accepted and i > 0:
+                                temp_path = os.path.join(checkpoints_dir, f"temp_iter_{i+1}.ckpt")
+                                if os.path.exists(temp_path):
+                                    log_print(f"🔄 ROLLBACK: Loading previous model from {temp_path}")
+                                    mk.load_from_checkpoint(temp_path, device)
+                                    mk.to(device)
+                                    mk.eval()
+                                    # Используем предыдущий win rate
+                                    current_win_rate = previous_win_rate
+                                    log_print(f"✅ Rolled back to previous model (win rate: {previous_win_rate:.2%})")
+                                else:
+                                    log_print(f"⚠️  Rollback checkpoint not found: {temp_path}. Continuing with current model.")
+                                    model_accepted = True  # Продолжаем, если нет backup
+                            
+                            # Сохраняем как лучшую если модель принята И:
                             # 1. Это первый результат в сессии (session_best_win_rate == -1.0), ИЛИ
                             # 2. Есть улучшение более чем на 1% относительно лучшего в текущей сессии, ИЛИ
                             # 3. Есть улучшение более чем на 1% относительно глобального лучшего
                             should_save = False
-                            if session_best_win_rate < 0:
-                                # Первый результат - всегда сохраняем
-                                should_save = True
-                                log_print(f"[FIRST] Saving first checkpoint with win rate {current_win_rate:.2%}")
-                            elif current_win_rate > (session_best_win_rate + 0.01):
-                                # Улучшение относительно текущей сессии
-                                should_save = True
-                                log_print(f"[SESSION BEST] Win rate improved from {session_best_win_rate:.2%} to {current_win_rate:.2%}")
-                            elif self.best_metric >= 0 and current_win_rate > (self.best_metric + 0.01):
-                                # Улучшение относительно глобального лучшего
-                                should_save = True
-                                log_print(f"[GLOBAL BEST] Win rate {current_win_rate:.2%} beats global best {self.best_metric:.2%}")
+                            if model_accepted:
+                                if session_best_win_rate < 0:
+                                    # Первый результат - всегда сохраняем
+                                    should_save = True
+                                    log_print(f"[FIRST] Saving first checkpoint with win rate {current_win_rate:.2%}")
+                                elif current_win_rate > (session_best_win_rate + 0.01):
+                                    # Улучшение относительно текущей сессии
+                                    should_save = True
+                                    log_print(f"[SESSION BEST] Win rate improved from {session_best_win_rate:.2%} to {current_win_rate:.2%}")
+                                elif self.best_metric >= 0 and current_win_rate > (self.best_metric + 0.01):
+                                    # Улучшение относительно глобального лучшего
+                                    should_save = True
+                                    log_print(f"[GLOBAL BEST] Win rate {current_win_rate:.2%} beats global best {self.best_metric:.2%}")
+                                
+                                if should_save:
+                                    session_best_win_rate = current_win_rate
+                                    ckpt_name = f"best_iter_{i+1}.ckpt"
+                                    mk.save_checkpoint(checkpoints_dir, f"best_iter_{i+1}")
+                                    self._save_best_info(ckpt_name, current_win_rate)
+                                    log_print(f"[NEW BEST] Win rate {current_win_rate:.2%} - saved as {ckpt_name}")
                             
-                            if should_save:
-                                session_best_win_rate = current_win_rate
-                                ckpt_name = f"best_iter_{i+1}.ckpt"
-                                mk.save_checkpoint(checkpoints_dir, f"best_iter_{i+1}")
-                                self._save_best_info(ckpt_name, current_win_rate)
-                                log_print(f"[NEW BEST] Win rate {current_win_rate:.2%} - saved as {ckpt_name}")
+                            # Обновляем previous_win_rate для следующей итерации
+                            if model_accepted:
+                                previous_win_rate = current_win_rate
+                                # Удаляем временный чекпойнт после успешной итерации
+                                temp_path = os.path.join(checkpoints_dir, f"temp_iter_{i+1}.ckpt")
+                                if os.path.exists(temp_path):
+                                    try:
+                                        os.remove(temp_path)
+                                        log_print(f"🧹 Cleaned up temp checkpoint: temp_iter_{i+1}.ckpt")
+                                    except:
+                                        pass
+                            # Если откатились, previous_win_rate остается прежним, temp чекпойнт тоже остается
                 
                 # Периодическое сохранение чекпоинтов - реже (раз в 20 итераций)
                 save_interval = max(5, total // 5) 
