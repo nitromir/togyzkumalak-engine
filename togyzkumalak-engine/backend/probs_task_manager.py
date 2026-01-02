@@ -14,10 +14,10 @@ from typing import Dict, Optional, List
 from dataclasses import dataclass
 
 probs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 
-    "../../../probs-main/python_impl_generic"))
+    "../probs-main/python_impl_generic"))
 if not os.path.exists(probs_path):
     probs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 
-        "../../../../probs-main/python_impl_generic"))
+        "../../probs-main/python_impl_generic"))
 
 if probs_path not in sys.path:
     sys.path.insert(0, probs_path)

@@ -1,0 +1,49 @@
+name: 'Battle model vs random'
+player1:
+  # kind: "random"
+  # kind: "one_step_lookahead"
+  # kind: "two_step_lookahead"
+  # kind: "v_resnet_player"
+  kind: "q_resnet_player"
+  model:
+    v:
+      type: resnet
+      res_blocks: 17
+      filters: 128
+    q:
+      type: resnet
+      res_blocks: 13
+      filters: 128
+    checkpoint: '/home/excellent/ds/probs/probs_chess_cpp/checkpoints/ckpt_20250201-122725*'
+player2:
+  kind: "q_resnet_player"
+  model:
+    v:
+      type: resnet
+      res_blocks: 11
+      filters: 96
+    q:
+      type: resnet
+      res_blocks: 11
+      filters: 96
+    checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20241219-103526*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20241224-104436*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20241228-123713*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250101-134134*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250103-114533*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250106-100812*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250108-163826*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250109-221743*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250112-063901*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250115-013705*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250117-221507*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250121-141439*'
+    # checkpoint: '/home/excellent/ds/trained_models/cpp_chess8x8/ckpt_20250124-095102*'
+
+battle:
+  random_first_turns: 2
+env:
+  n_max_episode_steps: 500
+infra:
+  gpu: 0                               # gpu id, use -1 for cpu
+  evaluate_n_games: 10000
