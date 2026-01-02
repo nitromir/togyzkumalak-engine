@@ -210,4 +210,5 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
             for p in processes:
                 p.join()
 
-    helpers.TENSORBOARD.append_scalar('greedy_action_freq', stats['greedy_action_sum'] / stats['greedy_action_cnt'])
+    if stats['greedy_action_cnt'] > 0:
+        helpers.TENSORBOARD.append_scalar('greedy_action_freq', stats['greedy_action_sum'] / stats['greedy_action_cnt'])
