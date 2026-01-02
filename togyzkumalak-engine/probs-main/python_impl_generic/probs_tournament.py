@@ -16,6 +16,20 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
+# Добавляем путь к backend для импорта TogyzkumalakGame
+# Пробуем разные варианты путей
+backend_paths = [
+    os.path.abspath(os.path.join(current_dir, "../../../togyzkumalak-engine")),  # Локальная структура
+    os.path.abspath(os.path.join(current_dir, "../../togyzkumalak-engine")),     # Структура на сервере
+    os.path.abspath(os.path.join(current_dir, "../../..")),                        # Альтернативный вариант
+]
+
+for backend_path in backend_paths:
+    if os.path.exists(os.path.join(backend_path, "backend", "alphazero_trainer.py")):
+        if backend_path not in sys.path:
+            sys.path.insert(0, backend_path)
+        break
+
 import yaml
 from cross_arena import Arena, load_probs_agent
 
