@@ -1256,16 +1256,16 @@ class TrainingController {
         }
 
         const settings = {
-            'probsIters': 500,
-            'probsVEpisodes': 10000,
-            'probsQEpisodes': 5000,
-            'probsMemEpisodes': 100000,
-            'probsBatchSize': 1024,
-            'probsQCalls': 100,
-            'probsMaxDepth': 200,
-            'probsThreads': 8, // Оптимально для 4 GPU (по 2 процесса на карту)
-            'probsEvalGames': 100,
-            'probsProcesses': 32, // Задействуем 32 ядра для сбора Q-данных (по 8 на GPU)
+            'probsIters': 300,           // 300 итераций (быстрее сходимость)
+            'probsVEpisodes': 5000,      // 5K партий для Self-play (было 10K)
+            'probsQEpisodes': 2000,      // 2K эпизодов Q-train (было 5K)
+            'probsMemEpisodes': 50000,   // Буфер памяти
+            'probsBatchSize': 1024,      // Большой батч для GPU
+            'probsQCalls': 50,           // Глубина поиска Q (было 100)
+            'probsMaxDepth': 100,        // Макс глубина дерева (было 200)
+            'probsThreads': 8,           // 8 потоков Self-play (по 2 на GPU)
+            'probsEvalGames': 50,        // 50 игр для оценки (было 100)
+            'probsProcesses': 32,        // 32 воркера Q-train
             'probsDevice': 'cuda'
         };
 
