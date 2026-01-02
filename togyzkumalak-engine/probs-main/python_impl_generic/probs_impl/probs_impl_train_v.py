@@ -9,6 +9,8 @@ import helpers
 
 def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, experience_replay: helpers.ExperienceReplay, batch_size: int, dataset_drop_ratio: float, num_epochs: int = 3):
     value_model.train()
+    # Убеждаемся, что модель на правильном устройстве
+    value_model = value_model.to(device)
     helpers.optimizer_to(optimizer, device)
 
     dataset = []
@@ -61,6 +63,10 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
             else:
                 actual_values = torch.tensor(actual_values, device=device, dtype=torch.float32)
             actual_values = actual_values.view((-1, 1)).float()
+            
+            # Финальная проверка: все inputs должны быть на GPU
+            assert all(torch.is_tensor(x) and x.device.type == device.split(':')[0] for x in inputs), \
+                f"Not all inputs on GPU! Devices: {[x.device if torch.is_tensor(x) else 'not_tensor' for x in inputs]}"
 
             pred_state_value = value_model.forward(*inputs)
 
