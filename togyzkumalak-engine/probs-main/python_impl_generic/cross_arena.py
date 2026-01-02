@@ -80,21 +80,18 @@ class RandomAgent(helpers.BaseAgent):
         return "Random"
 
 
-def load_probs_agent(config_path, checkpoint_path=None, agent_name=None):
+def load_probs_agent(config_path, checkpoint_path=None):
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
     env_name = config["env"]["name"]
     device = config.get("infra", {}).get("device", "cpu")
     model_keeper = probs_impl_common.create_model_keeper(config["model"], env_name)
     if checkpoint_path and os.path.exists(checkpoint_path):
-        model_keeper.load_checkpoint(checkpoint_path)
-        if agent_name is None:
-            agent_name = os.path.basename(checkpoint_path)
-    if agent_name is None:
-        agent_name = "PROBS"
-    model_keeper.to(device)
+        model_keeper.load_from_checkpoint(checkpoint_path, device=device)
+    else:
+        model_keeper.to(device)
     model_keeper.eval()
-    return probs_impl_common.SelfLearningAgent(agent_name, model_keeper, device)
+    return probs_impl_common.SelfLearningAgent("PROBS", model_keeper, device)
 
 
 def load_alphazero_agent(checkpoint_path, num_mcts_sims=50):
@@ -102,16 +99,14 @@ def load_alphazero_agent(checkpoint_path, num_mcts_sims=50):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Arena for comparing PROBS checkpoints")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/train_togyzkumalak.yaml")
-    parser.add_argument("--probs-checkpoint", default=None, help="First PROBS checkpoint path")
-    parser.add_argument("--probs-checkpoint2", default=None, help="Second PROBS checkpoint path (for PROBS vs PROBS)")
+    parser.add_argument("--probs-checkpoint", default=None)
     parser.add_argument("--az-checkpoint", default="../../gym-togyzkumalak-master/togyzkumalak-engine/models/alphazero/best.pth.tar")
     parser.add_argument("--games", type=int, default=10)
     parser.add_argument("--mcts-sims", type=int, default=50)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--vs-random", action="store_true")
-    parser.add_argument("--device", default="cuda", help="Device to use (cuda or cpu)")
     args = parser.parse_args()
     if not os.path.exists(args.config):
         print("Config not found:", args.config)
@@ -120,21 +115,7 @@ def main():
         config = yaml.safe_load(f)
     env_name = config["env"]["name"]
     arena = Arena(env_name)
-    
-    # PROBS vs PROBS
-    if args.probs_checkpoint and args.probs_checkpoint2:
-        print(f"⚔️ PROBS vs PROBS: {args.probs_checkpoint} vs {args.probs_checkpoint2}")
-        probs_agent1 = load_probs_agent(args.config, args.probs_checkpoint, agent_name=os.path.basename(args.probs_checkpoint))
-        probs_agent1.model_keeper.to(args.device)
-        probs_agent2 = load_probs_agent(args.config, args.probs_checkpoint2, agent_name=os.path.basename(args.probs_checkpoint2))
-        probs_agent2.model_keeper.to(args.device)
-        arena.run_match(probs_agent1, probs_agent2, n_games=args.games, verbose=args.verbose)
-        return
-    
-    # PROBS vs AlphaZero or Random
-    probs_agent = load_probs_agent(args.config, args.probs_checkpoint, agent_name=os.path.basename(args.probs_checkpoint) if args.probs_checkpoint else None)
-    probs_agent.model_keeper.to(args.device)
-    
+    probs_agent = load_probs_agent(args.config, args.probs_checkpoint)
     if os.path.exists(args.az_checkpoint):
         az_agent = load_alphazero_agent(args.az_checkpoint, args.mcts_sims)
         arena.run_match(probs_agent, az_agent, n_games=args.games, verbose=args.verbose)
