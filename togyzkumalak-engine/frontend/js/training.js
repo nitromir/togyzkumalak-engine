@@ -1494,14 +1494,24 @@ class TrainingController {
                 return;
             }
             
-            container.innerHTML = data.checkpoints.slice(0, 10).map((cp, i) => `
-                <div class="checkpoint-item ${cp.is_best ? 'best' : ''}">
+            container.innerHTML = data.checkpoints.slice(0, 10).map((cp, i) => {
+                // Формируем метрику для отображения
+                let metricText = '';
+                if (cp.is_best && cp.metric !== null && cp.metric !== undefined) {
+                    metricText = `<span class="cp-metric" style="color: #10b981; font-weight: bold;">Win rate: ${(cp.metric * 100).toFixed(1)}%</span>`;
+                } else if (cp.is_best) {
+                    metricText = `<span class="cp-metric" style="color: #ffcc00;">👑 Лучший</span>`;
+                }
+                
+                return `
+                <div class="checkpoint-item ${cp.is_best ? 'best' : ''}" style="${cp.is_best ? 'border: 2px solid #ffcc00; background: rgba(255, 204, 0, 0.1);' : ''}">
                     <div class="cp-main-info">
                         <span class="cp-rank">#${i + 1}</span>
-                        <span class="cp-name" style="${cp.is_best ? 'color: #ffcc00; font-weight: bold;' : ''}">${cp.filename} ${cp.is_best ? '👑 BEST' : ''}</span>
+                        <span class="cp-name" style="${cp.is_best ? 'color: #ffcc00; font-weight: bold;' : ''}">${cp.filename}</span>
                         <span class="cp-time">${new Date(cp.timestamp).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'})}</span>
                     </div>
                     <div class="cp-metrics">
+                        ${metricText}
                         <span class="cp-size">${cp.size_mb} MB</span>
                     </div>
                     <div class="cp-actions">
@@ -1513,7 +1523,8 @@ class TrainingController {
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
 
             // Populate checkpoint selector for continuation
             const select = document.getElementById('probsInitialCheckpoint');
