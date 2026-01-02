@@ -3,7 +3,6 @@ import numpy as np
 import time
 import copy
 import torch
-from functools import partial
 try:
     import resource
 except ImportError:
@@ -486,49 +485,12 @@ class BudgetLookahead(BaseAgent):
         return np.random.choice(bad_moves)
 
 
-# Глобальная функция для collate_fn (должна быть на уровне модуля для pickle)
-# НЕ переносим на GPU здесь - оставляем на CPU для pin_memory
-def _tuple_collate(tpl):
-    """Собирает батч на CPU (для последующего pin_memory)"""
-    return torch.utils.data.dataloader.default_collate(tpl)
-
 def torch_create_dataloader(dataset: list, device: str, batch_size: int, shuffle: bool, drop_last: bool):
-    # КРИТИЧЕСКАЯ ПРОВЕРКА: пустой dataset
-    if not dataset or len(dataset) == 0:
-        raise ValueError(f"Cannot create DataLoader from empty dataset (len={len(dataset) if dataset else 0})! This indicates a problem with data collection.")
-    
-    # КРИТИЧЕСКАЯ ОПТИМИЗАЦИЯ: num_workers для параллельной загрузки данных
-    # Это ускоряет обучение в 2-3 раза, так как GPU не ждёт данные
-    num_workers = min(8, os.cpu_count() // 4) if 'cuda' in device else 0
-    
-    # pin_memory работает только с CPU тензорами
-    # Если num_workers > 0, используем pin_memory для быстрого переноса на GPU
-    # Если num_workers = 0, переносим на GPU в collate_fn
-    if num_workers > 0:
-        # Данные остаются на CPU в worker процессах, pin_memory закрепит их
-        collate_fn = _tuple_collate
-        pin_memory = 'cuda' in device
-    else:
-        # Без workers переносим на GPU сразу в collate_fn
-        collate_fn = partial(_tuple_to_device, device=device)
-        pin_memory = False
-    
-    dataloader = torch.utils.data.DataLoader(
-        dataset, 
-        batch_size=batch_size, 
-        shuffle=shuffle, 
-        drop_last=drop_last, 
-        collate_fn=collate_fn,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
-        persistent_workers=num_workers > 0  # Переиспользование воркеров между эпохами
-    )
-    return dataloader
+    def __tuple_to_device(tpl):
+        return tuple(x.to(device) for x in torch.utils.data.dataloader.default_collate(tpl))
 
-# Глобальная функция для переноса на GPU (используется когда num_workers = 0)
-def _tuple_to_device(tpl, device: str):
-    """Переносит батч данных на указанный device"""
-    return tuple(x.to(device) for x in torch.utils.data.dataloader.default_collate(tpl))
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, collate_fn=__tuple_to_device)
+    return dataloader
 
 
 def torch_batch_map_to_dataset(dataloader, fmap):

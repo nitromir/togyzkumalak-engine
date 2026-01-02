@@ -9,8 +9,6 @@ import helpers
 
 def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, experience_replay: helpers.ExperienceReplay, batch_size: int, dataset_drop_ratio: float, num_epochs: int = 3):
     value_model.train()
-    # Убеждаемся, что модель на правильном устройстве
-    value_model = value_model.to(device)
     helpers.optimizer_to(optimizer, device)
 
     dataset = []
@@ -22,11 +20,6 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
             dataset.append(dataset_row)
     print("Value model dataset length", len(dataset))
 
-    # Проверка на пустой dataset
-    if len(dataset) == 0:
-        print(f"[WARNING] Empty dataset for value model training! Skipping training.")
-        return
-
     dataloader = helpers.torch_create_dataloader(dataset, device, batch_size=batch_size, shuffle=True, drop_last=True)
 
     predictions = defaultdict(list)
@@ -35,49 +28,10 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
     for epoch in range(num_epochs):
         epoch_losses = []
         for batch_input in dataloader:
-            # Разделяем на inputs и actual_values
+            # for inp_tensor in batch_input: print(f"[train_value_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}, {inp_tensor.device}")
+
             inputs = batch_input[:-1]
-            actual_values = batch_input[-1]
-            
-            # КРИТИЧНО: ВСЕГДА переносим ВСЕ данные на GPU явно
-            # Модель использует torch.as_tensor() который создает тензоры на CPU по умолчанию!
-            # Поэтому мы ДОЛЖНЫ убедиться, что все уже на GPU
-            if isinstance(inputs, tuple):
-                # Переносим каждый элемент tuple на GPU
-                inputs_gpu = []
-                for x in inputs:
-                    if torch.is_tensor(x):
-                        x_gpu = x.to(device, non_blocking=True)
-                    else:
-                        # Конвертируем numpy/list в тензор НАПРЯМУЮ на GPU
-                        x_gpu = torch.tensor(x, device=device, dtype=torch.float32)
-                    inputs_gpu.append(x_gpu)
-                inputs = tuple(inputs_gpu)
-            elif torch.is_tensor(inputs):
-                inputs = (inputs.to(device, non_blocking=True),)
-            else:
-                # Fallback: конвертируем в tuple тензоров на GPU
-                if hasattr(inputs, '__iter__'):
-                    inputs = tuple(torch.tensor(x, device=device, dtype=torch.float32) for x in inputs)
-                else:
-                    inputs = (torch.tensor(inputs, device=device, dtype=torch.float32),)
-            
-            # actual_values тоже на GPU
-            if torch.is_tensor(actual_values):
-                actual_values = actual_values.to(device, non_blocking=True)
-            else:
-                actual_values = torch.tensor(actual_values, device=device, dtype=torch.float32)
-            actual_values = actual_values.view((-1, 1)).float()
-            
-            # Финальная проверка: все inputs должны быть на правильном устройстве
-            target_device = device.split(':')[0]  # "cuda" из "cuda:0"
-            for i, x in enumerate(inputs):
-                if not torch.is_tensor(x):
-                    raise RuntimeError(f"Input {i} is not a tensor: {type(x)}")
-                if x.device.type != target_device:
-                    # Принудительно переносим на правильное устройство
-                    inputs = tuple(x.to(device) if j == i else x for j, x in enumerate(inputs))
-                    break
+            actual_values = batch_input[-1].view((-1, 1)).float()
 
             pred_state_value = value_model.forward(*inputs)
 

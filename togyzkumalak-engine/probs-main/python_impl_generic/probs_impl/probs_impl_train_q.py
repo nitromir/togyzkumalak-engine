@@ -196,24 +196,11 @@ def expand_env_to_tree_data__using_q_s_a(env: helpers.BaseEnv, prev_tree: TreeNo
 
 
 def get_state_values(to_eval):
-    # Проверка на пустой dataset
-    if len(to_eval) == 0:
-        print(f"[WARNING] Empty dataset in get_state_values! Returning empty list.")
-        return []
-    
     # num_workers=1, pin_memory=True
     dataloader = helpers.torch_create_dataloader(to_eval, GET_DATASET_DEVICE, batch_size=CONFIG['train']['train_batch_size'], shuffle=False, drop_last=False)
 
     state_values = []
     for batch_input in dataloader:
-        # ВСЕГДА переносим ВСЕ данные на GPU явно (критично при num_workers > 0)
-        if isinstance(batch_input, tuple):
-            batch_input = tuple(x.to(device, non_blocking=True) if torch.is_tensor(x) else torch.tensor(x, device=device) for x in batch_input)
-        elif torch.is_tensor(batch_input):
-            batch_input = batch_input.to(device, non_blocking=True)
-        else:
-            batch_input = tuple(torch.tensor(x, device=device) for x in batch_input) if hasattr(batch_input, '__iter__') else torch.tensor(batch_input, device=device)
-        
         eval_result = VALUE_MODEL.forward(*batch_input)
         eval_result = eval_result.detach().cpu().numpy()[:, 0]
         state_values.extend(eval_result)
@@ -403,42 +390,17 @@ def train_q_model(
     value_model.eval()
     self_learning_model.train()
 
-    # КРИТИЧЕСКАЯ ПРОВЕРКА: пустой dataset
-    if not dataset or len(dataset) == 0:
-        print(f"[ERROR] Empty dataset for Q model training! Dataset type: {type(dataset)}, len: {len(dataset) if dataset else 0}")
-        print(f"[ERROR] This means Q-dataset workers returned no data. Check worker logs for errors.")
-        raise RuntimeError(f"Cannot train Q model with empty dataset (len={len(dataset) if dataset else 0})")
-
-    print(f"[INFO] Training Q model with dataset size: {len(dataset)}")
     dataloader = helpers.torch_create_dataloader(dataset, device, config['train']['train_batch_size'], shuffle=True, drop_last=True)
     
     num_epochs = 3  # Множественные эпохи для лучшего обучения
     for epoch in range(num_epochs):
         epoch_losses = []
         for batch_input in dataloader:
-            # Разделяем на inputs, actual_action_values и actions_mask
+            # for inp_tensor in batch_input: print(f"[train_self_learning_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}")
+
             inputs = batch_input[:-2]
             actual_action_values = batch_input[-2]   # (B, N_ACTIONS)
             actions_mask = batch_input[-1]         # (B, N_ACTIONS)
-            
-            # ВСЕГДА переносим ВСЕ данные на GPU явно (критично при num_workers > 0)
-            if isinstance(inputs, tuple):
-                inputs = tuple(x.to(device, non_blocking=True) if torch.is_tensor(x) else torch.tensor(x, device=device) for x in inputs)
-            elif torch.is_tensor(inputs):
-                inputs = (inputs.to(device, non_blocking=True),)
-            else:
-                inputs = tuple(torch.tensor(x, device=device) for x in inputs) if hasattr(inputs, '__iter__') else (torch.tensor(inputs, device=device),)
-            
-            # actual_action_values и actions_mask тоже на GPU
-            if torch.is_tensor(actual_action_values):
-                actual_action_values = actual_action_values.to(device, non_blocking=True)
-            else:
-                actual_action_values = torch.tensor(actual_action_values, device=device)
-            
-            if torch.is_tensor(actions_mask):
-                actions_mask = actions_mask.to(device, non_blocking=True)
-            else:
-                actions_mask = torch.tensor(actions_mask, device=device)
 
             pred_action_values = self_learning_model.forward(*inputs)
 
