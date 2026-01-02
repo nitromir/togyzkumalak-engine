@@ -34,6 +34,16 @@ def init_worker(value_model, self_learning_model, config, device, worker_id=0):
     GET_DATASET_DEVICE = actual_device
 
 
+def self_play_worker_task(q, gids, idx, value_model, self_learning_model, config, device):
+    try:
+        init_worker(value_model, self_learning_model, config, device, idx)
+        result = multiprocessing_entry_self_play(gids)
+        q.put(result)
+    except Exception as e:
+        import traceback
+        q.put(("error", str(e), traceback.format_exc()))
+
+
 def multiprocessing_entry_self_play(game_ids):
     # #region agent log
     import json as _json; _log_path = r"c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log"
@@ -180,17 +190,19 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
             
             for i in range(config['infra']['self_play_threads']):
                 p = tmp.Process(
-                    target=lambda q, gids, idx: q.put(
-                        (init_worker(value_model, self_learning_model, config, get_dataset_device, idx) or True) and 
-                        multiprocessing_entry_self_play(gids)
-                    ),
-                    args=(results_queue, game_ids_splits[i], i)
+                    target=self_play_worker_task,
+                    args=(results_queue, game_ids_splits[i], i, value_model, self_learning_model, config, get_dataset_device)
                 )
                 p.start()
                 processes.append(p)
 
             for _ in range(len(processes)):
-                replay_episodes, episodes_stats = results_queue.get()
+                res = results_queue.get()
+                if isinstance(res, tuple) and res[0] == "error":
+                    print(f"ERROR in worker: {res[1]}\n{res[2]}")
+                    continue
+                    
+                replay_episodes, episodes_stats = res
                 for replay_episode in replay_episodes:
                     experience_replay.append_replay_episode(replay_episode)
                 stats += episodes_stats
