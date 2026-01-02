@@ -188,6 +188,7 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
                 gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
                 worker_device = f"cuda:{i % gpu_count}" if gpu_count > 0 else get_dataset_device
                 
+                print(f"  [Self-Play] Starting worker {i} on {worker_device}...")
                 p = mp_ctx.Process(
                     target=self_play_worker_task,
                     args=(results_queue, game_ids_splits[i], i, value_model_cpu, self_learning_model_cpu, config, worker_device)
@@ -195,8 +196,16 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
                 p.start()
                 processes.append(p)
 
-            for _ in range(len(processes)):
-                res = results_queue.get()
+            for i in range(len(processes)):
+                try:
+                    res = results_queue.get(timeout=600) # Таймаут 10 минут на порцию игр
+                except:
+                    print(f"  [ERROR] Self-play worker timeout! Some workers might have crashed.")
+                    # Пытаемся проверить живы ли процессы
+                    for idx, p in enumerate(processes):
+                        if not p.is_alive():
+                            print(f"  [ERROR] Worker {idx} is dead with exit code {p.exitcode}")
+                    raise RuntimeError("Self-play workers timed out or crashed.")
                 if isinstance(res, tuple) and res[0] == "error":
                     err_msg = f"ERROR in worker: {res[1]}\n{res[2]}"
                     print(err_msg)

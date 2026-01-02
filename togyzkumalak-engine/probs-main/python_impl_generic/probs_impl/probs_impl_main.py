@@ -103,10 +103,15 @@ def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, 
 
     # Train Q model
     if sub_processes_cnt > 0 and tasks_queues and results_queue:
-        # Send models to threads
+        # Send models to threads (ALWAYS VIA CPU TO AVOID OOM ON GPU 0)
+        v_state_cpu = {k: v.cpu() for k, v in value_model.state_dict().items()}
+        q_state_cpu = {k: v.cpu() for k, v in self_learning_model.state_dict().items()}
+        v_package = pickle.dumps(v_state_cpu)
+        q_package = pickle.dumps(q_state_cpu)
+        
         for pi in range(sub_processes_cnt):
-            tasks_queues[pi].put_nowait((pi, "load_v_model", pickle.dumps(value_model.state_dict())))
-            tasks_queues[pi].put_nowait((pi, "load_q_model", pickle.dumps(self_learning_model.state_dict())))
+            tasks_queues[pi].put_nowait((pi, "load_v_model", v_package))
+            tasks_queues[pi].put_nowait((pi, "load_q_model", q_package))
         usage.checkpoint("Send models to threads")
 
         for n_games in helpers.split_uniformly(cnt=config['train']['q_train_episodes'], chunks=config['train']['q_dataset_episodes_sub_iter']):
@@ -116,7 +121,11 @@ def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, 
 
             dataset, stats = [], Counter()
             for task_i in range(sub_processes_cnt):
-                pi, itemtype, package = results_queue.get(True, None)
+                try:
+                    pi, itemtype, package = results_queue.get(timeout=600)
+                except:
+                    print(f"  [ERROR] Q-dataset worker timeout! Some workers might have crashed.")
+                    raise RuntimeError("Q-dataset workers timed out or crashed.")
                 if itemtype == "got_q_dataset":
                     sub_dataset, sub_stats = package
                     dataset.extend(sub_dataset)
@@ -160,10 +169,14 @@ def go_train(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_e
         except: pass
         tasks_queues = [multiprocessing.Queue() for _ in range(sub_processes_cnt)]
         results_queue = multiprocessing.Queue()
+        gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        
         for pi in range(sub_processes_cnt):
             v_class_name = value_model.__class__.__name__
             q_class_name = self_learning_model.__class__.__name__
-            p = multiprocessing.Process(target=worker, args=(tasks_queues[pi], results_queue, config, device, v_class_name, q_class_name))
+            # РАСПРЕДЕЛЯЕМ ПОСТОЯННЫХ ВОРКЕРОВ ПО GPU
+            worker_device = f"cuda:{pi % gpu_count}" if gpu_count > 0 else device
+            p = multiprocessing.Process(target=worker, args=(tasks_queues[pi], results_queue, config, worker_device, v_class_name, q_class_name))
             p.start()
     else:
         tasks_queues, results_queue = None, None
@@ -188,10 +201,15 @@ def go_train(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_e
         model_keeper.eval()
         usage.checkpoint("Train value model")
 
-        # Send models to threads
+        # Send models to threads (ALWAYS VIA CPU TO AVOID OOM ON GPU 0)
+        v_state_cpu = {k: v.cpu() for k, v in value_model.state_dict().items()}
+        q_state_cpu = {k: v.cpu() for k, v in self_learning_model.state_dict().items()}
+        v_package = pickle.dumps(v_state_cpu)
+        q_package = pickle.dumps(q_state_cpu)
+        
         for pi in range(sub_processes_cnt):
-            tasks_queues[pi].put_nowait((pi, "load_v_model", pickle.dumps(value_model.state_dict())))
-            tasks_queues[pi].put_nowait((pi, "load_q_model", pickle.dumps(self_learning_model.state_dict())))
+            tasks_queues[pi].put_nowait((pi, "load_v_model", v_package))
+            tasks_queues[pi].put_nowait((pi, "load_q_model", q_package))
         usage.checkpoint("Send models to threads")
 
         # Train Q model
@@ -204,7 +222,11 @@ def go_train(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_e
             dataset, stats = [], Counter()
 
             for task_i in range(sub_processes_cnt):
-                pi, itemtype, package = results_queue.get(True, None)
+                try:
+                    pi, itemtype, package = results_queue.get(timeout=600)
+                except:
+                    print(f"  [ERROR] Q-dataset worker timeout! Some workers might have crashed.")
+                    raise RuntimeError("Q-dataset workers timed out or crashed.")
 
                 if itemtype == "got_q_dataset":
                     sub_dataset, sub_stats = package
