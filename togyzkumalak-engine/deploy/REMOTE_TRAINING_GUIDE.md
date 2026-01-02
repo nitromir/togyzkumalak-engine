@@ -142,7 +142,15 @@ ssh -p ПОРТ root@IP -L 8080:localhost:8000
 Запусти в PowerShell на своем ПК:
 ```powershell
 # В корне проекта Toguzkumalak
+cd C:\Users\Admin\Documents\Toguzkumalak
 .\gym-togyzkumalak-master\venv\Scripts\python.exe sync_checkpoints.py
+```
+
+Или если виртуальное окружение уже активировано:
+```powershell
+# В корне проекта Toguzkumalak
+cd C:\Users\Admin\Documents\Toguzkumalak
+python sync_checkpoints.py
 ```
 
 ### Как понять, что всё качается:
