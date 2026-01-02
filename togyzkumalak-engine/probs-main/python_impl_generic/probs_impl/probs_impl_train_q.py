@@ -201,11 +201,13 @@ def get_state_values(to_eval):
 
     state_values = []
     for batch_input in dataloader:
-        # ВСЕГДА переносим данные на GPU (надежнее чем проверка device)
+        # ВСЕГДА переносим ВСЕ данные на GPU явно (критично при num_workers > 0)
         if isinstance(batch_input, tuple):
-            batch_input = tuple(x.to(device, non_blocking=True) if torch.is_tensor(x) else x for x in batch_input)
+            batch_input = tuple(x.to(device, non_blocking=True) if torch.is_tensor(x) else torch.tensor(x, device=device) for x in batch_input)
         elif torch.is_tensor(batch_input):
             batch_input = batch_input.to(device, non_blocking=True)
+        else:
+            batch_input = tuple(torch.tensor(x, device=device) for x in batch_input) if hasattr(batch_input, '__iter__') else torch.tensor(batch_input, device=device)
         
         eval_result = VALUE_MODEL.forward(*batch_input)
         eval_result = eval_result.detach().cpu().numpy()[:, 0]
