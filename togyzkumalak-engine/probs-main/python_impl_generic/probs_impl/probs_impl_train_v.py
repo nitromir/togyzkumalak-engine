@@ -64,9 +64,15 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
                 actual_values = torch.tensor(actual_values, device=device, dtype=torch.float32)
             actual_values = actual_values.view((-1, 1)).float()
             
-            # Финальная проверка: все inputs должны быть на GPU
-            assert all(torch.is_tensor(x) and x.device.type == device.split(':')[0] for x in inputs), \
-                f"Not all inputs on GPU! Devices: {[x.device if torch.is_tensor(x) else 'not_tensor' for x in inputs]}"
+            # Финальная проверка: все inputs должны быть на правильном устройстве
+            target_device = device.split(':')[0]  # "cuda" из "cuda:0"
+            for i, x in enumerate(inputs):
+                if not torch.is_tensor(x):
+                    raise RuntimeError(f"Input {i} is not a tensor: {type(x)}")
+                if x.device.type != target_device:
+                    # Принудительно переносим на правильное устройство
+                    inputs = tuple(x.to(device) if j == i else x for j, x in enumerate(inputs))
+                    break
 
             pred_state_value = value_model.forward(*inputs)
 
