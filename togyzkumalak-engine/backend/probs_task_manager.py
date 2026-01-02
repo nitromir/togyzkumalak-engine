@@ -312,14 +312,22 @@ model:
                 log_print(f"Initializing {sub_processes_cnt} worker processes...")
                 try: multiprocessing.set_start_method("spawn", force=True)
                 except: pass
+                
+                # РАСПРЕДЕЛЕНИЕ ПО GPU ДЛЯ МАКСИМАЛЬНОЙ ЖАРЫ
+                gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+                if gpu_count > 0:
+                    log_print(f"Detected {gpu_count} GPUs. Distributing workers...")
+
                 tasks_queues = [multiprocessing.Queue() for _ in range(sub_processes_cnt)]
                 results_queue = multiprocessing.Queue()
                 v_class = probs_config['model']['value']['class']
                 q_class = probs_config['model']['self_learner']['class']
                 for pi in range(sub_processes_cnt):
+                    # Каждому воркеру своя GPU (по кругу)
+                    worker_device = f"cuda:{pi % gpu_count}" if gpu_count > 0 else device
                     p = multiprocessing.Process(
                         target=probs_impl_main.worker, 
-                        args=(tasks_queues[pi], results_queue, probs_config, device, v_class, q_class)
+                        args=(tasks_queues[pi], results_queue, probs_config, worker_device, v_class, q_class)
                     )
                     p.daemon = True
                     p.start()

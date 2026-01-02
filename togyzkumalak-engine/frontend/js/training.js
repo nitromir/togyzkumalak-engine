@@ -1251,21 +1251,21 @@ class TrainingController {
     }
 
     applyMonsterConfig() {
-        if (!confirm('🔥 Применить настройки для МОНСТР-СЕРВЕРА (64 ядра, 4x GPU)?\n\nЭто радикально увеличит объемы данных и параллелизм.')) {
+        if (!confirm('🔥 Применить настройки для МОНСТР-СЕРВЕРА (128 ядер, 4x GPU)?\n\nЭто радикально увеличит объемы данных и параллелизм.')) {
             return;
         }
 
         const settings = {
             'probsIters': 500,
-            'probsVEpisodes': 5000,
-            'probsQEpisodes': 2000,
-            'probsMemEpisodes': 50000,
-            'probsBatchSize': 512,
-            'probsQCalls': 60,
-            'probsMaxDepth': 100,
-            'probsThreads': 1, // При использовании CUDA всегда 1
+            'probsVEpisodes': 10000,
+            'probsQEpisodes': 5000,
+            'probsMemEpisodes': 100000,
+            'probsBatchSize': 2048,
+            'probsQCalls': 100,
+            'probsMaxDepth': 200,
+            'probsThreads': 1, // При использовании CUDA всегда 1 для self-play
             'probsEvalGames': 100,
-            'probsProcesses': 32, // Задействуем 32 ядра для сбора Q-данных
+            'probsProcesses': 96, // Задействуем 96 ядер для сбора Q-данных (распределятся по 4 GPU)
             'probsDevice': 'cuda'
         };
 
