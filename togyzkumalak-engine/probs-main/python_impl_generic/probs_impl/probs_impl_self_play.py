@@ -173,17 +173,18 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
 
             import sys
             import torch.multiprocessing as tmp
-            mp_context = "spawn" if sys.platform == "win32" else "fork"
             
+            # ГАРАНТИРОВАННЫЙ SPAWN
             try:
-                tmp.set_start_method(mp_context, force=True)
+                tmp.set_start_method('spawn', force=True)
             except RuntimeError: pass
-
-            results_queue = tmp.Queue()
+            
+            mp_ctx = tmp.get_context('spawn')
+            results_queue = mp_ctx.Queue()
             processes = []
             
             for i in range(config['infra']['self_play_threads']):
-                p = tmp.Process(
+                p = mp_ctx.Process(
                     target=self_play_worker_task,
                     args=(results_queue, game_ids_splits[i], i, value_model_cpu, self_learning_model_cpu, config, get_dataset_device)
                 )
