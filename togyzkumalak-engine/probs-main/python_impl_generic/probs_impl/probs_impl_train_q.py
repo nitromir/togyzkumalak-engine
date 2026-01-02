@@ -403,11 +403,13 @@ def train_q_model(
     value_model.eval()
     self_learning_model.train()
 
-    # Проверка на пустой dataset
-    if len(dataset) == 0:
-        print(f"[WARNING] Empty dataset for Q model training! Skipping training.")
-        return
+    # КРИТИЧЕСКАЯ ПРОВЕРКА: пустой dataset
+    if not dataset or len(dataset) == 0:
+        print(f"[ERROR] Empty dataset for Q model training! Dataset type: {type(dataset)}, len: {len(dataset) if dataset else 0}")
+        print(f"[ERROR] This means Q-dataset workers returned no data. Check worker logs for errors.")
+        raise RuntimeError(f"Cannot train Q model with empty dataset (len={len(dataset) if dataset else 0})")
 
+    print(f"[INFO] Training Q model with dataset size: {len(dataset)}")
     dataloader = helpers.torch_create_dataloader(dataset, device, config['train']['train_batch_size'], shuffle=True, drop_last=True)
     
     num_epochs = 3  # Множественные эпохи для лучшего обучения

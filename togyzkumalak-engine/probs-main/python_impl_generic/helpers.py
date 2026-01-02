@@ -493,9 +493,9 @@ def _tuple_collate(tpl):
     return torch.utils.data.dataloader.default_collate(tpl)
 
 def torch_create_dataloader(dataset: list, device: str, batch_size: int, shuffle: bool, drop_last: bool):
-    # Проверка на пустой dataset
-    if len(dataset) == 0:
-        raise ValueError(f"Cannot create DataLoader from empty dataset! This indicates a problem with data collection.")
+    # КРИТИЧЕСКАЯ ПРОВЕРКА: пустой dataset
+    if not dataset or len(dataset) == 0:
+        raise ValueError(f"Cannot create DataLoader from empty dataset (len={len(dataset) if dataset else 0})! This indicates a problem with data collection.")
     
     # КРИТИЧЕСКАЯ ОПТИМИЗАЦИЯ: num_workers для параллельной загрузки данных
     # Это ускоряет обучение в 2-3 раза, так как GPU не ждёт данные
