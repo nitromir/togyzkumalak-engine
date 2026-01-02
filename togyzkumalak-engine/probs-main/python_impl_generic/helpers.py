@@ -493,6 +493,10 @@ def _tuple_collate(tpl):
     return torch.utils.data.dataloader.default_collate(tpl)
 
 def torch_create_dataloader(dataset: list, device: str, batch_size: int, shuffle: bool, drop_last: bool):
+    # Проверка на пустой dataset
+    if len(dataset) == 0:
+        raise ValueError(f"Cannot create DataLoader from empty dataset! This indicates a problem with data collection.")
+    
     # КРИТИЧЕСКАЯ ОПТИМИЗАЦИЯ: num_workers для параллельной загрузки данных
     # Это ускоряет обучение в 2-3 раза, так как GPU не ждёт данные
     num_workers = min(8, os.cpu_count() // 4) if 'cuda' in device else 0

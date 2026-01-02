@@ -196,6 +196,11 @@ def expand_env_to_tree_data__using_q_s_a(env: helpers.BaseEnv, prev_tree: TreeNo
 
 
 def get_state_values(to_eval):
+    # Проверка на пустой dataset
+    if len(to_eval) == 0:
+        print(f"[WARNING] Empty dataset in get_state_values! Returning empty list.")
+        return []
+    
     # num_workers=1, pin_memory=True
     dataloader = helpers.torch_create_dataloader(to_eval, GET_DATASET_DEVICE, batch_size=CONFIG['train']['train_batch_size'], shuffle=False, drop_last=False)
 
