@@ -148,6 +148,10 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
 
     stats = Counter()
 
+    # Переводим модели на CPU перед пиклингом для подпроцессов
+    value_model_cpu = value_model.cpu()
+    self_learning_model_cpu = self_learning_model.cpu()
+
     with torch.no_grad():
 
         # ------------ No multiprocessing
@@ -175,14 +179,13 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
                 tmp.set_start_method(mp_context, force=True)
             except RuntimeError: pass
 
-            # Используем кастомную очередь для сбора результатов
             results_queue = tmp.Queue()
             processes = []
             
             for i in range(config['infra']['self_play_threads']):
                 p = tmp.Process(
                     target=self_play_worker_task,
-                    args=(results_queue, game_ids_splits[i], i, value_model, self_learning_model, config, get_dataset_device)
+                    args=(results_queue, game_ids_splits[i], i, value_model_cpu, self_learning_model_cpu, config, get_dataset_device)
                 )
                 p.start()
                 processes.append(p)
@@ -190,7 +193,11 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
             for _ in range(len(processes)):
                 res = results_queue.get()
                 if isinstance(res, tuple) and res[0] == "error":
-                    print(f"ERROR in worker: {res[1]}\n{res[2]}")
+                    err_msg = f"ERROR in worker: {res[1]}\n{res[2]}"
+                    print(err_msg)
+                    # Попытаемся записать в общий лог если это возможно
+                    with open("../../probs_training.log", "a") as f:
+                        f.write(f"{time.strftime('%H:%M:%S')} {err_msg}\n")
                     continue
                     
                 replay_episodes, episodes_stats = res
@@ -201,5 +208,12 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
             for p in processes:
                 p.join()
 
+    if len(experience_replay.episodes) == 0:
+        raise RuntimeError("Self-play failed to collect any games. Check worker errors above.")
+
     if stats['greedy_action_cnt'] > 0:
         helpers.TENSORBOARD.append_scalar('greedy_action_freq', stats['greedy_action_sum'] / stats['greedy_action_cnt'])
+
+    # Возвращаем модели на исходный девайс
+    value_model.to(get_dataset_device)
+    self_learning_model.to(get_dataset_device)
