@@ -345,6 +345,20 @@ model:
             mk.to(device)
             helpers.TENSORBOARD = helpers.MemorySummaryWriter()
             
+            # Создаём LR schedulers для стабильного обучения
+            total_iterations = probs_config["train"]["n_high_level_iterations"]
+            for model_key in ['value', 'self_learner']:
+                if model_key in mk.optimizers:
+                    optimizer = mk.optimizers[model_key]
+                    # CosineAnnealingLR: плавно снижает LR от начального до минимального
+                    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                        optimizer, 
+                        T_max=total_iterations,  # Период косинуса = количество итераций
+                        eta_min=1e-5  # Минимальный LR (0.00001)
+                    )
+                    mk.schedulers[model_key] = scheduler
+                    log_print(f"Created LR scheduler for {model_key}: start_lr={optimizer.param_groups[0]['lr']:.6f}, min_lr=1e-5")
+            
             # Противник для оценки (теперь one_step_lookahead по умолчанию)
             metrics_enemy = probs_impl_common.create_agent(
                 probs_config["evaluate"]["enemy"], "togyzkumalak", device
@@ -382,6 +396,14 @@ model:
                     results_queue=results_queue, 
                     experience_replay=experience_replay
                 )
+                
+                # Обновляем LR schedulers после каждой итерации
+                for model_key in ['value', 'self_learner']:
+                    if model_key in mk.schedulers:
+                        mk.schedulers[model_key].step()
+                        current_lr = mk.optimizers[model_key].param_groups[0]['lr']
+                        if i % 10 == 0:  # Логируем каждые 10 итераций
+                            log_print(f"LR for {model_key}: {current_lr:.6f}")
 
                 # Логируем и сохраняем метрики
                 current_win_rate = None

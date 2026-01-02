@@ -135,6 +135,7 @@ class ModelKeeper:
     def __init__(self) -> None:
         self.models = dict()
         self.optimizers = dict()
+        self.schedulers = dict()  # LR schedulers для каждого optimizer
 
     def save_checkpoint(self, checkpoints_dir, filename_or_prefix):
         data = dict()

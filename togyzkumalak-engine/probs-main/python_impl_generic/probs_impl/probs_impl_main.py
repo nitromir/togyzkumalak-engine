@@ -91,7 +91,9 @@ def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, 
 
     # Self play
     model_keeper.eval()
-    experience_replay.clear()
+    # НЕ очищаем буфер! Старые данные постепенно вытесняются новыми через deque(maxlen)
+    # Это предотвращает катастрофическое забывание и стабилизирует обучение
+    # experience_replay.clear()  # УБРАНО: буфер сам ограничивается через max_episodes
     probs_impl_self_play.go_self_play(value_model, self_learning_model, config, experience_replay, device)
     experience_replay.print_stats()
     usage.checkpoint("Self play")
@@ -191,7 +193,8 @@ def go_train(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_e
 
         # Self play
         model_keeper.eval()
-        experience_replay.clear()
+        # НЕ очищаем буфер! Старые данные постепенно вытесняются новыми через deque(maxlen)
+        # experience_replay.clear()  # УБРАНО: буфер сам ограничивается через max_episodes
         probs_impl_self_play.go_self_play(value_model, self_learning_model, config, experience_replay, device)
         experience_replay.print_stats()
         usage.checkpoint("Self play")

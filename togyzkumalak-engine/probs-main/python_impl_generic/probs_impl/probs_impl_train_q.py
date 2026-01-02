@@ -391,8 +391,11 @@ def train_q_model(
     self_learning_model.train()
 
     dataloader = helpers.torch_create_dataloader(dataset, device, config['train']['train_batch_size'], shuffle=True, drop_last=True)
-
-    for batch_input in dataloader:
+    
+    num_epochs = 3  # Множественные эпохи для лучшего обучения
+    for epoch in range(num_epochs):
+        epoch_losses = []
+        for batch_input in dataloader:
         # for inp_tensor in batch_input: print(f"[train_self_learning_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}")
 
         inputs = batch_input[:-2]
@@ -413,8 +416,16 @@ def train_q_model(
 
         loss = (loss / action_mask_norm).mean()
 
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            # Gradient clipping для предотвращения gradient explosion
+            grad_norm = torch.nn.utils.clip_grad_norm_(self_learning_model.parameters(), max_norm=10.0)
+            optimizer.step()
 
-        helpers.TENSORBOARD.append_scalar('self_learning_loss', loss.item())
+            epoch_losses.append(loss.item())
+            helpers.TENSORBOARD.append_scalar('self_learning_loss', loss.item())
+            helpers.TENSORBOARD.append_scalar('q_grad_norm', grad_norm.item())
+        
+        if epoch_losses:
+            avg_loss = np.mean(epoch_losses)
+            print(f"Q model epoch {epoch+1}/{num_epochs}, avg loss: {avg_loss:.4f}")

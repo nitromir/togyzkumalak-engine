@@ -169,7 +169,11 @@ def create_model_keeper(model_config, env_name: str) -> helpers.ModelKeeper:
             if 'learning_rate' in model_config[model_key]:
                 lr = model_config[model_key]['learning_rate']
                 wd = model_config[model_key]['weight_decay']
-                model_keeper.optimizers[model_key] = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
+                optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
+                model_keeper.optimizers[model_key] = optimizer
+                
+                # Создаём LR scheduler (будет настроен позже, когда узнаем n_iterations)
+                # Пока создаём placeholder, scheduler.step() будет вызван после настройки
 
     if 'checkpoint' in model_config:
         checkpoint_filename = model_config['checkpoint']

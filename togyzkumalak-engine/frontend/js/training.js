@@ -1264,7 +1264,7 @@ class TrainingController {
             'probsQCalls': 50,           // Глубина поиска Q
             'probsMaxDepth': 100,        // Макс глубина дерева
             'probsThreads': 16,          // 16 потоков Self-play (было 8)
-            'probsEvalGames': 50,        // 50 игр для оценки
+            'probsEvalGames': 100,       // 100 игр для стабильной оценки (было 50)
             'probsProcesses': 64,        // 64 воркера Q-train (было 32)
             'probsDevice': 'cuda'
         };
