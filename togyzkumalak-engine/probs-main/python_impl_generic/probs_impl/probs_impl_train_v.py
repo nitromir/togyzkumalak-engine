@@ -28,10 +28,12 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
     for epoch in range(num_epochs):
         epoch_losses = []
         for batch_input in dataloader:
-            # Переносим данные на GPU если они еще на CPU (при использовании num_workers > 0)
-            if isinstance(batch_input, tuple) and len(batch_input) > 0:
-                if batch_input[0].device.type == 'cpu':
-                    batch_input = tuple(x.to(device) for x in batch_input)
+            # ВСЕГДА переносим данные на GPU (надежнее чем проверка device)
+            # Это необходимо при использовании num_workers > 0, когда данные остаются на CPU
+            if isinstance(batch_input, tuple):
+                batch_input = tuple(x.to(device, non_blocking=True) if torch.is_tensor(x) else x for x in batch_input)
+            elif torch.is_tensor(batch_input):
+                batch_input = batch_input.to(device, non_blocking=True)
 
             inputs = batch_input[:-1]
             actual_values = batch_input[-1].view((-1, 1)).float()
