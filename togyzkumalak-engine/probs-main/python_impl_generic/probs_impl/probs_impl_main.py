@@ -247,8 +247,9 @@ def go_train(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_e
             for task_i in range(sub_processes_cnt):
                 try:
                     pi, itemtype, package = results_queue.get(timeout=600)
-                except:
+                except Exception as e:
                     print(f"  [ERROR] Q-dataset worker timeout! Some workers might have crashed.")
+                    print(f"  [ERROR] Exception: {type(e).__name__}: {e}")
                     raise RuntimeError("Q-dataset workers timed out or crashed.")
 
                 if itemtype == "got_q_dataset":
@@ -256,7 +257,10 @@ def go_train(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_e
                     # print(f"Main thread got result `{itemtype}`: dataset with {len(sub_dataset)} rows and stats {sub_stats}")
                     dataset.extend(sub_dataset)
                     stats += sub_stats
-
+                elif itemtype == "error":
+                    # Получили ошибку от worker
+                    print(f"  [FATAL] Worker {pi} reported error: {package}")
+                    raise RuntimeError(f"Q-dataset worker {pi} crashed: {package}")
                 else:
                     raise Exception(f"Got unexpected item from results queue {pi, itemtype}")
 
