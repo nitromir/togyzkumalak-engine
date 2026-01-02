@@ -487,18 +487,27 @@ class BudgetLookahead(BaseAgent):
 
 
 # Глобальная функция для collate_fn (должна быть на уровне модуля для pickle)
-def _tuple_to_device(tpl, device: str):
-    """Переносит батч данных на указанный device"""
-    return tuple(x.to(device) for x in torch.utils.data.dataloader.default_collate(tpl))
+# НЕ переносим на GPU здесь - оставляем на CPU для pin_memory
+def _tuple_collate(tpl):
+    """Собирает батч на CPU (для последующего pin_memory)"""
+    return torch.utils.data.dataloader.default_collate(tpl)
 
 def torch_create_dataloader(dataset: list, device: str, batch_size: int, shuffle: bool, drop_last: bool):
     # КРИТИЧЕСКАЯ ОПТИМИЗАЦИЯ: num_workers для параллельной загрузки данных
     # Это ускоряет обучение в 2-3 раза, так как GPU не ждёт данные
     num_workers = min(8, os.cpu_count() // 4) if 'cuda' in device else 0
-    pin_memory = 'cuda' in device  # Быстрый перенос данных на GPU
     
-    # Используем partial для создания pickle-совместимой collate_fn
-    collate_fn = partial(_tuple_to_device, device=device)
+    # pin_memory работает только с CPU тензорами
+    # Если num_workers > 0, используем pin_memory для быстрого переноса на GPU
+    # Если num_workers = 0, переносим на GPU в collate_fn
+    if num_workers > 0:
+        # Данные остаются на CPU в worker процессах, pin_memory закрепит их
+        collate_fn = _tuple_collate
+        pin_memory = 'cuda' in device
+    else:
+        # Без workers переносим на GPU сразу в collate_fn
+        collate_fn = partial(_tuple_to_device, device=device)
+        pin_memory = False
     
     dataloader = torch.utils.data.DataLoader(
         dataset, 
@@ -511,6 +520,11 @@ def torch_create_dataloader(dataset: list, device: str, batch_size: int, shuffle
         persistent_workers=num_workers > 0  # Переиспользование воркеров между эпохами
     )
     return dataloader
+
+# Глобальная функция для переноса на GPU (используется когда num_workers = 0)
+def _tuple_to_device(tpl, device: str):
+    """Переносит батч данных на указанный device"""
+    return tuple(x.to(device) for x in torch.utils.data.dataloader.default_collate(tpl))
 
 
 def torch_batch_map_to_dataset(dataloader, fmap):

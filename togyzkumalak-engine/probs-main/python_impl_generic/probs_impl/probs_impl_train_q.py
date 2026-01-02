@@ -201,6 +201,11 @@ def get_state_values(to_eval):
 
     state_values = []
     for batch_input in dataloader:
+        # Переносим данные на GPU если они еще на CPU (при использовании num_workers > 0)
+        if isinstance(batch_input, tuple) and len(batch_input) > 0:
+            if batch_input[0].device.type == 'cpu':
+                batch_input = tuple(x.to(device) for x in batch_input)
+        
         eval_result = VALUE_MODEL.forward(*batch_input)
         eval_result = eval_result.detach().cpu().numpy()[:, 0]
         state_values.extend(eval_result)
@@ -396,7 +401,10 @@ def train_q_model(
     for epoch in range(num_epochs):
         epoch_losses = []
         for batch_input in dataloader:
-            # for inp_tensor in batch_input: print(f"[train_self_learning_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}")
+            # Переносим данные на GPU если они еще на CPU (при использовании num_workers > 0)
+            if isinstance(batch_input, tuple) and len(batch_input) > 0:
+                if batch_input[0].device.type == 'cpu':
+                    batch_input = tuple(x.to(device) for x in batch_input)
 
             inputs = batch_input[:-2]
             actual_action_values = batch_input[-2]   # (B, N_ACTIONS)
