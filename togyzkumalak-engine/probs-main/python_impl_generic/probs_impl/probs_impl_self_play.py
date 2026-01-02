@@ -184,9 +184,13 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
             processes = []
             
             for i in range(config['infra']['self_play_threads']):
+                # Распределяем потоки самоигры по доступным GPU
+                gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+                worker_device = f"cuda:{i % gpu_count}" if gpu_count > 0 else get_dataset_device
+                
                 p = mp_ctx.Process(
                     target=self_play_worker_task,
-                    args=(results_queue, game_ids_splits[i], i, value_model_cpu, self_learning_model_cpu, config, get_dataset_device)
+                    args=(results_queue, game_ids_splits[i], i, value_model_cpu, self_learning_model_cpu, config, worker_device)
                 )
                 p.start()
                 processes.append(p)

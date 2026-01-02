@@ -28,13 +28,17 @@ def worker(tasks_queue, results_queue, config, device, v_class_name, q_class_nam
 
         if task == "load_v_model":
             state_dict = pickle.loads(package)
-            # print(f"Process {proc._identity}, pi={pi}, task `load_v_model`, pickle size is {len(package)}")
             value_model.load_state_dict(state_dict)
+            del state_dict
+            if 'cuda' in str(device):
+                torch.cuda.empty_cache()
 
         elif task == "load_q_model":
             state_dict = pickle.loads(package)
-            # print(f"Process {proc._identity}, pi={pi}, task `load_q_model`, pickle size is {len(package)}")
             self_learning_model.load_state_dict(state_dict)
+            del state_dict
+            if 'cuda' in str(device):
+                torch.cuda.empty_cache()
 
         elif task == "get_q_dataset":
             n_subprocess_games = package
