@@ -241,6 +241,9 @@ class ExperienceReplay:
 
     def print_stats(self):
         eps = len(self.episodes)
+        if eps == 0:
+            print(f"Episodes 0, states 0: No data collected yet.")
+            return
         ep_lens = np.array([ len(ep.actions) + 1 for ep in self.episodes ])
         states = sum(ep_lens)
         m0 = min(ep_lens)

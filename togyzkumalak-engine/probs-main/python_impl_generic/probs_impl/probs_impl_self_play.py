@@ -45,12 +45,6 @@ def self_play_worker_task(q, gids, idx, value_model, self_learning_model, config
 
 
 def multiprocessing_entry_self_play(game_ids):
-    # #region agent log
-    import json as _json; _log_path = r"c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log"
-    def _dbg(hyp, msg, data): open(_log_path, 'a').write(_json.dumps({"hypothesisId": hyp, "location": "probs_impl_self_play.py:multiprocessing_entry_self_play", "message": msg, "data": data, "timestamp": __import__('time').time()}) + '\n')
-    _dbg("H6", "Worker Entry", {"value_model_exists": VALUE_MODEL is not None})
-    # #endregion
-    # start = time.time()
     torch.set_num_threads(1)  # Important for multiprocessing
 
     if VALUE_MODEL is None:
@@ -67,9 +61,6 @@ def multiprocessing_entry_self_play(game_ids):
     replay_episodes = []
 
     replay_episodes, stats = play_using_self_learned_model(game_ids)
-
-    # p = multiprocessing.current_process()
-    # print(f"Fork {p._identity, os.getpid()}. {game_i} completed. {time.time() - start} seconds")
 
     return replay_episodes, stats
 
