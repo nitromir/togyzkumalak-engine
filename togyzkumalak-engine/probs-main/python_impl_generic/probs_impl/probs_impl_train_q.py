@@ -396,25 +396,25 @@ def train_q_model(
     for epoch in range(num_epochs):
         epoch_losses = []
         for batch_input in dataloader:
-        # for inp_tensor in batch_input: print(f"[train_self_learning_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}")
+            # for inp_tensor in batch_input: print(f"[train_self_learning_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}")
 
-        inputs = batch_input[:-2]
-        actual_action_values = batch_input[-2]   # (B, N_ACTIONS)
-        actions_mask = batch_input[-1]         # (B, N_ACTIONS)
+            inputs = batch_input[:-2]
+            actual_action_values = batch_input[-2]   # (B, N_ACTIONS)
+            actions_mask = batch_input[-1]         # (B, N_ACTIONS)
 
-        pred_action_values = self_learning_model.forward(*inputs)
+            pred_action_values = self_learning_model.forward(*inputs)
 
-        loss = torch.nn.functional.mse_loss(pred_action_values, actual_action_values, reduction='none')
+            loss = torch.nn.functional.mse_loss(pred_action_values, actual_action_values, reduction='none')
 
-        loss = (loss * actions_mask).sum(axis=1)
+            loss = (loss * actions_mask).sum(axis=1)
 
-        action_mask_norm = actions_mask.sum(axis=1)
+            action_mask_norm = actions_mask.sum(axis=1)
 
-        if action_mask_norm.min() == 0:
-            print(action_mask_norm.detach().cpu().numpy())
-            raise 1
+            if action_mask_norm.min() == 0:
+                print(action_mask_norm.detach().cpu().numpy())
+                raise 1
 
-        loss = (loss / action_mask_norm).mean()
+            loss = (loss / action_mask_norm).mean()
 
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
