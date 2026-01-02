@@ -32,21 +32,34 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
             inputs = batch_input[:-1]
             actual_values = batch_input[-1]
             
-            # ВСЕГДА переносим ВСЕ данные на GPU явно (критично при num_workers > 0)
-            # inputs должен быть tuple тензоров
+            # КРИТИЧНО: ВСЕГДА переносим ВСЕ данные на GPU явно
+            # Модель использует torch.as_tensor() который создает тензоры на CPU по умолчанию!
+            # Поэтому мы ДОЛЖНЫ убедиться, что все уже на GPU
             if isinstance(inputs, tuple):
-                inputs = tuple(x.to(device, non_blocking=True) if torch.is_tensor(x) else torch.tensor(x, device=device) for x in inputs)
+                # Переносим каждый элемент tuple на GPU
+                inputs_gpu = []
+                for x in inputs:
+                    if torch.is_tensor(x):
+                        x_gpu = x.to(device, non_blocking=True)
+                    else:
+                        # Конвертируем numpy/list в тензор НАПРЯМУЮ на GPU
+                        x_gpu = torch.tensor(x, device=device, dtype=torch.float32)
+                    inputs_gpu.append(x_gpu)
+                inputs = tuple(inputs_gpu)
             elif torch.is_tensor(inputs):
                 inputs = (inputs.to(device, non_blocking=True),)
             else:
-                # Fallback: конвертируем в tuple тензоров
-                inputs = tuple(torch.tensor(x, device=device) for x in inputs) if hasattr(inputs, '__iter__') else (torch.tensor(inputs, device=device),)
+                # Fallback: конвертируем в tuple тензоров на GPU
+                if hasattr(inputs, '__iter__'):
+                    inputs = tuple(torch.tensor(x, device=device, dtype=torch.float32) for x in inputs)
+                else:
+                    inputs = (torch.tensor(inputs, device=device, dtype=torch.float32),)
             
             # actual_values тоже на GPU
             if torch.is_tensor(actual_values):
                 actual_values = actual_values.to(device, non_blocking=True)
             else:
-                actual_values = torch.tensor(actual_values, device=device)
+                actual_values = torch.tensor(actual_values, device=device, dtype=torch.float32)
             actual_values = actual_values.view((-1, 1)).float()
 
             pred_state_value = value_model.forward(*inputs)
