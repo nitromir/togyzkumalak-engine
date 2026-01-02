@@ -1070,6 +1070,60 @@
                     </div>
                 </div>
                 
+                <!-- Training Metrics Guide -->
+                <div class="training-metrics-guide">
+                    <div class="metrics-guide-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <h3>📊 Руководство по метрикам обучения</h3>
+                        <span class="expand-icon">▼</span>
+                    </div>
+                    <div class="metrics-guide-content">
+                        <div class="metrics-section">
+                            <h4>✅ Позитивные признаки</h4>
+                            <ul>
+                                <li><strong>Win rate:</strong> Монотонный рост 1-3% за итерацию</li>
+                                <li><strong>Loss:</strong> Плавное снижение (2.5 → 1.0 → 0.5 → 0.3)</li>
+                                <li><strong>Типичная timeline:</strong>
+                                    <ul>
+                                        <li>1-10 итераций: Random → Basic (30-40% win rate)</li>
+                                        <li>10-50: Basic → Intermediate (50-70%)</li>
+                                        <li>50-200: Intermediate → Strong (80-90%)</li>
+                                        <li>200-500: Strong → Superhuman (95%+)</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        <div class="metrics-section">
+                            <h4>🔴 Красные флаги</h4>
+                            <ul>
+                                <li><strong>Win rate падает:</strong> 50% → 40% → 30% (катастрофическое забывание)</li>
+                                <li><strong>Loss не падает 20+ итераций:</strong> LR слишком низкий или слабая архитектура</li>
+                                <li><strong>Loss → inf:</strong> LR слишком высокий, gradient explosion</li>
+                                <li><strong>Win rate застыла на плато:</strong> Модель упёрлась в потолок</li>
+                                <li><strong>High variance:</strong> 45% → 30% → 40% (нужно больше eval games)</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="metrics-section">
+                            <h4>📊 Ключевые метрики</h4>
+                            <ul>
+                                <li><strong>Win rate vs baseline:</strong> Должен монотонно расти. Скачки ±10% → проблема</li>
+                                <li><strong>Policy/Value loss:</strong> Должны падать. Застыли → LR низкий. NaN/Inf → LR высокий</li>
+                                <li><strong>Entropy:</strong> Оптимум 0.8-1.2. Высокий (>1.5) → много exploration. Низкий (<0.5) → мало exploration</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="metrics-section">
+                            <h4>🛠️ Что делать</h4>
+                            <ul>
+                                <li><strong>Краткосрочно:</strong> Следи за loss в логах, смотри на максимальный win rate</li>
+                                <li><strong>Среднесрочно:</strong> Если нестабильно → увеличь eval games до 100, уменьши batch size</li>
+                                <li><strong>Долгосрочно:</strong> Win rate >70% → усложни противника. <50% → пересмотри архитектуру</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Panel Annotation -->
                 <div class="panel-annotation">
                     <h4>📖 About this panel</h4>
