@@ -146,12 +146,21 @@ def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, 
                     sub_dataset, sub_stats = package
                     dataset.extend(sub_dataset)
                     stats += sub_stats
+                    print(f"  [INFO] Worker {pi} returned {len(sub_dataset)} dataset rows")
                 elif itemtype == "error":
                     # Получили ошибку от worker
                     print(f"  [FATAL] Worker {pi} reported error: {package}")
                     raise RuntimeError(f"Q-dataset worker {pi} crashed: {package}")
                 else:
                     print(f"  [WARNING] Unexpected item type from worker {pi}: {itemtype}")
+            
+            # Проверка на пустой dataset
+            if len(dataset) == 0:
+                print(f"  [ERROR] Empty Q-dataset collected from all workers! Stats: {stats}")
+                print(f"  [ERROR] This might indicate that workers crashed or returned empty results.")
+                raise RuntimeError("Q-dataset is empty - no data collected from workers")
+            
+            print(f"  [INFO] Total Q-dataset size: {len(dataset)} rows from {sub_processes_cnt} workers")
             
             if stats['depth_cnt'] > 0:
                 helpers.TENSORBOARD.append_scalar('beam_search_avg_depth', stats['depth_sum'] / stats['depth_cnt'])

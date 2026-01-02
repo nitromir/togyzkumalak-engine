@@ -22,6 +22,11 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
             dataset.append(dataset_row)
     print("Value model dataset length", len(dataset))
 
+    # Проверка на пустой dataset
+    if len(dataset) == 0:
+        print(f"[WARNING] Empty dataset for value model training! Skipping training.")
+        return
+
     dataloader = helpers.torch_create_dataloader(dataset, device, batch_size=batch_size, shuffle=True, drop_last=True)
 
     predictions = defaultdict(list)

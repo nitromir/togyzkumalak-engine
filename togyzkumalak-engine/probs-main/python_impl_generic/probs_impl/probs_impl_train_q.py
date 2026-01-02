@@ -398,6 +398,11 @@ def train_q_model(
     value_model.eval()
     self_learning_model.train()
 
+    # Проверка на пустой dataset
+    if len(dataset) == 0:
+        print(f"[WARNING] Empty dataset for Q model training! Skipping training.")
+        return
+
     dataloader = helpers.torch_create_dataloader(dataset, device, config['train']['train_batch_size'], shuffle=True, drop_last=True)
     
     num_epochs = 3  # Множественные эпохи для лучшего обучения
