@@ -221,7 +221,7 @@ class PROBSTaskManager:
         # Получаем параметры с разумными значениями по умолчанию (как в оригинале)
         device = config.get("device", "cpu")
         sub_processes_cnt = config.get("sub_processes_cnt", 0)
-        self_play_threads = config.get("self_play_threads", 1)  # 1 для совместимости с GPU
+        self_play_threads = config.get("self_play_threads", 1)  # Поддерживает мульти-GPU через кастомный Pool
         mem_max_episodes = config.get("mem_max_episodes", 10000)
         
         n_high_level_iterations = config.get("n_high_level_iterations", 100)

@@ -15,15 +15,23 @@ CONFIG: dict = None
 GET_DATASET_DEVICE: str = None
 
 
-def init_worker(value_model, self_learning_model, config, device):
+def init_worker(value_model, self_learning_model, config, device, worker_id=0):
     global VALUE_MODEL
     global SELF_LEARNING_MODEL
     global CONFIG
     global GET_DATASET_DEVICE
-    VALUE_MODEL = value_model
-    SELF_LEARNING_MODEL = self_learning_model
+    
+    # Распределяем по GPU
+    gpu_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    if gpu_count > 0:
+        actual_device = f"cuda:{worker_id % gpu_count}"
+    else:
+        actual_device = device
+        
+    VALUE_MODEL = value_model.to(actual_device)
+    SELF_LEARNING_MODEL = self_learning_model.to(actual_device)
     CONFIG = config
-    GET_DATASET_DEVICE = device
+    GET_DATASET_DEVICE = actual_device
 
 
 def multiprocessing_entry_self_play(game_ids):
@@ -142,7 +150,7 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
     with torch.no_grad():
 
         # ------------ No multiprocessing
-        if config['infra']['self_play_threads'] == 1:
+        if config['infra']['self_play_threads'] <= 1:
             game_ids = list(range(config['train']['v_train_episodes']))
 
             replay_episodes, episodes_stats = play_using_self_learned_model(game_ids)
@@ -152,36 +160,42 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
 
         # ------------ Multiprocessing
         else:
-            # self_learning_model.share_memory()  - ?
-
-            game_ids = [[] for _ in range(config['infra']['self_play_threads'])]
+            game_ids_splits = [[] for _ in range(config['infra']['self_play_threads'])]
             gi = 0
             for game_i in range(config['train']['v_train_episodes']):
-                game_ids[gi].append(game_i)
-                gi = (gi + 1) % len(game_ids)
+                game_ids_splits[gi].append(game_i)
+                gi = (gi + 1) % len(game_ids_splits)
 
             import sys
-            mp_context = "spawn" if sys.platform == "win32" else "fork"
-            # #region agent log
-            import json as _json; _log_path = r"c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log"
-            def _dbg(hyp, msg, data): open(_log_path, 'a').write(_json.dumps({"hypothesisId": hyp, "location": "probs_impl_self_play.py:go_self_play", "message": msg, "data": data, "timestamp": __import__('time').time()}) + '\n')
-            _dbg("H6", "Creating Pool", {"context": mp_context, "threads": config['infra']['self_play_threads']})
-            # #endregion
-            
-            # Using torch.multiprocessing for better model handling
             import torch.multiprocessing as tmp
+            mp_context = "spawn" if sys.platform == "win32" else "fork"
+            
             try:
                 tmp.set_start_method(mp_context, force=True)
             except RuntimeError: pass
 
-            with tmp.get_context(mp_context).Pool(
-                config['infra']['self_play_threads'],
-                initializer=init_worker,
-                initargs=(value_model, self_learning_model, config, get_dataset_device)
-            ) as multiprocessing_pool:
-                for replay_episodes, episodes_stats in multiprocessing_pool.imap_unordered(multiprocessing_entry_self_play, game_ids):
-                    for replay_episode in replay_episodes:
-                        experience_replay.append_replay_episode(replay_episode)
-                    stats += episodes_stats
+            # Используем кастомную очередь для сбора результатов
+            results_queue = tmp.Queue()
+            processes = []
+            
+            for i in range(config['infra']['self_play_threads']):
+                p = tmp.Process(
+                    target=lambda q, gids, idx: q.put(
+                        (init_worker(value_model, self_learning_model, config, get_dataset_device, idx) or True) and 
+                        multiprocessing_entry_self_play(gids)
+                    ),
+                    args=(results_queue, game_ids_splits[i], i)
+                )
+                p.start()
+                processes.append(p)
+
+            for _ in range(len(processes)):
+                replay_episodes, episodes_stats = results_queue.get()
+                for replay_episode in replay_episodes:
+                    experience_replay.append_replay_episode(replay_episode)
+                stats += episodes_stats
+
+            for p in processes:
+                p.join()
 
     helpers.TENSORBOARD.append_scalar('greedy_action_freq', stats['greedy_action_sum'] / stats['greedy_action_cnt'])

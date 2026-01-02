@@ -1263,9 +1263,9 @@ class TrainingController {
             'probsBatchSize': 2048,
             'probsQCalls': 100,
             'probsMaxDepth': 200,
-            'probsThreads': 1, // При использовании CUDA всегда 1 для self-play
+            'probsThreads': 32, // ТЕПЕРЬ ПОДДЕРЖИВАЕТ МУЛЬТИ-GPU И ПАРАЛЛЕЛИЗМ
             'probsEvalGames': 100,
-            'probsProcesses': 96, // Задействуем 96 ядер для сбора Q-данных (распределятся по 4 GPU)
+            'probsProcesses': 128, // Задействуем все 128 ядер для сбора Q-данных
             'probsDevice': 'cuda'
         };
 

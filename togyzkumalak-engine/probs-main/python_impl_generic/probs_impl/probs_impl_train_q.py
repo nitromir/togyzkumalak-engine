@@ -417,4 +417,4 @@ def train_q_model(
         loss.backward()
         optimizer.step()
 
-        helpers.TENSORBOARD.append_scalar('self_learning_loss', float(loss))
+        helpers.TENSORBOARD.append_scalar('self_learning_loss', loss.item())

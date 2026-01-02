@@ -145,8 +145,6 @@ def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, 
 
 def go_train(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_enemy: helpers.BaseAgent):
     sub_processes_cnt = max(config['infra']['sub_processes_cnt'], 1)
-    if config['infra']['self_play_threads'] > 1:
-        assert config['infra']['device'] == 'cpu', "Pytorch gpu doesn't support multithreading, fallback to cpu"
 
     value_model = model_keeper.models['value']
     value_optimizer = model_keeper.optimizers['value']
@@ -154,8 +152,8 @@ def go_train(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_e
     self_learning_optimizer = model_keeper.optimizers['self_learner']
 
     if sub_processes_cnt > 0:
-        assert config['infra']['self_play_threads'] == 1
-        multiprocessing.set_start_method('spawn')
+        try: multiprocessing.set_start_method('spawn', force=True)
+        except: pass
         tasks_queues = [multiprocessing.Queue() for _ in range(sub_processes_cnt)]
         results_queue = multiprocessing.Queue()
         for pi in range(sub_processes_cnt):

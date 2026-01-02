@@ -45,4 +45,4 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
             pred = float(pred_state_value[i, 0])
             predictions[actual].append(pred)
 
-        helpers.TENSORBOARD.append_scalar('value_loss', float(loss))
+        helpers.TENSORBOARD.append_scalar('value_loss', loss.item())
