@@ -557,7 +557,21 @@ class AIEngine:
                 
                 # Use the agent to get action via Beam Search
                 move = self.probs_agent.get_action(env)
-                
+
+                # Check if PROBS is uncertain about the move (fallback to heuristic)
+                # Get Q-values to check uncertainty
+                try:
+                    q_values = probs_impl_common.get_q_a_single_state(
+                        self.probs_model_keeper.models['self_learner'],
+                        env,
+                        str(self.device)
+                    )
+                    if self._is_too_uniform_q_values(q_values, legal_moves, threshold=0.75):
+                        print(f"[PROBS] Q-values too uniform (uncertainty: {self._calculate_q_uniformity(q_values, legal_moves):.3f}), falling back to heuristic")
+                        return self._heuristic_move(board, legal_moves)
+                except Exception as e:
+                    print(f"[PROBS] Could not check Q-uniformity: {e}")
+
                 # Validate move
                 if move not in legal_moves:
                     print(f"[PROBS] Agent suggested illegal move {move}, choosing best legal")
@@ -567,6 +581,12 @@ class AIEngine:
                         env,
                         str(self.device)
                     )
+
+                    # Check if Q-values are too uniform (PROBS is uncertain)
+                    if self._is_too_uniform_q_values(q_values, legal_moves, threshold=0.8):
+                        print(f"[PROBS] Q-values too uniform (uncertainty: {self._calculate_q_uniformity(q_values, legal_moves):.3f}), falling back to heuristic")
+                        return self._heuristic_move(board, legal_moves)
+
                     mask = np.zeros(9)
                     for m in legal_moves: mask[m] = 1
                     move = int(np.argmax(q_values * mask + (1 - mask) * (-1e9)))
@@ -963,6 +983,38 @@ class AIEngine:
         Returns True if the distribution is uninformative (too uniform).
         """
         return self._calculate_uniformity(probs) > threshold
+
+    def _calculate_q_uniformity(self, q_values: np.ndarray, legal_moves: List[int]) -> float:
+        """
+        Calculate uniformity score for Q-values (0 = very confident, 1 = completely uniform).
+        Only considers legal moves.
+        """
+        if not legal_moves or len(q_values) != 9:
+            return 1.0
+
+        # Only consider legal moves
+        legal_q_values = [q_values[m] for m in legal_moves]
+
+        if len(legal_q_values) <= 1:
+            return 0.0
+
+        # Normalize Q-values to probabilities using softmax
+        q_array = np.array(legal_q_values)
+        exp_q = np.exp(q_array - np.max(q_array))
+        probs = exp_q / np.sum(exp_q)
+
+        # Calculate uniformity as in _calculate_uniformity
+        uniform_prob = 1.0 / len(legal_q_values)
+        total_deviation = sum(abs(p - uniform_prob) for p in probs)
+        max_possible_deviation = 2 * (len(legal_q_values) - 1) / len(legal_q_values)
+
+        return 1 - (total_deviation / max_possible_deviation) if max_possible_deviation > 0 else 0.0
+
+    def _is_too_uniform_q_values(self, q_values: np.ndarray, legal_moves: List[int], threshold: float = 0.8) -> bool:
+        """
+        Check if Q-values distribution is too uniform (PROBS is uncertain).
+        """
+        return self._calculate_q_uniformity(q_values, legal_moves) > threshold
 
     def _get_ensemble_probabilities(self, board: TogyzkumalakBoard) -> Dict[int, float]:
         """
