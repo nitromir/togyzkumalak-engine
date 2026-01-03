@@ -420,6 +420,7 @@ class GymTrainingManager:
         file_time = datetime.fromtimestamp(os.path.getmtime(model_path)).strftime('%Y-%m-%d %H:%M:%S')
         
         print(f"[OK] AlphaZero model {ai_engine.current_model_name} (created: {file_time}) loaded and MCTS activated")
+        print(f"[API] AlphaZero checkpoint loaded for Level 5: {Path(model_path).name}")
         return True
     
     def _load_gym_model(self, model_path: str, checkpoint, device, ai_engine) -> bool:

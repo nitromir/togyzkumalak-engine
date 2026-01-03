@@ -771,7 +771,7 @@ async def get_alphazero_metrics():
             "best_checkpoint": best_checkpoint
         }
         
-        return {"metrics": metrics, "config": config, "summary": summary, "checkpoints": checkpoints_sorted[:10]}
+        return {"metrics": metrics, "config": config, "summary": summary, "checkpoints": checkpoints_sorted}  # Показываем ВСЕ чекпойнты
     except Exception as e:
         return {"error": str(e), "metrics": [], "config": {}, "checkpoints": []}
 
@@ -2680,7 +2680,12 @@ async def load_probs_checkpoint(checkpoint_name: str):
         success = probs_task_manager.load_checkpoint(checkpoint_path)
         if success:
             # Also update the ai_engine
-            ai_engine.probs_model_keeper = probs_task_manager.get_loaded_model()
+            loaded_model = probs_task_manager.get_loaded_model()
+            ai_engine.probs_model_keeper = loaded_model
+            # Store checkpoint name for logging
+            if hasattr(loaded_model, '__dict__'):
+                loaded_model._checkpoint_name = checkpoint_file
+            print(f"[API] PROBS checkpoint loaded for Level 7: {checkpoint_file}")
             return {"status": "success", "loaded": checkpoint_file}
         else:
             raise HTTPException(status_code=500, detail="Failed to load checkpoint")
@@ -2695,10 +2700,33 @@ async def download_probs_checkpoint(checkpoint_name: str):
     """Download a PROBS checkpoint file."""
     try:
         checkpoint_file = checkpoint_name if checkpoint_name.endswith('.ckpt') else f"{checkpoint_name}.ckpt"
-        checkpoint_path = os.path.join(engine_dir, "models", "probs", "checkpoints", checkpoint_file)
+        
+        # Используем тот же путь, что и probs_task_manager
+        checkpoint_path = os.path.join(probs_task_manager.models_dir, "checkpoints", checkpoint_file)
+        
+        # Альтернативный путь (на случай разных структур)
+        if not os.path.exists(checkpoint_path):
+            alt_path = os.path.join(engine_dir, "models", "probs", "checkpoints", checkpoint_file)
+            if os.path.exists(alt_path):
+                checkpoint_path = alt_path
         
         if not os.path.exists(checkpoint_path):
-            raise HTTPException(status_code=404, detail=f"Checkpoint not found: {checkpoint_file}")
+            # Попробуем найти файл в любом месте
+            import glob
+            search_paths = [
+                os.path.join(engine_dir, "models", "probs", "checkpoints", "*.ckpt"),
+                os.path.join(probs_task_manager.models_dir, "checkpoints", "*.ckpt"),
+                os.path.join("/workspace", "togyzkumalak-engine", "togyzkumalak-engine", "models", "probs", "checkpoints", "*.ckpt"),
+            ]
+            found_files = []
+            for pattern in search_paths:
+                found_files.extend(glob.glob(pattern))
+            
+            similar = [f for f in found_files if checkpoint_file.lower() in os.path.basename(f).lower()]
+            error_msg = f"Checkpoint not found: {checkpoint_file}"
+            if similar:
+                error_msg += f"\nSimilar files found: {[os.path.basename(f) for f in similar[:5]]}"
+            raise HTTPException(status_code=404, detail=error_msg)
         
         return FileResponse(
             path=checkpoint_path,

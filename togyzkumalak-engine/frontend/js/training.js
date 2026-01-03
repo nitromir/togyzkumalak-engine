@@ -885,13 +885,36 @@ class TrainingController {
      */
     renderCheckpointsList(checkpoints) {
         const container = document.getElementById('azCheckpointsList');
-        if (!container || !checkpoints.length) return;
+        if (!container) return;
         
-        container.innerHTML = checkpoints.slice(0, 10).map((cp, i) => `
-            <div class="checkpoint-item ${i === 0 ? 'best' : ''} ${cp.accepted ? 'accepted' : 'rejected'}">
+        if (!checkpoints || checkpoints.length === 0) {
+            container.innerHTML = '<p class="empty-text">Нет сохранённых чекпоинтов AlphaZero</p>';
+            return;
+        }
+        
+        // Показываем ВСЕ чекпойнты (без ограничения)
+        const totalCount = checkpoints.length;
+        
+        // Добавляем заголовок с количеством
+        let html = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--text-secondary);">
+            Всего чекпойнтов: <strong>${totalCount}</strong>
+        </div>`;
+        
+        // Добавляем поиск
+        html += `<div style="margin-bottom: 10px;">
+            <input type="text" id="azCheckpointSearch" placeholder="🔍 Поиск чекпойнта..." 
+                   style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);"
+                   onkeyup="trainingController.filterAlphaZeroCheckpoints(this.value)">
+        </div>`;
+        
+        // Контейнер для списка
+        html += `<div id="azCheckpointsListItems" style="max-height: 600px; overflow-y: auto;">`;
+        
+        html += checkpoints.map((cp, i) => `
+            <div class="checkpoint-item ${i === 0 ? 'best' : ''} ${cp.accepted !== false ? 'accepted' : 'rejected'}" data-filename="${(cp.filename || '').toLowerCase()}" data-iteration="${cp.iteration || 0}">
                 <div class="cp-main-info">
                     <span class="cp-rank">#${i + 1}</span>
-                    <span class="cp-iter">iter ${cp.iteration}</span>
+                    <span class="cp-iter">iter ${cp.iteration || '?'}</span>
                     <span class="cp-time">${cp.timestamp ? new Date(cp.timestamp).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'}) : ''}</span>
                 </div>
                 <div class="cp-metrics">
@@ -900,15 +923,22 @@ class TrainingController {
                     <span class="cp-winrate" title="Win Rate">${cp.win_rate ? (cp.win_rate * 100).toFixed(0) + '%' : '-'}</span>
                 </div>
                 <div class="cp-actions">
-                    <button class="btn btn-tiny btn-primary" onclick="trainingController.loadAlphaZeroCheckpoint('${cp.filename}')" title="Загрузить для игры">
-                        📦
+                    <button class="btn btn-tiny btn-primary" onclick="trainingController.loadAlphaZeroCheckpoint('${cp.filename || cp.name}')" title="Загрузить для игры">
+                        📦 Загрузить
                     </button>
-                    <button class="btn btn-tiny btn-secondary" onclick="trainingController.downloadCheckpoint('${cp.filename}')" title="Скачать файл">
-                        💾
+                    <button class="btn btn-tiny btn-secondary" onclick="trainingController.downloadCheckpoint('${cp.filename || cp.name}')" title="Скачать файл">
+                        💾 Скачать
                     </button>
                 </div>
             </div>
         `).join('');
+        
+        html += `</div>`;
+        
+        container.innerHTML = html;
+        
+        // Сохраняем все чекпойнты для фильтрации
+        this.allAlphaZeroCheckpoints = checkpoints;
     }
     
     /**
@@ -1641,38 +1671,106 @@ class TrainingController {
     async loadPROBSCheckpoints() {
         try {
             const response = await fetch('/api/training/probs/checkpoints');
-            if (!response.ok) return;
+            if (!response.ok) {
+                console.error('❌ Failed to load PROBS checkpoints:', response.status, response.statusText);
+                return;
+            }
             
             const data = await response.json();
+            console.log('📋 PROBS checkpoints data:', {
+                total: data.total || 0,
+                checkpoints_count: data.checkpoints ? data.checkpoints.length : 0,
+                best_checkpoint: data.best_checkpoint
+            });
+            
             const container = document.getElementById('probsCheckpointsList');
             
-            if (!container) return;
+            if (!container) {
+                console.error('❌ Container probsCheckpointsList not found');
+                return;
+            }
             
             if (!data.checkpoints || data.checkpoints.length === 0) {
                 container.innerHTML = '<p class="empty-text">Нет сохранённых чекпоинтов PROBS</p>';
                 return;
             }
             
-            container.innerHTML = data.checkpoints.slice(0, 10).map((cp, i) => `
-                <div class="checkpoint-item ${cp.is_best ? 'best' : ''}">
+            // Показываем ВСЕ чекпойнты (без ограничения)
+            const allCheckpoints = data.checkpoints || [];
+            const totalCount = allCheckpoints.length;
+            
+            console.log(`✅ Rendering ${totalCount} PROBS checkpoints`);
+            
+            // Добавляем заголовок с количеством
+            const bestCheckpointName = data.best_checkpoint ? 
+                (typeof data.best_checkpoint === 'string' ? data.best_checkpoint : (data.best_checkpoint.filename || '')) : 
+                '';
+            let html = `<div style="margin-bottom: 10px; font-size: 12px; color: var(--text-secondary);">
+                Всего чекпойнтов: <strong>${totalCount}</strong>
+                ${bestCheckpointName ? ` | 🏆 Лучший: <strong>${bestCheckpointName}</strong>` : ''}
+            </div>`;
+            
+            // Добавляем поиск
+            html += `<div style="margin-bottom: 10px;">
+                <input type="text" id="probsCheckpointSearch" placeholder="🔍 Поиск чекпойнта..." 
+                       style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);"
+                       onkeyup="trainingController.filterPROBSCheckpoints(this.value)">
+            </div>`;
+            
+            // Контейнер для списка
+            html += `<div id="probsCheckpointsListItems" style="max-height: 600px; overflow-y: auto;">`;
+            
+            try {
+            html += allCheckpoints.map((cp, i) => {
+                // Безопасная обработка данных
+                const filename = (cp.filename || '').replace(/'/g, "\\'");
+                const timestamp = cp.timestamp ? (() => {
+                    try {
+                        return new Date(cp.timestamp).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'});
+                    } catch(e) {
+                        return cp.timestamp || 'N/A';
+                    }
+                })() : 'N/A';
+                const size_mb = cp.size_mb || 0;
+                const is_best = cp.is_best || false;
+                const metric = cp.metric !== null && cp.metric !== undefined ? cp.metric : null;
+                
+                return `
+                <div class="checkpoint-item ${is_best ? 'best' : ''}" data-filename="${filename.toLowerCase()}">
                     <div class="cp-main-info">
                         <span class="cp-rank">#${i + 1}</span>
-                        <span class="cp-name" style="${cp.is_best ? 'color: #ffcc00; font-weight: bold;' : ''}">${cp.filename} ${cp.is_best ? '👑 BEST' : ''}</span>
-                        <span class="cp-time">${new Date(cp.timestamp).toLocaleString('ru-RU', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'})}</span>
+                        <span class="cp-name" style="${is_best ? 'color: #ffcc00; font-weight: bold;' : ''}">
+                            ${filename} ${is_best ? '👑 BEST' : ''}
+                            ${metric !== null ? ` (Win: ${(metric * 100).toFixed(1)}%)` : ''}
+                        </span>
+                        <span class="cp-time">${timestamp}</span>
                     </div>
                     <div class="cp-metrics">
-                        <span class="cp-size">${cp.size_mb} MB</span>
+                        <span class="cp-size">${size_mb} MB</span>
                     </div>
                     <div class="cp-actions">
-                        <button class="btn btn-tiny btn-primary" onclick="trainingController.loadPROBSCheckpoint('${cp.filename}')" title="Загрузить для игры">
-                            📦
+                        <button class="btn btn-tiny btn-primary" onclick="trainingController.loadPROBSCheckpoint('${filename}')" title="Загрузить для игры">
+                            📦 Загрузить
                         </button>
-                        <button class="btn btn-tiny btn-secondary" onclick="trainingController.downloadPROBSCheckpoint('${cp.filename}')" title="Скачать файл">
-                            💾
+                        <button class="btn btn-tiny btn-secondary" onclick="trainingController.downloadPROBSCheckpoint('${filename}')" title="Скачать файл">
+                            💾 Скачать
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
+            } catch (error) {
+                console.error('❌ Error rendering checkpoints:', error);
+                html += `<p class="empty-text" style="color: red;">Ошибка отображения чекпойнтов: ${error.message}</p>`;
+            }
+            
+            html += `</div>`;
+            
+            container.innerHTML = html;
+            console.log('✅ Checkpoints HTML rendered, length:', html.length);
+            
+            // Сохраняем все чекпойнты для фильтрации
+            this.allPROBSCheckpoints = allCheckpoints;
 
             // Populate checkpoint selector for continuation
             const select = document.getElementById('probsInitialCheckpoint');
@@ -1680,24 +1778,30 @@ class TrainingController {
                 const currentValue = select.value;
                 // Формируем опции с метриками
                 const options = '<option value="">🆕 Новая модель (с нуля)</option>' + 
-                    data.checkpoints.map(cp => {
-                        let label = cp.filename;
+                    (data.checkpoints || []).map(cp => {
+                        const filename = cp.filename || '';
+                        let label = filename;
                         if (cp.is_best) {
                             label = `⭐ ${label}`;
                             if (cp.metric !== null && cp.metric !== undefined) {
                                 label += ` (Win rate: ${(cp.metric * 100).toFixed(1)}%)`;
                             }
                         }
-                        return `<option value="${cp.filename}">${label}</option>`;
+                        // Экранируем кавычки в значении
+                        const safeValue = filename.replace(/"/g, '&quot;').replace(/'/g, "&#39;");
+                        return `<option value="${safeValue}">${label}</option>`;
                     }).join('');
                 select.innerHTML = options;
                 
                 // Автоматически выбираем лучший чекпоинт, если ничего не выбрано
                 if (!currentValue) {
-                    const bestCheckpoint = data.checkpoints.find(cp => cp.is_best);
+                    const bestCheckpoint = (data.checkpoints || []).find(cp => cp.is_best) || 
+                                          (data.best_checkpoint && data.checkpoints ? 
+                                           data.checkpoints.find(cp => cp.filename === data.best_checkpoint.filename) : null);
                     if (bestCheckpoint) {
-                        select.value = bestCheckpoint.filename;
-                        console.log(`Auto-selected best checkpoint: ${bestCheckpoint.filename} (Win rate: ${(bestCheckpoint.metric * 100).toFixed(1)}%)`);
+                        const safeValue = bestCheckpoint.filename.replace(/"/g, '&quot;').replace(/'/g, "&#39;");
+                        select.value = safeValue;
+                        console.log(`Auto-selected best checkpoint: ${bestCheckpoint.filename} (Win rate: ${bestCheckpoint.metric ? (bestCheckpoint.metric * 100).toFixed(1) : 'N/A'}%)`);
                     }
                 } else {
                     select.value = currentValue;
@@ -1744,6 +1848,59 @@ class TrainingController {
         } catch (e) {
             console.error('Error downloading PROBS checkpoint:', e);
             alert('Ошибка скачивания: ' + e.message);
+        }
+    }
+    
+    filterPROBSCheckpoints(searchText) {
+        const container = document.getElementById('probsCheckpointsListItems');
+        if (!container || !this.allPROBSCheckpoints) return;
+        
+        const search = searchText.toLowerCase().trim();
+        const items = container.querySelectorAll('.checkpoint-item');
+        
+        let visibleCount = 0;
+        items.forEach(item => {
+            const filename = item.getAttribute('data-filename') || '';
+            const matches = !search || filename.includes(search);
+            item.style.display = matches ? '' : 'none';
+            if (matches) visibleCount++;
+        });
+        
+        // Показываем количество найденных
+        const searchInput = document.getElementById('probsCheckpointSearch');
+        if (searchInput && search) {
+            const placeholder = searchInput.getAttribute('data-original-placeholder') || '🔍 Поиск чекпойнта...';
+            searchInput.setAttribute('data-original-placeholder', placeholder);
+            searchInput.placeholder = `🔍 Найдено: ${visibleCount}`;
+        } else if (searchInput) {
+            searchInput.placeholder = '🔍 Поиск чекпойнта...';
+        }
+    }
+    
+    filterAlphaZeroCheckpoints(searchText) {
+        const container = document.getElementById('azCheckpointsListItems');
+        if (!container || !this.allAlphaZeroCheckpoints) return;
+        
+        const search = searchText.toLowerCase().trim();
+        const items = container.querySelectorAll('.checkpoint-item');
+        
+        let visibleCount = 0;
+        items.forEach(item => {
+            const filename = item.getAttribute('data-filename') || '';
+            const iteration = item.getAttribute('data-iteration') || '';
+            const matches = !search || filename.includes(search) || iteration.includes(search);
+            item.style.display = matches ? '' : 'none';
+            if (matches) visibleCount++;
+        });
+        
+        // Показываем количество найденных
+        const searchInput = document.getElementById('azCheckpointSearch');
+        if (searchInput && search) {
+            const placeholder = searchInput.getAttribute('data-original-placeholder') || '🔍 Поиск чекпойнта...';
+            searchInput.setAttribute('data-original-placeholder', placeholder);
+            searchInput.placeholder = `🔍 Найдено: ${visibleCount}`;
+        } else if (searchInput) {
+            searchInput.placeholder = '🔍 Поиск чекпойнта...';
         }
     }
 

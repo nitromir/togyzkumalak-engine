@@ -108,9 +108,10 @@ class AIEngine:
             
             self.models[level] = model
         
-        # Load AlphaZero model if available
+        # Load AlphaZero model if available (only if not already loaded via training_manager)
+        # This is a fallback - the model should be loaded via training_manager when user selects a checkpoint
         az_path = os.path.join(ai_config.model_dir, "alphazero", "best.pth.tar")
-        if os.path.exists(az_path):
+        if os.path.exists(az_path) and self.alphazero_model is None:
             try:
                 from .alphazero_trainer import TogyzkumalakGame, AlphaZeroNetwork
                 game = TogyzkumalakGame()
@@ -120,7 +121,7 @@ class AIEngine:
                 az_net.to(self.device)
                 az_net.eval()
                 self.alphazero_model = az_net
-                print("[AI] Loaded AlphaZero model from best.pth.tar")
+                print("[AI] Loaded AlphaZero model from best.pth.tar (fallback)")
             except Exception as e:
                 print(f"[AI] Failed to load AlphaZero model: {e}")
 
@@ -314,7 +315,14 @@ class AIEngine:
     ) -> int:
         """Level 3-5: Neural network-based move selection."""
         # Use AlphaZero MCTS for any neural level if model is loaded and MCTS is enabled
+        # Level 5 ALWAYS uses the selected AlphaZero checkpoint from Training tab
         if self.alphazero_model is not None and self.use_mcts:
+            if level == 5:
+                # Log which model is being used for Level 5
+                model_name = getattr(self, 'current_model_name', 'unknown')
+                if not hasattr(self, '_last_logged_model') or self._last_logged_model != model_name:
+                    print(f"[AI Level 5] Using AlphaZero model: {model_name}")
+                    self._last_logged_model = model_name
             return self._alphazero_mcts_move(board, legal_moves, level)
             
         model = self.models.get(level)
@@ -443,7 +451,8 @@ class AIEngine:
         board: TogyzkumalakBoard,
         legal_moves: List[int]
     ) -> int:
-        """Level 6: Gemini LLM-based move selection."""
+        """Level 6: Gemini LLM-based move selection.
+        ALWAYS uses Google Gemini API (not a checkpoint)."""
         try:
             # Lazy-load Gemini player
             if self.gemini_player is None:
@@ -451,8 +460,13 @@ class AIEngine:
                 self.gemini_player = GeminiPlayer()
             
             if not self.gemini_player.is_available():
-                print("[WARNING] Gemini not available, falling back to heuristic")
+                print("[WARNING] Level 6: Gemini API not available (GEMINI_API_KEY not set), falling back to heuristic")
                 return self._heuristic_move(board, legal_moves)
+            
+            # Log that we're using Gemini API (only once)
+            if not hasattr(self, '_gemini_logged'):
+                print("[AI Level 6] Using Google Gemini API for move selection")
+                self._gemini_logged = True
             
             # Determine current player color
             current_player = board.current_player
@@ -492,7 +506,8 @@ class AIEngine:
         board: TogyzkumalakBoard,
         legal_moves: List[int]
     ) -> int:
-        """Level 7: PROBS (Predict Result of Beam Search) move selection with Beam Search."""
+        """Level 7: PROBS (Predict Result of Beam Search) move selection with Beam Search.
+        ALWAYS uses the selected PROBS checkpoint from Training tab."""
         try:
             # Lazy-load PROBS components
             if self.probs_model_keeper is None:
@@ -501,6 +516,13 @@ class AIEngine:
             if self.probs_model_keeper is None:
                 print("[WARNING] PROBS model not available, falling back to heuristic")
                 return self._heuristic_move(board, legal_moves)
+            
+            # Log which PROBS checkpoint is being used (if available)
+            if hasattr(self.probs_model_keeper, '_checkpoint_name'):
+                checkpoint_name = getattr(self.probs_model_keeper, '_checkpoint_name', 'unknown')
+                if not hasattr(self, '_last_logged_probs') or self._last_logged_probs != checkpoint_name:
+                    print(f"[AI Level 7] Using PROBS checkpoint: {checkpoint_name}")
+                    self._last_logged_probs = checkpoint_name
             
             # Import PROBS components
             original_cwd = os.getcwd()

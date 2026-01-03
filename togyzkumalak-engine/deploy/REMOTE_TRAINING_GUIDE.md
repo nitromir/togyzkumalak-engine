@@ -94,8 +94,7 @@ except Exception as e:
 
     ---
 увидеть прожарку
-cd /workspace/togyzkumalak-engine/togyzkumalak-engine/deploy
-python monitor.py
+
 ---
 
     
