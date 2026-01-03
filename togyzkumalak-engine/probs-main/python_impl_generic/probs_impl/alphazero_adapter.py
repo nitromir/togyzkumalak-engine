@@ -13,7 +13,7 @@ import helpers
 
 
 class AlphaZeroAgent(helpers.BaseAgent):
-    def __init__(self, checkpoint_path, hidden_size=256, num_mcts_sims=50, cpuct=1.0):
+    def __init__(self, checkpoint_path, hidden_size=256, num_mcts_sims=200, cpuct=1.0):
         self.game = TogyzkumalakGame()
         self.config = AlphaZeroConfig(hidden_size=hidden_size, num_mcts_sims=num_mcts_sims, cpuct=cpuct)
         self.nnet = NNetWrapper(self.game, self.config)

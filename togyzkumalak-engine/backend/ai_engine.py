@@ -536,13 +536,13 @@ class AIEngine:
                 # We use SelfLearningAgent_TreeScan for deep search (Level 7)
                 if self.probs_agent is None or not isinstance(self.probs_agent, probs_impl_common.SelfLearningAgent_TreeScan):
                     # Configure search parameters - make Level 7 strong
-                    # 60 nodes and 0.5s is usually enough to be very strong
+                    # 500 nodes and 2.0s for maximum strength
                     self.probs_agent = probs_impl_common.SelfLearningAgent_TreeScan(
                         "PROBS_Level7",
                         model_keeper=self.probs_model_keeper,
                         device=str(self.device),
-                        action_time_budget=0.8,  # 0.8 seconds per move
-                        expand_tree_budget=100,  # Expand up to 100 nodes
+                        action_time_budget=2.0,  # 2.0 seconds per move
+                        expand_tree_budget=500,  # Expand up to 500 nodes
                         batch_size=32            # Batch size for NN inference
                     )
                 

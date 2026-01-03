@@ -94,7 +94,7 @@ def load_probs_agent(config_path, checkpoint_path=None):
     return probs_impl_common.SelfLearningAgent("PROBS", model_keeper, device)
 
 
-def load_alphazero_agent(checkpoint_path, num_mcts_sims=50):
+def load_alphazero_agent(checkpoint_path, num_mcts_sims=200):
     return alphazero_adapter.AlphaZeroAgent(checkpoint_path, hidden_size=256, num_mcts_sims=num_mcts_sims)
 
 
@@ -104,7 +104,7 @@ def main():
     parser.add_argument("--probs-checkpoint", default=None)
     parser.add_argument("--az-checkpoint", default="../../gym-togyzkumalak-master/togyzkumalak-engine/models/alphazero/best.pth.tar")
     parser.add_argument("--games", type=int, default=10)
-    parser.add_argument("--mcts-sims", type=int, default=50)
+    parser.add_argument("--mcts-sims", type=int, default=200)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--vs-random", action="store_true")
     args = parser.parse_args()

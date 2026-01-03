@@ -48,7 +48,7 @@ class CrossTrainer:
         mem_max = self.probs_config.get('infra', {}).get('mem_max_episodes', 1000)
         self.probs_experience = helpers.ExperienceReplay(max_episodes=mem_max, create_env_func=self.create_env)
         self.az_game = TogyzkumalakGame()
-        self.az_config = AlphaZeroConfig(hidden_size=256, num_mcts_sims=50)
+        self.az_config = AlphaZeroConfig(hidden_size=256, num_mcts_sims=200)
         self.az_nnet = NNetWrapper(self.az_game, self.az_config)
         self.az_checkpoint_path = az_checkpoint_path
         if os.path.exists(az_checkpoint_path):
@@ -66,7 +66,7 @@ class CrossTrainer:
         return probs_impl_common.SelfLearningAgent("PROBS", self.probs_model_keeper, self.device)
 
     def create_az_agent(self):
-        agent = alphazero_adapter.AlphaZeroAgent(self.az_checkpoint_path, hidden_size=256, num_mcts_sims=50)
+        agent = alphazero_adapter.AlphaZeroAgent(self.az_checkpoint_path, hidden_size=256, num_mcts_sims=200)
         agent.nnet = self.az_nnet
         agent.reset_mcts()
         return agent
