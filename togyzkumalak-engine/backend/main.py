@@ -2608,21 +2608,28 @@ class PROBSTrainingRequest(BaseModel):
 async def start_probs_ultra_training(request: PROBSTrainingRequest):
     """Start PROBS Ultra training session (mixed: self-play + vs AlphaZero)."""
     try:
+        print(f"[API] PROBS Ultra start requested")
         config = request.dict()
+        print(f"[API] Config received: {list(config.keys())}")
         # Включаем Ultra режим
         config['ultra_mode'] = True
         config['vs_alphazero_ratio'] = config.get('vs_alphazero_ratio', 0.3)  # 30% игр против AlphaZero
+        print(f"[API] Ultra mode enabled, vs_alphazero_ratio: {config['vs_alphazero_ratio']}")
         
         # Проверяем, что метод существует
         if not hasattr(probs_task_manager, 'start_ultra_training'):
+            print("[API] ERROR: start_ultra_training method not found")
             raise HTTPException(status_code=500, detail="start_ultra_training method not found in probs_task_manager")
         
+        print(f"[API] Calling start_ultra_training...")
         task_id = probs_task_manager.start_ultra_training(config)
+        print(f"[API] PROBS Ultra started, task_id: {task_id}")
         return {"task_id": task_id, "status": "started", "mode": "ultra"}
     except HTTPException:
         raise
     except Exception as e:
         import traceback
+        print(f"[API] ERROR in start_probs_ultra_training: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
