@@ -1600,42 +1600,22 @@ class TrainingController {
     }
     
     async startPROBSUltra() {
-        if (!confirm('⚡ Запустить PROBS Ultra?\n\nЭто смешанное обучение:\n- Self-play (70%)\n- Игры против AlphaZero (30%)\n\nТребуется загруженный AlphaZero чекпойнт.')) {
-            return;
-        }
-        
-        // Читаем значения из полей (те же, что использует обычный PROBS)
-        const getValue = (id, defaultValue) => {
-            const el = document.getElementById(id);
-            const value = el ? (el.value || el.textContent || defaultValue) : defaultValue;
-            const parsed = parseInt(value);
-            return isNaN(parsed) ? defaultValue : parsed;
-        };
-        
-        const getStringValue = (id, defaultValue) => {
-            const el = document.getElementById(id);
-            return el ? (el.value || defaultValue) : defaultValue;
-        };
-        
         const config = {
-            n_high_level_iterations: getValue('probsIters', 100),
-            v_train_episodes: getValue('probsVEpisodes', 500),
-            q_train_episodes: getValue('probsQEpisodes', 250),
-            mem_max_episodes: getValue('probsMemEpisodes', 10000),
-            train_batch_size: getValue('probsBatchSize', 64),
-            num_q_s_a_calls: getValue('probsQCalls', 30),
-            max_depth: getValue('probsMaxDepth', 50),
-            self_play_threads: getValue('probsThreads', 4),
-            sub_processes_cnt: getValue('probsProcesses', 4),
-            evaluate_n_games: getValue('probsEvalGames', 20),
-            device: getStringValue('probsDevice', 'cpu'),
+            n_high_level_iterations: parseInt(document.getElementById('probsIters')?.value) || 100,
+            v_train_episodes: parseInt(document.getElementById('probsVEpisodes')?.value) || 500,
+            q_train_episodes: parseInt(document.getElementById('probsQEpisodes')?.value) || 250,
+            mem_max_episodes: parseInt(document.getElementById('probsMemEpisodes')?.value) || 10000,
+            train_batch_size: parseInt(document.getElementById('probsBatchSize')?.value) || 64,
+            num_q_s_a_calls: parseInt(document.getElementById('probsQCalls')?.value) || 30,
+            max_depth: parseInt(document.getElementById('probsMaxDepth')?.value) || 50,
+            self_play_threads: parseInt(document.getElementById('probsThreads')?.value) || 4,
+            sub_processes_cnt: parseInt(document.getElementById('probsProcesses')?.value) || 4,
+            evaluate_n_games: parseInt(document.getElementById('probsEvalGames')?.value) || 20,
+            device: document.getElementById('probsDevice')?.value || 'cpu',
             use_boost: document.getElementById('probsUseBoost')?.checked || false,
             initial_checkpoint: document.getElementById('probsInitialCheckpoint')?.value || null,
             vs_alphazero_ratio: 0.3  // 30% игр против AlphaZero
         };
-        
-        // Логируем конфиг для отладки
-        console.log('[PROBS Ultra] Config:', config);
         
         try {
             const btnStartUltra = document.getElementById('btnStartPROBSUltra');
@@ -1644,12 +1624,7 @@ class TrainingController {
                 btnStartUltra.textContent = '⏳ Запуск Ultra...';
             }
             
-            // Используем window.location.origin для правильного определения сервера
-            const apiUrl = `${window.location.origin}/api/training/probs/ultra/start`;
-            console.log('[PROBS Ultra] Requesting:', apiUrl);
-            console.log('[PROBS Ultra] Current origin:', window.location.origin);
-            
-            const response = await fetch(apiUrl, {
+            const response = await fetch('/api/training/probs/ultra/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config)
@@ -1657,30 +1632,6 @@ class TrainingController {
             
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('[PROBS Ultra] Error response:', response.status, errorText);
-                console.error('[PROBS Ultra] Request URL was:', apiUrl);
-                
-                // Дополнительная диагностика для 404
-                if (response.status === 404) {
-                    const helpMsg = `\n\n🔍 ДИАГНОСТИКА 404:\n` +
-                        `  1. Текущий сервер: ${window.location.origin}\n` +
-                        `  2. Запрос отправлен на: ${apiUrl}\n` +
-                        `  3. Если это локальный сервер (localhost:8000), обновите его:\n` +
-                        `     - git pull origin master\n` +
-                        `     - Перезапустите сервер\n` +
-                        `  4. Или откройте фронтенд через удаленный сервер\n`;
-                    console.error(helpMsg);
-                    
-                    // Показываем более информативное сообщение пользователю
-                    throw new Error(`Endpoint не найден (404).\n\n` +
-                        `Сервер: ${window.location.origin}\n` +
-                        `URL: ${apiUrl}\n\n` +
-                        `Возможные причины:\n` +
-                        `1. Локальный сервер не обновлен (git pull + restart)\n` +
-                        `2. Фронтенд открыт локально, а сервер на удаленной машине\n` +
-                        `3. Сервер не перезапущен после обновления кода\n\n` +
-                        `Проверьте логи сервера или откройте фронтенд через удаленный сервер.`);
-                }
                 throw new Error(`Сервер вернул ошибку ${response.status}: ${errorText}`);
             }
             
@@ -1695,7 +1646,7 @@ class TrainingController {
             
             this.startPROBSPolling();
             
-            alert('✅ PROBS Ultra запущен! Task ID: ' + data.task_id + '\n\nРежим: Смешанное обучение (self-play + vs AlphaZero)');
+            alert('✅ Обучение PROBS Ultra запущено! Task ID: ' + data.task_id);
             
         } catch (error) {
             console.error('Error starting PROBS Ultra:', error);
