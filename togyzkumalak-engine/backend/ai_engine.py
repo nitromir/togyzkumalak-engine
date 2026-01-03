@@ -235,6 +235,8 @@ class AIEngine:
             move = self._gemini_move(board, legal_moves)
         elif level == 7:
             move = self._probs_move(board, legal_moves)
+        elif level == 8:
+            move = self._ensemble_move(board, legal_moves)
         else:
             move = self._neural_move(board, legal_moves, level)
         
@@ -1007,6 +1009,35 @@ class AIEngine:
 
         print(f"[ENSEMBLE] Combined {len(probabilities)} models: {list(probabilities.keys())}")
         return combined_probs
+
+    def _ensemble_move(self, board: TogyzkumalakBoard, legal_moves: List[int]) -> int:
+        """
+        Level 8: Ensemble AI - uses combined predictions from multiple models.
+        Takes the highest probability move from ensemble analysis.
+        """
+        try:
+            probabilities = self._get_ensemble_probabilities(board)
+
+            # Find the legal move with highest probability
+            best_move = -1
+            best_prob = -1
+
+            for move in legal_moves:
+                if probabilities.get(move, 0) > best_prob:
+                    best_prob = probabilities[move]
+                    best_move = move
+
+            if best_move != -1:
+                print(f"[ENSEMBLE] Chose move {best_move} with probability {best_prob:.3f}")
+                return best_move
+            else:
+                # Fallback to heuristic if no valid moves found
+                print("[ENSEMBLE] No valid moves found, falling back to heuristic")
+                return self._heuristic_move(board, legal_moves)
+
+        except Exception as e:
+            print(f"[ENSEMBLE] Error in ensemble move: {e}, falling back to heuristic")
+            return self._heuristic_move(board, legal_moves)
 
     def _get_heuristic_probabilities(self, board: TogyzkumalakBoard) -> Dict[int, float]:
         """

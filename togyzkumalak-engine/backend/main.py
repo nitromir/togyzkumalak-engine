@@ -150,7 +150,7 @@ async def create_game(request: NewGameRequest):
         raise HTTPException(status_code=400, detail="Invalid player color")
     
     if request.ai_level not in range(1, 8):
-        raise HTTPException(status_code=400, detail="AI level must be 1-7")
+        raise HTTPException(status_code=400, detail="AI level must be 1-8")
     
     game = game_manager.create_game(
         human_color=request.player_color,
@@ -324,7 +324,8 @@ async def get_ai_levels():
             {"level": 4, "name": "Advanced", "elo": 1800, "description": "Neural network (deep)"},
             {"level": 5, "name": "Expert", "elo": 2100, "description": "Best available model"},
             {"level": 6, "name": "Gemini AI", "elo": 2400, "description": "Google Gemini LLM opponent"},
-            {"level": 7, "name": "PROBS AI", "elo": 2200, "description": "PROBS algorithm (Beam Search)"}
+            {"level": 7, "name": "PROBS AI", "elo": 2200, "description": "PROBS algorithm (Beam Search)"},
+            {"level": 8, "name": "Ensemble AI", "elo": 2500, "description": "Combined neural networks + heuristics"}
         ]
     }
 

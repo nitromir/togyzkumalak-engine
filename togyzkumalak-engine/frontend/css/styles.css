@@ -4258,6 +4258,22 @@ html, body {
     background: rgba(255, 136, 0, 0.3);
 }
 
+.level-btn.level-ensemble {
+    border-color: rgba(255, 68, 68, 0.4);
+    background: linear-gradient(45deg, rgba(0, 242, 255, 0.1), rgba(112, 0, 255, 0.1), rgba(255, 136, 0, 0.1), rgba(255, 68, 68, 0.1));
+}
+
+.level-btn.level-ensemble:hover {
+    border-color: rgba(255, 68, 68, 0.8);
+    background: linear-gradient(45deg, rgba(0, 242, 255, 0.2), rgba(112, 0, 255, 0.2), rgba(255, 136, 0, 0.2), rgba(255, 68, 68, 0.2));
+    box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);
+}
+
+.level-btn.level-ensemble.active {
+    border-color: #ff4444;
+    background: linear-gradient(45deg, rgba(0, 242, 255, 0.3), rgba(112, 0, 255, 0.3), rgba(255, 136, 0, 0.3), rgba(255, 68, 68, 0.3));
+}
+
 @media (max-width: 1200px) {
     .probs-config-grid {
         grid-template-columns: repeat(3, 1fr);
