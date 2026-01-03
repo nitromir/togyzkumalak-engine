@@ -728,7 +728,11 @@ class AIEngine:
             except Exception as e:
                 print(f"[WARNING] AlphaZero MCTS probabilities failed: {e}")
 
-        # 4. POLYNET / GYM MODELS (Default)
+        # 4. HEURISTIC
+        if model_type == 'heuristic':
+            return self._get_heuristic_probabilities(board)
+
+        # 5. POLYNET / GYM MODELS (Default)
         target_level = level
         # If model_type is explicitly polynet, use level 5 if target level not found
         # Or if we fell through from level 7
@@ -931,11 +935,12 @@ class AIEngine:
         Combine predictions from multiple models using ensemble learning.
 
         Strategy:
-        - Get probabilities from Polynet, AlphaZero, PROBS
+        - Get probabilities from Polynet, AlphaZero, PROBS, Heuristic
         - Use weighted average with confidence-based weights
-        - Polynet: 0.3 (fast baseline)
-        - AlphaZero: 0.4 (strategic depth)
-        - PROBS: 0.3 (tactical search)
+        - Polynet: 0.2 (fast baseline)
+        - AlphaZero: 0.3 (strategic depth)
+        - PROBS: 0.2 (tactical search)
+        - Heuristic: 0.3 (domain knowledge)
         """
         probabilities = {}
         weights = {}
@@ -946,8 +951,8 @@ class AIEngine:
             polynet_probs = self.get_move_probabilities(board, model_type='polynet')
             if polynet_probs and any(v > 0.1 for v in polynet_probs.values()):
                 probabilities['polynet'] = polynet_probs
-                weights['polynet'] = 0.3
-                total_weight += 0.3
+                weights['polynet'] = 0.2
+                total_weight += 0.2
         except Exception as e:
             print(f"[ENSEMBLE] Polynet failed: {e}")
 
@@ -957,8 +962,8 @@ class AIEngine:
                 alphazero_probs = self.get_move_probabilities(board, model_type='alphazero')
                 if alphazero_probs and any(v > 0.1 for v in alphazero_probs.values()):
                     probabilities['alphazero'] = alphazero_probs
-                    weights['alphazero'] = 0.4
-                    total_weight += 0.4
+                    weights['alphazero'] = 0.3
+                    total_weight += 0.3
         except Exception as e:
             print(f"[ENSEMBLE] AlphaZero failed: {e}")
 
@@ -967,10 +972,20 @@ class AIEngine:
             probs_probs = self.get_move_probabilities(board, model_type='probs')
             if probs_probs and any(v > 0.1 for v in probs_probs.values()):
                 probabilities['probs'] = probs_probs
-                weights['probs'] = 0.3
-                total_weight += 0.3
+                weights['probs'] = 0.2
+                total_weight += 0.2
         except Exception as e:
             print(f"[ENSEMBLE] PROBS failed: {e}")
+
+        # 4. Get Heuristic probabilities (domain knowledge)
+        try:
+            heuristic_probs = self._get_heuristic_probabilities(board)
+            if heuristic_probs and any(v > 0.1 for v in heuristic_probs.values()):
+                probabilities['heuristic'] = heuristic_probs
+                weights['heuristic'] = 0.3
+                total_weight += 0.3
+        except Exception as e:
+            print(f"[ENSEMBLE] Heuristic failed: {e}")
 
         # If no models available, return uniform distribution
         if not probabilities:
@@ -992,6 +1007,73 @@ class AIEngine:
 
         print(f"[ENSEMBLE] Combined {len(probabilities)} models: {list(probabilities.keys())}")
         return combined_probs
+
+    def _get_heuristic_probabilities(self, board: TogyzkumalakBoard) -> Dict[int, float]:
+        """
+        Convert heuristic scores to probabilities for ensemble use.
+
+        Uses the same logic as _heuristic_move but returns probability distribution.
+        """
+        current_player = board.current_player
+        scores = {}
+
+        legal_moves = board.get_legal_moves()
+
+        for move in legal_moves:
+            score = 0
+            pit_index = move + (0 if current_player == "white" else 9)
+            kumalaks = board.fields[pit_index]
+
+            # More kumalaks = generally better control
+            score += kumalaks * 0.1
+
+            # Simulate the move to see outcome
+            test_board = TogyzkumalakBoard(board.fields.copy())
+            success, notation = test_board.make_move(move + 1)
+
+            if success:
+                # Check for tuzduk creation
+                if 'x' in notation:
+                    score += 50  # Tuzduk is very valuable
+
+                # Check kazan gain
+                if current_player == "white":
+                    gain = test_board.white_kazan - board.white_kazan
+                else:
+                    gain = test_board.black_kazan - board.black_kazan
+                score += gain * 2
+
+                # Penalize if opponent can capture after
+                opponent_legal = test_board.get_legal_moves()
+                for opp_move in opponent_legal:
+                    opp_test = TogyzkumalakBoard(test_board.fields.copy())
+                    opp_test.make_move(opp_move + 1)
+                    if current_player == "white":
+                        opp_gain = opp_test.black_kazan - test_board.black_kazan
+                    else:
+                        opp_gain = opp_test.white_kazan - test_board.white_kazan
+                    if opp_gain > 10:
+                        score -= opp_gain * 0.5
+
+            scores[move] = score
+
+        # Convert scores to probabilities using softmax
+        if scores:
+            # Find best move and create probability distribution
+            max_score = max(scores.values())
+            # Use temperature to control distribution spread
+            temperature = 0.5
+            exp_scores = {move: np.exp((score - max_score) / temperature) for move, score in scores.items()}
+
+            total = sum(exp_scores.values())
+            probabilities = {move: exp_scores[move] / total for move in exp_scores}
+        else:
+            # Fallback to uniform if no moves
+            probabilities = {move: 1.0 / len(legal_moves) for move in legal_moves}
+
+        # Convert to dict with all 9 positions (0-8)
+        result = {i: probabilities.get(i, 0.0) for i in range(9)}
+        return result
 
 
 # Global AI engine instance
