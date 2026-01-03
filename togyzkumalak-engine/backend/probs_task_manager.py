@@ -105,6 +105,29 @@ class PROBSTaskManager:
         self.training_thread.start()
         return task_id
     
+    def start_ultra_training(self, config):
+        """
+        Запускает PROBS Ultra training - смешанное обучение (self-play + vs AlphaZero).
+        """
+        # Включаем Ultra режим в конфиге
+        config['ultra_mode'] = True
+        config['vs_alphazero_ratio'] = config.get('vs_alphazero_ratio', 0.3)  # 30% игр против AlphaZero по умолчанию
+        
+        if self.current_task and self.tasks.get(self.current_task, {}).get("status") == "running":
+            raise Exception("Training already running")
+        task_id = "probs_ultra_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.tasks[task_id] = {
+            "task_id": task_id, "status": "starting", "config": config,
+            "progress": 0, "current_iteration": 0,
+            "total_iterations": config.get("n_high_level_iterations", 10),
+            "start_time": time.time(), "elapsed_time": 0, "metrics": [], "error": None
+        }
+        self.current_task = task_id
+        self.stop_requested = False
+        self.training_thread = threading.Thread(target=self._run_training, args=(task_id, config), daemon=True)
+        self.training_thread.start()
+        return task_id
+    
     def _run_training(self, task_id, config):
         log_path = os.path.join(self.engine_dir, "probs_training.log")
         with open(log_path, "w", encoding="utf-8") as f:
