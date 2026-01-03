@@ -21,7 +21,9 @@ class VoiceService {
         this.audioContext = null;
         this.audioQueue = [];
         this.currentSource = null;
-        this.byteBuffer = new Uint8Array(0);
+        this.audioChunks = []; // Collect all chunks before decoding
+        this.isCollectingChunks = false;
+        this.completeAudioData = null; // Store complete audio blob
         
         // Sentence processing for Hybrid TTS
         this.sentenceIndex = 0;
@@ -110,6 +112,8 @@ class VoiceService {
         }
         this.audioQueue = [];
         this.byteBuffer = new Uint8Array(0);
+        this.completeAudioData = new Uint8Array(0);
+        this.isCollectingChunks = false;
         this.sentenceIndex = 0;
         this.isPaused = false;
         
@@ -182,13 +186,17 @@ class VoiceService {
         // #endregion
 
         this.initAudioContext();
+        this.completeAudioData = new Uint8Array(0); // Reset for new audio
+        this.isCollectingChunks = true;
+        this.byteBuffer = new Uint8Array(0); // For base64 decoding
+
         try {
             const response = await fetch('/api/voice/tts/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `text=${encodeURIComponent(clean)}`
             });
-            
+
             // #region agent log
             fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:185',message:'speakGoogle response',data:{status:response.status,ok:response.ok,pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
             // #endregion
@@ -197,58 +205,50 @@ class VoiceService {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-            
+
             while (true) {
-                if (this.playbackId !== pid) { 
+                if (this.playbackId !== pid) {
                     // #region agent log
                     fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:195',message:'speakGoogle cancelled due to playbackId mismatch',data:{current:this.playbackId,pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
                     // #endregion
-                    await reader.cancel(); 
-                    return; 
+                    await reader.cancel();
+                    return;
                 }
                 const { done, value } = await reader.read();
                 if (done) break;
-                
+
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop() || '';
-                
+
                 for (const line of lines) {
                     if (!line.trim() || this.playbackId !== pid) continue;
                     try {
                         const binary = atob(line);
-                        // #region agent log
-                        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:205',message:'speakGoogle chunk',data:{binLen:binary.length,queueLen:this.audioQueue.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
-                        // #endregion
                         const bytes = new Uint8Array(binary.length);
                         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                        
-                        const total = this.byteBuffer.length + bytes.length;
-                        const combined = new Uint8Array(total);
-                        combined.set(this.byteBuffer);
-                        combined.set(bytes, this.byteBuffer.length);
-                        
-                        const even = total & ~1;
-                        if (even > 0) {
-                            this.audioQueue.push(combined.slice(0, even));
-                            this.byteBuffer = combined.slice(even);
-                        } else {
-                            this.byteBuffer = combined;
-                        }
-                        
-                        // Start Google only when Native is done
+
+                        // Collect all decoded bytes into completeAudioData
+                        const combined = new Uint8Array(this.completeAudioData.length + bytes.length);
+                        combined.set(this.completeAudioData);
+                        combined.set(bytes, this.completeAudioData.length);
+                        this.completeAudioData = combined;
+
                         // #region agent log
-                        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:215',message:'checking if can play google chunk',data:{hasSource:!!this.currentSource,isPaused:this.isPaused,isSynthSpeaking:this.synth.speaking},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+                        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:205',message:'collected decoded chunk',data:{bytesLen:bytes.length,totalLen:this.completeAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
                         // #endregion
-                        if (!this.currentSource && !this.isPaused && !this.synth.speaking) {
-                            this.playNextChunk(pid);
-                        }
+
                     } catch (e) {
                         // #region agent log
                         fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:230',message:'speakGoogle atob error',data:{err:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
                         // #endregion
                     }
                 }
+            }
+
+            // All chunks collected and decoded, now decode audio and play
+            if (this.playbackId === pid && this.completeAudioData.length > 0) {
+                await this.decodeAndPlayCompleteAudio(pid);
             }
             
             const check = () => {
@@ -264,6 +264,46 @@ class VoiceService {
             // #region agent log
             fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:245',message:'speakGoogle fatal error',data:{err:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
             // #endregion
+        }
+    }
+
+    async decodeAndPlayCompleteAudio(pid) {
+        if (this.playbackId !== pid || this.completeAudioData.length === 0) {
+            return;
+        }
+
+        try {
+            if (this.audioContext.state === 'suspended') await this.audioContext.resume();
+
+            // Decode the complete audio data using Web Audio API
+            const audioBuffer = await this.audioContext.decodeAudioData(this.completeAudioData.buffer.slice(this.completeAudioData.byteOffset, this.completeAudioData.byteOffset + this.completeAudioData.byteLength));
+
+            const source = this.audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(this.audioContext.destination);
+            this.currentSource = source;
+
+            source.onended = () => {
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:280',message:'complete audio ended',data:{pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+                // #endregion
+                this.currentSource = null;
+                this.completeAudioData = new Uint8Array(0);
+            };
+
+            source.start();
+            this.updateStatus('Озвучка (Gemini)...');
+
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:290',message:'started complete audio playback',data:{audioLen:this.completeAudioData.length,duration:audioBuffer.duration},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            // #endregion
+
+        } catch (e) {
+            console.error('[TTS] Audio decoding error:', e);
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'complete audio decode error',data:{err:e.message,audioLen:this.completeAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            // #endregion
+            this.completeAudioData = new Uint8Array(0);
         }
     }
 
