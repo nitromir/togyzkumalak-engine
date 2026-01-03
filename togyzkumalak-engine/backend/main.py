@@ -2599,6 +2599,9 @@ class PROBSTrainingRequest(BaseModel):
     use_boost: bool = False
     initial_checkpoint: Optional[str] = None
     vs_alphazero_ratio: Optional[float] = None  # Для PROBS Ultra
+    
+    class Config:
+        extra = "allow"  # Разрешаем дополнительные поля
 
 
 @app.post("/api/training/probs/ultra/start")
