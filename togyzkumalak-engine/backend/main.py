@@ -2604,6 +2604,11 @@ class PROBSTrainingRequest(BaseModel):
         extra = "allow"  # Разрешаем дополнительные поля
 
 
+@app.get("/api/training/probs/ultra/test")
+async def test_probs_ultra_endpoint():
+    """Test endpoint to verify PROBS Ultra route is registered."""
+    return {"status": "ok", "message": "PROBS Ultra endpoint is accessible", "has_method": hasattr(probs_task_manager, 'start_ultra_training')}
+
 @app.post("/api/training/probs/ultra/start")
 async def start_probs_ultra_training(request: PROBSTrainingRequest):
     """Start PROBS Ultra training session (mixed: self-play + vs AlphaZero)."""
