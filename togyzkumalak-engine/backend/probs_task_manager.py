@@ -405,13 +405,8 @@ model:
                     mk.schedulers[model_key] = scheduler
                     log_print(f"Created LR scheduler for {model_key}: start_lr={optimizer.param_groups[0]['lr']:.6f}, min_lr=1e-5")
             
-            # Противник для оценки (теперь one_step_lookahead по умолчанию)
-            metrics_enemy = probs_impl_common.create_agent(
-                probs_config["evaluate"]["enemy"], "togyzkumalak", device
-            )
-            log_print(f"Evaluation enemy: {probs_config['evaluate']['enemy']['kind']}")
-            
             # PROBS Ultra: Загружаем AlphaZero агента для смешанного обучения
+            # ВАЖНО: Загружаем ОДИН раз и используем для оценки И для игр
             alphazero_agent = None
             ultra_mode = probs_config.get('train', {}).get('ultra_mode', False)
             if ultra_mode:
@@ -447,6 +442,18 @@ model:
                     log_print(f"⚠️  PROBS Ultra: Error loading AlphaZero: {e}. Disabling Ultra mode.")
                     ultra_mode = False
                     alphazero_agent = None
+            
+            # Противник для оценки
+            # В Ultra режиме используем тот же AlphaZero агент, что и для игр
+            if ultra_mode and alphazero_agent is not None:
+                metrics_enemy = alphazero_agent
+                log_print(f"Evaluation enemy: AlphaZero (same as Ultra opponent)")
+            else:
+                # Обычный режим: используем one_step_lookahead
+                metrics_enemy = probs_impl_common.create_agent(
+                    probs_config["evaluate"]["enemy"], "togyzkumalak", device
+                )
+                log_print(f"Evaluation enemy: {probs_config['evaluate']['enemy']['kind']}")
             
             # Experience replay буфер
             experience_replay = helpers.ExperienceReplay(
