@@ -1078,7 +1078,20 @@ class TogyzkumalakApp {
         // (which can visually "truncate" the output if Gemini returns "<...>").
         const escaped = this.escapeHtml(text);
 
-        return escaped
+        // Split text into paragraphs (double newlines or markdown sections)
+        const paragraphs = escaped.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+
+        // Wrap each paragraph in a styled container
+        const formattedParagraphs = paragraphs.map(paragraph => {
+            // Skip headings (they already have their own styling)
+            if (paragraph.startsWith('<h4')) {
+                return paragraph;
+            }
+
+            return `<div class="gemini-response-paragraph">${paragraph}</div>`;
+        });
+
+        return formattedParagraphs.join('')
             // Handle markdown ## headings first (new format)
             .replace(/^## (📊.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
             .replace(/^## (🔍.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
