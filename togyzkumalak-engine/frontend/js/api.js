@@ -51,7 +51,7 @@ class TogyzkumalakAPI {
             ai_level: aiLevel,
             player_id: 'human'
         });
-        
+
         this.gameId = data.game_id;
         return data;
     }

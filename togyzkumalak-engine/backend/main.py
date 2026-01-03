@@ -149,7 +149,7 @@ async def create_game(request: NewGameRequest):
     if request.player_color not in ["white", "black"]:
         raise HTTPException(status_code=400, detail="Invalid player color")
     
-    if request.ai_level not in range(1, 8):
+    if request.ai_level not in range(1, 9):
         raise HTTPException(status_code=400, detail="AI level must be 1-8")
     
     game = game_manager.create_game(
