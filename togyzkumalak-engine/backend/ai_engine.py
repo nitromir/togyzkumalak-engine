@@ -932,12 +932,45 @@ class AIEngine:
         
         return move + 1, int(elapsed), raw_logits, action_probs, value
 
+    def _calculate_uniformity(self, probs: Dict[int, float]) -> float:
+        """
+        Calculate uniformity score (0 = completely non-uniform, 1 = perfectly uniform).
+        """
+        if not probs:
+            return 1.0
+
+        values = list(probs.values())
+        n = len(values)
+
+        if n <= 1:
+            return 0.0
+
+        # For uniform distribution, each prob should be 1/n
+        uniform_prob = 1.0 / n
+
+        # Calculate total absolute deviation from uniform
+        total_deviation = sum(abs(v - uniform_prob) for v in values)
+
+        # Normalize by maximum possible deviation (when one prob=1, others=0)
+        max_possible_deviation = 2 * (n - 1) / n
+        uniformity_score = 1 - (total_deviation / max_possible_deviation)
+
+        return max(0.0, min(1.0, uniformity_score))
+
+    def _is_too_uniform(self, probs: Dict[int, float], threshold: float = 0.8) -> bool:
+        """
+        Check if probability distribution is too close to uniform.
+        Returns True if the distribution is uninformative (too uniform).
+        """
+        return self._calculate_uniformity(probs) > threshold
+
     def _get_ensemble_probabilities(self, board: TogyzkumalakBoard) -> Dict[int, float]:
         """
         Combine predictions from multiple models using ensemble learning.
 
         Strategy:
         - Get probabilities from Polynet, AlphaZero, PROBS, Heuristic
+        - Filter out uninformative (too uniform) predictions
         - Use weighted average with confidence-based weights
         - Polynet: 0.1 (fast baseline)
         - AlphaZero: 0.4 (strategic depth)
@@ -951,10 +984,14 @@ class AIEngine:
         # 1. Get Polynet probabilities (fast baseline)
         try:
             polynet_probs = self.get_move_probabilities(board, model_type='polynet')
-            if polynet_probs and any(v > 0.1 for v in polynet_probs.values()):
+            if (polynet_probs and any(v > 0.1 for v in polynet_probs.values())
+                and not self._is_too_uniform(polynet_probs, threshold=0.7)):
                 probabilities['polynet'] = polynet_probs
                 weights['polynet'] = 0.1
                 total_weight += 0.1
+                print(f"[ENSEMBLE] Polynet included (uniformity: {self._calculate_uniformity(polynet_probs):.3f})")
+            else:
+                print(f"[ENSEMBLE] Polynet excluded (uniform: {polynet_probs is not None and self._is_too_uniform(polynet_probs, threshold=0.7)})")
         except Exception as e:
             print(f"[ENSEMBLE] Polynet failed: {e}")
 
@@ -962,30 +999,42 @@ class AIEngine:
         try:
             if self.alphazero_model is not None:
                 alphazero_probs = self.get_move_probabilities(board, model_type='alphazero')
-                if alphazero_probs and any(v > 0.1 for v in alphazero_probs.values()):
+                if (alphazero_probs and any(v > 0.1 for v in alphazero_probs.values())
+                    and not self._is_too_uniform(alphazero_probs, threshold=0.8)):
                     probabilities['alphazero'] = alphazero_probs
                     weights['alphazero'] = 0.4
                     total_weight += 0.4
+                    print(f"[ENSEMBLE] AlphaZero included (uniformity: {self._calculate_uniformity(alphazero_probs):.3f})")
+                else:
+                    print(f"[ENSEMBLE] AlphaZero excluded (uniform: {alphazero_probs is not None and self._is_too_uniform(alphazero_probs, threshold=0.8)})")
         except Exception as e:
             print(f"[ENSEMBLE] AlphaZero failed: {e}")
 
         # 3. Get PROBS probabilities (tactical)
         try:
             probs_probs = self.get_move_probabilities(board, model_type='probs')
-            if probs_probs and any(v > 0.1 for v in probs_probs.values()):
+            if (probs_probs and any(v > 0.1 for v in probs_probs.values())
+                and not self._is_too_uniform(probs_probs, threshold=0.75)):
                 probabilities['probs'] = probs_probs
                 weights['probs'] = 0.2
                 total_weight += 0.2
+                print(f"[ENSEMBLE] PROBS included (uniformity: {self._calculate_uniformity(probs_probs):.3f})")
+            else:
+                print(f"[ENSEMBLE] PROBS excluded (uniform: {probs_probs is not None and self._is_too_uniform(probs_probs, threshold=0.75)})")
         except Exception as e:
             print(f"[ENSEMBLE] PROBS failed: {e}")
 
         # 4. Get Heuristic probabilities (domain knowledge)
         try:
             heuristic_probs = self._get_heuristic_probabilities(board)
-            if heuristic_probs and any(v > 0.1 for v in heuristic_probs.values()):
+            if (heuristic_probs and any(v > 0.1 for v in heuristic_probs.values())
+                and not self._is_too_uniform(heuristic_probs, threshold=0.6)):
                 probabilities['heuristic'] = heuristic_probs
                 weights['heuristic'] = 0.3
                 total_weight += 0.3
+                print(f"[ENSEMBLE] Heuristic included (uniformity: {self._calculate_uniformity(heuristic_probs):.3f})")
+            else:
+                print(f"[ENSEMBLE] Heuristic excluded (uniform: {heuristic_probs is not None and self._is_too_uniform(heuristic_probs, threshold=0.6)})")
         except Exception as e:
             print(f"[ENSEMBLE] Heuristic failed: {e}")
 
