@@ -1469,7 +1469,7 @@ class TrainingController {
         const boost = document.getElementById('probsUseBoost');
         if (boost) boost.checked = true;
 
-        this.showNotification('🔥 Настройки МОНСТРА применены! Не забудьте нажать "Запустить PROBS".');
+        this.showNotification('🔥 МОНСТР-КОНФИГ применен! Теперь можно запускать PROBS или PROBS Ultra.');
     }
 
     async loadPROBSLogs() {
