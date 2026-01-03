@@ -85,11 +85,9 @@ class VoiceService:
                                     d = p.inline_data.data
                                     if d:
                                         chunk_count += 1
-                                        # Yield raw bytes in smaller chunks to network
-                                        # This prevents the browser from waiting for massive 500KB blobs
-                                        chunk_size = 16384 # 16KB chunks for smoother network delivery
-                                        for i in range(0, len(d), chunk_size):
-                                            q.put(d[i:i+chunk_size])
+                                        # Don't chunk the audio data - send as complete blob
+                                        # Audio files must remain intact to avoid corruption/noise
+                                        q.put(d)
                     
                     # #region agent log
                     with open(r'c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log', 'a') as f:

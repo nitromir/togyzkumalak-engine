@@ -281,35 +281,33 @@ class VoiceService {
         // #endregion
         try {
             if (this.audioContext.state === 'suspended') await this.audioContext.resume();
-            let offset = (chunk.length > 44 && chunk[0] === 0x52 && chunk[1] === 0x49) ? 44 : 0;
-            const count = Math.floor((chunk.byteLength - offset) / 2);
-            const view = new DataView(chunk.buffer, chunk.byteOffset + offset, count * 2);
-            const samples = new Float32Array(count);
-            // Try little endian first? Or stick to big for now?
-            // User said "шипение" previously which is often endianness.
-            // Let's log if it's mostly noise.
-            for (let i = 0; i < count; i++) samples[i] = view.getInt16(i * 2, false) / 32768.0;
-            
-            const buffer = this.audioContext.createBuffer(1, samples.length, 24000);
-            buffer.getChannelData(0).set(samples);
+
+            // Use Web Audio API decodeAudioData for proper audio file decoding
+            // Gemini returns complete audio files (MP3/WAV), not raw PCM
+            const audioBuffer = await this.audioContext.decodeAudioData(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
+
             const source = this.audioContext.createBufferSource();
-            source.buffer = buffer;
+            source.buffer = audioBuffer;
             source.connect(this.audioContext.destination);
             this.currentSource = source;
+
             source.onended = () => {
                 // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:280',message:'chunk source ended',data:{pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:280',message:'audio source ended',data:{pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
                 // #endregion
                 this.currentSource = null;
                 this.playNextChunk(pid);
             };
+
             source.start();
             this.updateStatus('Озвучка (Quality)...');
-        } catch (e) { 
+
+        } catch (e) {
+            console.error('[TTS] Audio decoding error:', e);
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'playNextChunk error',data:{err:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'audio decode error',data:{err:e.message,chunkLen:chunk.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
             // #endregion
-            this.playNextChunk(pid); 
+            this.playNextChunk(pid);
         }
     }
 
