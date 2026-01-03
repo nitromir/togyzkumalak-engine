@@ -1316,8 +1316,8 @@ async def export_gemini_training_data():
     Converts all saved game logs to transitions for training.
     """
     try:
-        # Fix: games are in gemini_battles/games subdirectory
-        games_dir = os.path.join(gemini_battle_manager.logs_dir, "gemini_battles", "games")
+        # Games are in logs_dir/games subdirectory
+        games_dir = os.path.join(gemini_battle_manager.logs_dir, "games")
         
         if not os.path.exists(games_dir):
             return {"status": "no_data", "message": "No Gemini battle games found", "games_exported": 0}
