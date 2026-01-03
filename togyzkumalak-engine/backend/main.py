@@ -2598,6 +2598,7 @@ class PROBSTrainingRequest(BaseModel):
     device: str = "cpu"
     use_boost: bool = False
     initial_checkpoint: Optional[str] = None
+    vs_alphazero_ratio: Optional[float] = None  # Для PROBS Ultra
 
 
 @app.post("/api/training/probs/ultra/start")
