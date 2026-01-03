@@ -625,6 +625,10 @@ class AIEngine:
     ) -> Dict[int, float]:
         """Get move probabilities for visualization."""
 
+        # ENSEMBLE MODE: Combine all available models
+        if model_type == 'ensemble' or model_type == 'combined':
+            return self._get_ensemble_probabilities(board)
+
         # 1. GEMINI
         if model_type == 'gemini' or (model_type is None and level == 6):
             try:
@@ -921,6 +925,73 @@ class AIEngine:
             elapsed = thinking_time_ms
         
         return move + 1, int(elapsed), raw_logits, action_probs, value
+
+    def _get_ensemble_probabilities(self, board: TogyzkumalakBoard) -> Dict[int, float]:
+        """
+        Combine predictions from multiple models using ensemble learning.
+
+        Strategy:
+        - Get probabilities from Polynet, AlphaZero, PROBS
+        - Use weighted average with confidence-based weights
+        - Polynet: 0.3 (fast baseline)
+        - AlphaZero: 0.4 (strategic depth)
+        - PROBS: 0.3 (tactical search)
+        """
+        probabilities = {}
+        weights = {}
+        total_weight = 0
+
+        # 1. Get Polynet probabilities (fast baseline)
+        try:
+            polynet_probs = self.get_move_probabilities(board, model_type='polynet')
+            if polynet_probs and any(v > 0.1 for v in polynet_probs.values()):
+                probabilities['polynet'] = polynet_probs
+                weights['polynet'] = 0.3
+                total_weight += 0.3
+        except Exception as e:
+            print(f"[ENSEMBLE] Polynet failed: {e}")
+
+        # 2. Get AlphaZero probabilities (strategic)
+        try:
+            if self.alphazero_model is not None:
+                alphazero_probs = self.get_move_probabilities(board, model_type='alphazero')
+                if alphazero_probs and any(v > 0.1 for v in alphazero_probs.values()):
+                    probabilities['alphazero'] = alphazero_probs
+                    weights['alphazero'] = 0.4
+                    total_weight += 0.4
+        except Exception as e:
+            print(f"[ENSEMBLE] AlphaZero failed: {e}")
+
+        # 3. Get PROBS probabilities (tactical)
+        try:
+            probs_probs = self.get_move_probabilities(board, model_type='probs')
+            if probs_probs and any(v > 0.1 for v in probs_probs.values()):
+                probabilities['probs'] = probs_probs
+                weights['probs'] = 0.3
+                total_weight += 0.3
+        except Exception as e:
+            print(f"[ENSEMBLE] PROBS failed: {e}")
+
+        # If no models available, return uniform distribution
+        if not probabilities:
+            legal_moves = board.get_legal_moves()
+            return {m: 1.0 / len(legal_moves) if len(legal_moves) > 0 else 0.0 for m in range(9)}
+
+        # Combine probabilities using weighted average
+        combined_probs = {i: 0.0 for i in range(9)}
+
+        for model_name, probs in probabilities.items():
+            weight = weights[model_name]
+            for move_idx in range(9):
+                combined_probs[move_idx] += probs.get(move_idx, 0.0) * weight
+
+        # Normalize to ensure sum = 1
+        total = sum(combined_probs.values())
+        if total > 0:
+            combined_probs = {k: v / total for k, v in combined_probs.items()}
+
+        print(f"[ENSEMBLE] Combined {len(probabilities)} models: {list(probabilities.keys())}")
+        return combined_probs
 
 
 # Global AI engine instance

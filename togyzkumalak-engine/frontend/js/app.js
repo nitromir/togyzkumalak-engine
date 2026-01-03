@@ -762,13 +762,15 @@ class TogyzkumalakApp {
                 let modelsToFetch = [];
                 if (this.confidenceModel === 'all') {
                     modelsToFetch = ['polynet', 'alphazero', 'probs'];
+                } else if (this.confidenceModel === 'ensemble') {
+                    modelsToFetch = ['ensemble'];
                 } else {
                     modelsToFetch = [this.confidenceModel];
                 }
-                
+
                 const requests = modelsToFetch.map(m => api.getMoveProbabilities(this.aiLevel, m));
                 const results = await Promise.all(requests);
-                
+
                 results.forEach((res, idx) => {
                     if (res && res.probabilities) {
                         const modelKey = modelsToFetch[idx] === 'auto' ? 'polynet' : modelsToFetch[idx];
