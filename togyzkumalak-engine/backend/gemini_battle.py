@@ -78,7 +78,7 @@ def calculate_elo_change(player_elo: int, opponent_elo: int, result: str, k: int
 class GeminiPlayer:
     def __init__(self):
         self.client = None
-        self.model = "gemini-2.0-flash"
+        self.model = "gemini-3-flash-preview"
         if gemini_config.api_key:
             try:
                 from google import genai

@@ -1074,24 +1074,27 @@ class TogyzkumalakApp {
     formatAnalysis(text) {
         if (!text) return '';
 
+        // Split text into paragraphs (double newlines or markdown sections)
+        const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
+
+        if (paragraphs.length <= 1) {
+            // Single paragraph - format normally
+            return this.formatSingleParagraph(text);
+        }
+
+        // Multiple paragraphs - format each in separate rounded box
+        return paragraphs.map(paragraph => {
+            const formatted = this.formatSingleParagraph(paragraph.trim());
+            return `<div class="analysis-paragraph">${formatted}</div>`;
+        }).join('');
+    }
+
+    formatSingleParagraph(text) {
         // IMPORTANT: Escape HTML from Gemini output to avoid accidental tag interpretation
         // (which can visually "truncate" the output if Gemini returns "<...>").
         const escaped = this.escapeHtml(text);
 
-        // Split text into paragraphs (double newlines or markdown sections)
-        const paragraphs = escaped.split(/\n\s*\n/).filter(p => p.trim().length > 0);
-
-        // Wrap each paragraph in a styled container
-        const formattedParagraphs = paragraphs.map(paragraph => {
-            // Skip headings (they already have their own styling)
-            if (paragraph.startsWith('<h4')) {
-                return paragraph;
-            }
-
-            return `<div class="gemini-response-paragraph">${paragraph}</div>`;
-        });
-
-        return formattedParagraphs.join('')
+        return escaped
             // Handle markdown ## headings first (new format)
             .replace(/^## (📊.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
             .replace(/^## (🔍.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
