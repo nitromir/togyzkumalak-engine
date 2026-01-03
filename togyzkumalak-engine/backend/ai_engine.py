@@ -939,8 +939,8 @@ class AIEngine:
         Strategy:
         - Get probabilities from Polynet, AlphaZero, PROBS, Heuristic
         - Use weighted average with confidence-based weights
-        - Polynet: 0.2 (fast baseline)
-        - AlphaZero: 0.3 (strategic depth)
+        - Polynet: 0.1 (fast baseline)
+        - AlphaZero: 0.4 (strategic depth)
         - PROBS: 0.2 (tactical search)
         - Heuristic: 0.3 (domain knowledge)
         """
@@ -953,8 +953,8 @@ class AIEngine:
             polynet_probs = self.get_move_probabilities(board, model_type='polynet')
             if polynet_probs and any(v > 0.1 for v in polynet_probs.values()):
                 probabilities['polynet'] = polynet_probs
-                weights['polynet'] = 0.2
-                total_weight += 0.2
+                weights['polynet'] = 0.1
+                total_weight += 0.1
         except Exception as e:
             print(f"[ENSEMBLE] Polynet failed: {e}")
 
@@ -964,8 +964,8 @@ class AIEngine:
                 alphazero_probs = self.get_move_probabilities(board, model_type='alphazero')
                 if alphazero_probs and any(v > 0.1 for v in alphazero_probs.values()):
                     probabilities['alphazero'] = alphazero_probs
-                    weights['alphazero'] = 0.3
-                    total_weight += 0.3
+                    weights['alphazero'] = 0.4
+                    total_weight += 0.4
         except Exception as e:
             print(f"[ENSEMBLE] AlphaZero failed: {e}")
 

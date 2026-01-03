@@ -761,7 +761,7 @@ class TogyzkumalakApp {
                 
                 let modelsToFetch = [];
                 if (this.confidenceModel === 'all') {
-                    modelsToFetch = ['polynet', 'alphazero', 'probs', 'heuristic'];
+                    modelsToFetch = ['polynet', 'alphazero', 'probs'];
                 } else if (this.confidenceModel === 'ensemble') {
                     modelsToFetch = ['ensemble'];
                 } else {
