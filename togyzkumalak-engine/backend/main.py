@@ -2600,15 +2600,6 @@ class PROBSTrainingRequest(BaseModel):
     initial_checkpoint: Optional[str] = None
 
 
-@app.post("/api/training/probs/start")
-async def start_probs_training(request: PROBSTrainingRequest):
-    """Start PROBS training session."""
-    try:
-        task_id = probs_task_manager.start_training(request.dict())
-        return {"task_id": task_id, "status": "started"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/api/training/probs/ultra/start")
 async def start_probs_ultra_training(request: PROBSTrainingRequest):
     """Start PROBS Ultra training session (mixed: self-play + vs AlphaZero)."""
@@ -2619,6 +2610,16 @@ async def start_probs_ultra_training(request: PROBSTrainingRequest):
         config['vs_alphazero_ratio'] = config.get('vs_alphazero_ratio', 0.3)  # 30% игр против AlphaZero
         task_id = probs_task_manager.start_ultra_training(config)
         return {"task_id": task_id, "status": "started", "mode": "ultra"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/training/probs/start")
+async def start_probs_training(request: PROBSTrainingRequest):
+    """Start PROBS training session."""
+    try:
+        task_id = probs_task_manager.start_training(request.dict())
+        return {"task_id": task_id, "status": "started"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
