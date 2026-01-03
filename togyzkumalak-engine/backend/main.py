@@ -2608,9 +2608,18 @@ async def start_probs_ultra_training(request: PROBSTrainingRequest):
         # Включаем Ultra режим
         config['ultra_mode'] = True
         config['vs_alphazero_ratio'] = config.get('vs_alphazero_ratio', 0.3)  # 30% игр против AlphaZero
+        
+        # Проверяем, что метод существует
+        if not hasattr(probs_task_manager, 'start_ultra_training'):
+            raise HTTPException(status_code=500, detail="start_ultra_training method not found in probs_task_manager")
+        
         task_id = probs_task_manager.start_ultra_training(config)
         return {"task_id": task_id, "status": "started", "mode": "ultra"}
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
