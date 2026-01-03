@@ -105,29 +105,6 @@ class PROBSTaskManager:
         self.training_thread.start()
         return task_id
     
-    def start_ultra_training(self, config):
-        """
-        Запускает PROBS Ultra training - смешанное обучение (self-play + vs AlphaZero).
-        """
-        # Включаем Ultra режим в конфиге
-        config['ultra_mode'] = True
-        config['vs_alphazero_ratio'] = config.get('vs_alphazero_ratio', 0.3)  # 30% игр против AlphaZero по умолчанию
-        
-        if self.current_task and self.tasks.get(self.current_task, {}).get("status") == "running":
-            raise Exception("Training already running")
-        task_id = "probs_ultra_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.tasks[task_id] = {
-            "task_id": task_id, "status": "starting", "config": config,
-            "progress": 0, "current_iteration": 0,
-            "total_iterations": config.get("n_high_level_iterations", 10),
-            "start_time": time.time(), "elapsed_time": 0, "metrics": [], "error": None
-        }
-        self.current_task = task_id
-        self.stop_requested = False
-        self.training_thread = threading.Thread(target=self._run_training, args=(task_id, config), daemon=True)
-        self.training_thread.start()
-        return task_id
-    
     def _run_training(self, task_id, config):
         log_path = os.path.join(self.engine_dir, "probs_training.log")
         with open(log_path, "w", encoding="utf-8") as f:
@@ -276,12 +253,6 @@ class PROBSTaskManager:
         # Порог для принятия новой модели (механизм отката)
         update_threshold = config.get("update_threshold", 0.50)
         
-        # PROBS Ultra параметры
-        ultra_mode = config.get("ultra_mode", False)
-        vs_alphazero_ratio = config.get("vs_alphazero_ratio", 0.3)
-        alphazero_checkpoint = config.get("alphazero_checkpoint", None)
-        alphazero_mcts_sims = config.get("alphazero_mcts_sims", 50)
-        
         yaml_str = f"""name: probs_togyzkumalak
 env:
   name: togyzkumalak
@@ -308,9 +279,6 @@ train:
   alphazero_move_num_sampling_moves: {alphazero_move_num_sampling_moves}
   q_add_hardest_nodes_per_step: {q_add_hardest_nodes_per_step}
   update_threshold: {update_threshold}
-  ultra_mode: {str(ultra_mode).lower()}
-  vs_alphazero_ratio: {vs_alphazero_ratio}
-  alphazero_mcts_sims: {alphazero_mcts_sims}
 evaluate:
   evaluate_n_games: {evaluate_n_games}
   randomize_n_turns: 2
@@ -405,55 +373,11 @@ model:
                     mk.schedulers[model_key] = scheduler
                     log_print(f"Created LR scheduler for {model_key}: start_lr={optimizer.param_groups[0]['lr']:.6f}, min_lr=1e-5")
             
-            # PROBS Ultra: Загружаем AlphaZero агента для смешанного обучения
-            # ВАЖНО: Загружаем ОДИН раз и используем для оценки И для игр
-            alphazero_agent = None
-            ultra_mode = probs_config.get('train', {}).get('ultra_mode', False)
-            if ultra_mode:
-                try:
-                    # Пытаемся найти лучший чекпойнт AlphaZero
-                    az_checkpoint_path = probs_config.get('train', {}).get('alphazero_checkpoint', None)
-                    if az_checkpoint_path is None:
-                        # Ищем лучший чекпойнт AlphaZero
-                        az_models_dir = os.path.join(self.engine_dir, "models", "alphazero")
-                        best_path = os.path.join(az_models_dir, "best.pth.tar")
-                        if os.path.exists(best_path):
-                            az_checkpoint_path = best_path
-                        else:
-                            # Ищем любой чекпойнт
-                            import glob
-                            checkpoints = glob.glob(os.path.join(az_models_dir, "*.pth.tar"))
-                            if checkpoints:
-                                az_checkpoint_path = max(checkpoints, key=os.path.getmtime)
-                    
-                    if az_checkpoint_path and os.path.exists(az_checkpoint_path):
-                        from probs_impl.alphazero_adapter import AlphaZeroAgent
-                        num_mcts_sims = probs_config.get('train', {}).get('alphazero_mcts_sims', 50)
-                        alphazero_agent = AlphaZeroAgent(az_checkpoint_path, hidden_size=256, num_mcts_sims=num_mcts_sims)
-                        if alphazero_agent.is_loaded():
-                            log_print(f"✅ PROBS Ultra: Loaded AlphaZero from {az_checkpoint_path}")
-                        else:
-                            log_print(f"⚠️  PROBS Ultra: Failed to load AlphaZero from {az_checkpoint_path}")
-                            alphazero_agent = None
-                    else:
-                        log_print(f"⚠️  PROBS Ultra: AlphaZero checkpoint not found. Disabling Ultra mode.")
-                        ultra_mode = False
-                except Exception as e:
-                    log_print(f"⚠️  PROBS Ultra: Error loading AlphaZero: {e}. Disabling Ultra mode.")
-                    ultra_mode = False
-                    alphazero_agent = None
-            
-            # Противник для оценки
-            # В Ultra режиме используем тот же AlphaZero агент, что и для игр
-            if ultra_mode and alphazero_agent is not None:
-                metrics_enemy = alphazero_agent
-                log_print(f"Evaluation enemy: AlphaZero (same as Ultra opponent)")
-            else:
-                # Обычный режим: используем one_step_lookahead
-                metrics_enemy = probs_impl_common.create_agent(
-                    probs_config["evaluate"]["enemy"], "togyzkumalak", device
-                )
-                log_print(f"Evaluation enemy: {probs_config['evaluate']['enemy']['kind']}")
+            # Противник для оценки (теперь one_step_lookahead по умолчанию)
+            metrics_enemy = probs_impl_common.create_agent(
+                probs_config["evaluate"]["enemy"], "togyzkumalak", device
+            )
+            log_print(f"Evaluation enemy: {probs_config['evaluate']['enemy']['kind']}")
             
             # Experience replay буфер
             experience_replay = helpers.ExperienceReplay(
@@ -502,8 +426,7 @@ model:
                     probs_config, device, mk, metrics_enemy, i, 
                     tasks_queues=tasks_queues, 
                     results_queue=results_queue, 
-                    experience_replay=experience_replay,
-                    alphazero_agent=alphazero_agent  # Передаем AlphaZero агента для Ultra режима
+                    experience_replay=experience_replay
                 )
                 
                 # Обновляем LR schedulers после каждой итерации

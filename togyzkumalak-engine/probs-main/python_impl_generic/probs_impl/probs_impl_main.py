@@ -68,7 +68,7 @@ def report_model_performance(agent, env: helpers.BaseEnv, enemy_agent: helpers.B
         helpers.TENSORBOARD.append_scalar("wins", (wins + 0.5 * draws)/n_evaluate_games)
 
 
-def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_enemy: helpers.BaseAgent, high_level_i: int, tasks_queues=None, results_queue=None, experience_replay=None, alphazero_agent=None):
+def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, evaluage_enemy: helpers.BaseAgent, high_level_i: int, tasks_queues=None, results_queue=None, experience_replay=None):
     # #region agent log
     import json as _json; _log_path = r"c:\Users\Admin\Documents\Toguzkumalak\.cursor\debug.log"
     def _dbg(hyp, msg, data): open(_log_path, 'a').write(_json.dumps({"sessionId": "debug-session", "hypothesisId": hyp, "location": "probs_impl_main.py:go_train_iteration", "message": msg, "data": data, "timestamp": __import__('time').time()}) + '\n')
@@ -89,46 +89,14 @@ def go_train_iteration(config: dict, device, model_keeper: helpers.ModelKeeper, 
     print(f"High level iteration {high_level_i}/{config['train']['n_high_level_iterations']}")
     usage = helpers.UsageCounter()
 
-    # PROBS Ultra: Смешанное обучение (self-play + vs AlphaZero)
-    ultra_mode = config.get('train', {}).get('ultra_mode', False)
-    vs_alphazero_ratio = config.get('train', {}).get('vs_alphazero_ratio', 0.3)  # 30% игр против AlphaZero
-    
+    # Self play
     model_keeper.eval()
     # НЕ очищаем буфер! Старые данные постепенно вытесняются новыми через deque(maxlen)
     # Это предотвращает катастрофическое забывание и стабилизирует обучение
     # experience_replay.clear()  # УБРАНО: буфер сам ограничивается через max_episodes
-    
-    if ultra_mode and alphazero_agent is not None:
-        # Смешанное обучение: self-play + vs AlphaZero
-        v_train_episodes = config['train']['v_train_episodes']
-        self_play_episodes = int(v_train_episodes * (1 - vs_alphazero_ratio))
-        vs_az_episodes = v_train_episodes - self_play_episodes
-        
-        print(f"[PROBS Ultra] Mixed training: {self_play_episodes} self-play + {vs_az_episodes} vs AlphaZero")
-        
-        # Self-play (основная часть данных)
-        if self_play_episodes > 0:
-            # Временно изменяем количество эпизодов для self-play
-            original_episodes = config['train']['v_train_episodes']
-            config['train']['v_train_episodes'] = self_play_episodes
-            probs_impl_self_play.go_self_play(value_model, self_learning_model, config, experience_replay, device)
-            config['train']['v_train_episodes'] = original_episodes
-            usage.checkpoint("Self play")
-        
-        # Игры против AlphaZero (дополнительные данные)
-        if vs_az_episodes > 0:
-            from probs_impl import probs_impl_vs_alphazero
-            probs_impl_vs_alphazero.go_vs_alphazero(
-                value_model, self_learning_model, config, experience_replay, 
-                alphazero_agent, device, vs_az_episodes
-            )
-            usage.checkpoint("PROBS vs AlphaZero")
-    else:
-        # Обычное обучение: только self-play
-        probs_impl_self_play.go_self_play(value_model, self_learning_model, config, experience_replay, device)
-        usage.checkpoint("Self play")
-    
+    probs_impl_self_play.go_self_play(value_model, self_learning_model, config, experience_replay, device)
     experience_replay.print_stats()
+    usage.checkpoint("Self play")
 
     # Train value model
     probs_impl_train_v.train_value_model(value_model, device, value_optimizer, experience_replay, config['train']['train_batch_size'], config['train']['dataset_drop_ratio'])
