@@ -112,8 +112,8 @@ class VoiceService {
         }
         this.audioQueue = [];
         this.byteBuffer = new Uint8Array(0);
-        this.completeAudioData = new Uint8Array(0);
-        this.isCollectingChunks = false;
+        this.currentAudioData = new Uint8Array(0);
+        this.audioChunks = [];
         this.sentenceIndex = 0;
         this.isPaused = false;
         
@@ -186,9 +186,8 @@ class VoiceService {
         // #endregion
 
         this.initAudioContext();
-        this.completeAudioData = new Uint8Array(0); // Reset for new audio
-        this.isCollectingChunks = true;
-        this.byteBuffer = new Uint8Array(0); // For base64 decoding
+        this.currentAudioData = new Uint8Array(0); // Reset for new audio
+        this.audioChunks = []; // Queue of audio chunks to play
 
         try {
             const response = await fetch('/api/voice/tts/stream', {
@@ -228,14 +227,19 @@ class VoiceService {
                         const bytes = new Uint8Array(binary.length);
                         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-                        // Collect all decoded bytes into completeAudioData
-                        const combined = new Uint8Array(this.completeAudioData.length + bytes.length);
-                        combined.set(this.completeAudioData);
-                        combined.set(bytes, this.completeAudioData.length);
-                        this.completeAudioData = combined;
+                        // Add to current audio data
+                        const combined = new Uint8Array(this.currentAudioData.length + bytes.length);
+                        combined.set(this.currentAudioData);
+                        combined.set(bytes, this.currentAudioData.length);
+                        this.currentAudioData = combined;
+
+                        // Try to decode and play incrementally
+                        if (this.currentAudioData.length > 0) {
+                            await this.tryDecodeAndPlayIncremental(pid);
+                        }
 
                         // #region agent log
-                        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:205',message:'collected decoded chunk',data:{bytesLen:bytes.length,totalLen:this.completeAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
+                        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:205',message:'processed chunk',data:{bytesLen:bytes.length,totalLen:this.currentAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
                         // #endregion
 
                     } catch (e) {
@@ -246,9 +250,9 @@ class VoiceService {
                 }
             }
 
-            // All chunks collected and decoded, now decode audio and play
-            if (this.playbackId === pid && this.completeAudioData.length > 0) {
-                await this.decodeAndPlayCompleteAudio(pid);
+            // Final attempt to decode any remaining data
+            if (this.playbackId === pid && this.currentAudioData.length > 0) {
+                await this.tryDecodeAndPlayIncremental(pid, true);
             }
             
             const check = () => {
@@ -267,17 +271,25 @@ class VoiceService {
         }
     }
 
-    async decodeAndPlayCompleteAudio(pid) {
-        if (this.playbackId !== pid || this.completeAudioData.length === 0) {
+    async tryDecodeAndPlayIncremental(pid, isFinal = false) {
+        if (this.playbackId !== pid || this.currentAudioData.length === 0) {
+            return;
+        }
+
+        // Only try to decode if we have enough data or it's the final attempt
+        if (!isFinal && this.currentAudioData.length < 10000) { // Need at least ~10KB for MP3 header
             return;
         }
 
         try {
             if (this.audioContext.state === 'suspended') await this.audioContext.resume();
 
-            // Decode the complete audio data using Web Audio API
-            const audioBuffer = await this.audioContext.decodeAudioData(this.completeAudioData.buffer.slice(this.completeAudioData.byteOffset, this.completeAudioData.byteOffset + this.completeAudioData.byteLength));
+            // Try to decode the current audio data
+            const audioBuffer = await this.audioContext.decodeAudioData(
+                this.currentAudioData.buffer.slice(0, this.currentAudioData.length)
+            );
 
+            // If successful, create and play audio source
             const source = this.audioContext.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(this.audioContext.destination);
@@ -285,25 +297,36 @@ class VoiceService {
 
             source.onended = () => {
                 // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:280',message:'complete audio ended',data:{pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:280',message:'incremental audio ended',data:{pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
                 // #endregion
                 this.currentSource = null;
-                this.completeAudioData = new Uint8Array(0);
             };
 
             source.start();
             this.updateStatus('Озвучка (Gemini)...');
 
+            // Reset current data after successful decode
+            this.currentAudioData = new Uint8Array(0);
+
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:290',message:'started complete audio playback',data:{audioLen:this.completeAudioData.length,duration:audioBuffer.duration},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:290',message:'started incremental audio playback',data:{duration:audioBuffer.duration},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
             // #endregion
 
         } catch (e) {
-            console.error('[TTS] Audio decoding error:', e);
+            // If decoding failed and it's not final, just wait for more data
+            if (!isFinal) {
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'incremental decode failed, waiting for more data',data:{err:e.message,dataLen:this.currentAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+                // #endregion
+                return;
+            }
+
+            // If it's final and still failed, log error
+            console.error('[TTS] Final audio decoding error:', e);
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'complete audio decode error',data:{err:e.message,audioLen:this.completeAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'final incremental decode error',data:{err:e.message,dataLen:this.currentAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
             // #endregion
-            this.completeAudioData = new Uint8Array(0);
+            this.currentAudioData = new Uint8Array(0);
         }
     }
 
