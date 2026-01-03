@@ -1647,6 +1647,7 @@ class TrainingController {
             // Используем window.location.origin для правильного определения сервера
             const apiUrl = `${window.location.origin}/api/training/probs/ultra/start`;
             console.log('[PROBS Ultra] Requesting:', apiUrl);
+            console.log('[PROBS Ultra] Current origin:', window.location.origin);
             
             const response = await fetch(apiUrl, {
                 method: 'POST',
@@ -1657,13 +1658,28 @@ class TrainingController {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('[PROBS Ultra] Error response:', response.status, errorText);
-                // Дополнительная диагностика
+                console.error('[PROBS Ultra] Request URL was:', apiUrl);
+                
+                // Дополнительная диагностика для 404
                 if (response.status === 404) {
-                    console.error('[PROBS Ultra] 404 - Endpoint not found. Check:');
-                    console.error('  1. Server URL:', window.location.origin);
-                    console.error('  2. Full URL:', apiUrl);
-                    console.error('  3. Is server updated? Run: git pull origin master');
-                    console.error('  4. Is server restarted?');
+                    const helpMsg = `\n\n🔍 ДИАГНОСТИКА 404:\n` +
+                        `  1. Текущий сервер: ${window.location.origin}\n` +
+                        `  2. Запрос отправлен на: ${apiUrl}\n` +
+                        `  3. Если это локальный сервер (localhost:8000), обновите его:\n` +
+                        `     - git pull origin master\n` +
+                        `     - Перезапустите сервер\n` +
+                        `  4. Или откройте фронтенд через удаленный сервер\n`;
+                    console.error(helpMsg);
+                    
+                    // Показываем более информативное сообщение пользователю
+                    throw new Error(`Endpoint не найден (404).\n\n` +
+                        `Сервер: ${window.location.origin}\n` +
+                        `URL: ${apiUrl}\n\n` +
+                        `Возможные причины:\n` +
+                        `1. Локальный сервер не обновлен (git pull + restart)\n` +
+                        `2. Фронтенд открыт локально, а сервер на удаленной машине\n` +
+                        `3. Сервер не перезапущен после обновления кода\n\n` +
+                        `Проверьте логи сервера или откройте фронтенд через удаленный сервер.`);
                 }
                 throw new Error(`Сервер вернул ошибку ${response.status}: ${errorText}`);
             }
