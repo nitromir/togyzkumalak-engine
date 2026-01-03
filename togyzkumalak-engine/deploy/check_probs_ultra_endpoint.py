@@ -21,7 +21,11 @@ try:
     print(f"   ✅ Сервер отвечает! Статус: {response.status_code}")
 except requests.exceptions.ConnectionError:
     print("   ❌ Сервер не запущен или недоступен на порту 8000")
-    print("   💡 Запустите: cd /workspace/togyzkumalak-engine/togyzkumalak-engine && python run.py")
+    print("   💡 Запустите:")
+    print("      # Найдите директорию:")
+    print("      cd /workspace && find . -name 'run.py' -type f 2>/dev/null | head -1")
+    print("      # Обычно: cd /workspace/togyzkumalak-engine/togyzkumalak-engine")
+    print("      python run.py")
     sys.exit(1)
 except Exception as e:
     print(f"   ⚠️ Ошибка подключения: {e}")
@@ -104,9 +108,29 @@ print()
 
 # 5. Проверка логов сервера на ошибки
 print("5️⃣ Проверка логов сервера...")
-project_dir = '/workspace/togyzkumalak-engine/togyzkumalak-engine'
-if not os.path.exists(project_dir):
-    project_dir = '/root/togyzkumalak-engine'
+# Пытаемся найти правильную директорию проекта
+project_dir = None
+possible_dirs = [
+    '/workspace/togyzkumalak-engine/togyzkumalak-engine',
+    '/workspace/togyzkumalak/gym-togyzkumalak-master/togyzkumalak-engine',
+    '/root/togyzkumalak-engine',
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Относительно скрипта
+]
+for dir_path in possible_dirs:
+    if os.path.exists(dir_path) and os.path.exists(os.path.join(dir_path, 'run.py')):
+        project_dir = dir_path
+        break
+
+if not project_dir:
+    # Последняя попытка - поиск через find
+    import subprocess
+    try:
+        result = subprocess.run(['find', '/workspace', '-name', 'run.py', '-type', 'f'], 
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout.strip():
+            project_dir = os.path.dirname(result.stdout.strip().split('\n')[0])
+    except:
+        pass
 
 log_files = [
     os.path.join(project_dir, 'server_error.log'),
@@ -168,7 +192,11 @@ print("  РЕКОМЕНДАЦИИ")
 print("=" * 80)
 print()
 print("Если endpoint не найден (404):")
-print("1. Обновите код: cd /workspace/togyzkumalak-engine/togyzkumalak-engine && git pull origin master")
+print("1. Найдите директорию проекта и обновите код:")
+print("   cd /workspace")
+print("   find . -name 'run.py' -type f 2>/dev/null | head -1")
+print("   # Затем: cd <найденная_директория>")
+print("   git pull origin master")
 print("2. Перезапустите сервер: pkill -f run.py && sleep 2 && python run.py")
 print("3. Проверьте логи на ошибки импорта модулей")
 print()
