@@ -36,23 +36,24 @@ def main():
     print("=" * 70)
     print()
     
-    # Конфигурация для 200 итераций
+    # Конфигурация для 200 итераций - МОНСТР-КОНФИГ (128 ядер, 4x GPU)
+    # Основано на Monster Config из UI (training.js:1444-1461)
     config = {
         'n_high_level_iterations': 200,
-        'v_train_episodes': 500,
-        'q_train_episodes': 250,
-        'mem_max_episodes': 10000,
-        'train_batch_size': 64,
-        'num_q_s_a_calls': 30,
-        'max_depth': 50,
-        'self_play_threads': 4,
-        'sub_processes_cnt': 4,
-        'evaluate_n_games': 20,
+        'v_train_episodes': 8000,      # 8K партий для Self-play (GPU inference)
+        'q_train_episodes': 4000,      # 4K эпизодов Q-train (CPU + GPU)
+        'mem_max_episodes': 80000,     # Буфер памяти
+        'train_batch_size': 2048,      # Большой батч для GPU
+        'num_q_s_a_calls': 50,         # Глубина поиска Q
+        'max_depth': 100,              # Макс глубина дерева
+        'self_play_threads': 16,       # 16 потоков Self-play
+        'sub_processes_cnt': 64,       # 64 воркера Q-train
+        'evaluate_n_games': 100,        # 100 игр для стабильной оценки
         'device': 'cuda' if os.system('nvidia-smi > /dev/null 2>&1') == 0 else 'cpu',
-        'use_boost': False,
+        'use_boost': True,             # Включаем Boosting
         'initial_checkpoint': None,
         'ultra_mode': True,
-        'vs_alphazero_ratio': 0.3  # 30% игр против AlphaZero
+        'vs_alphazero_ratio': 0.3      # 30% игр против AlphaZero
     }
     
     print("📋 Конфигурация:")
