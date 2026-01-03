@@ -119,13 +119,21 @@ def main():
                 print(f"📈 Итерация {current_iter}/{total_iter} ({progress:.1f}%) - Статус: {status}")
                 last_iteration = current_iter
                 
-                # Показываем последние чекпойнты (расширение .ckpt)
+                # Показываем последние чекпойнты (формат: prefix_YYYYMMDD-HHMMSS.ckpt)
                 if os.path.exists(checkpoints_dir):
                     checkpoints = [f for f in os.listdir(checkpoints_dir) if f.endswith('.ckpt')]
                     if checkpoints:
                         latest = max(checkpoints, key=lambda f: os.path.getmtime(os.path.join(checkpoints_dir, f)))
                         size_mb = os.path.getsize(os.path.join(checkpoints_dir, latest)) / (1024 * 1024)
                         print(f"   💾 Последний чекпойнт: {latest} ({size_mb:.2f} MB)")
+                        
+                        # Показываем статистику по типам
+                        iter_ckpts = [f for f in checkpoints if f.startswith('iter_')]
+                        best_ckpts = [f for f in checkpoints if f.startswith('best_iter_')]
+                        final_ckpts = [f for f in checkpoints if f.startswith('final')]
+                        temp_ckpts = [f for f in checkpoints if f.startswith('temp_iter_')]
+                        if iter_ckpts or best_ckpts or final_ckpts or temp_ckpts:
+                            print(f"      (iter: {len(iter_ckpts)}, best: {len(best_ckpts)}, final: {len(final_ckpts)}, temp: {len(temp_ckpts)})")
             
             if status == "completed":
                 print()
@@ -135,26 +143,36 @@ def main():
                 print()
                 print(f"💾 Все чекпойнты сохранены в: {checkpoints_dir}")
                 
-                # Показываем финальные чекпойнты (расширение .ckpt)
+                # Показываем финальные чекпойнты (формат: prefix_YYYYMMDD-HHMMSS.ckpt)
                 if os.path.exists(checkpoints_dir):
                     checkpoints = sorted([f for f in os.listdir(checkpoints_dir) if f.endswith('.ckpt')])
                     print(f"\n📦 Всего чекпойнтов (.ckpt): {len(checkpoints)}")
-                    if checkpoints:
-                        print("   Последние 5:")
-                        for ckpt in checkpoints[-5:]:
-                            size_mb = os.path.getsize(os.path.join(checkpoints_dir, ckpt)) / (1024 * 1024)
-                            print(f"   - {ckpt} ({size_mb:.2f} MB)")
                     
-                    # Показываем типы чекпойнтов
+                    # Разделяем по типам (формат: prefix_timestamp.ckpt)
                     iter_ckpts = [f for f in checkpoints if f.startswith('iter_')]
                     best_ckpts = [f for f in checkpoints if f.startswith('best_iter_')]
                     final_ckpts = [f for f in checkpoints if f.startswith('final')]
-                    temp_ckpts = [f for f in checkpoints if f.startswith('temp_')]
+                    temp_ckpts = [f for f in checkpoints if f.startswith('temp_iter_')]
+                    other_ckpts = [f for f in checkpoints if not any([f.startswith(p) for p in ['iter_', 'best_iter_', 'final', 'temp_iter_']])]
+                    
                     print(f"\n   Типы чекпойнтов:")
-                    print(f"   - iter_*.ckpt: {len(iter_ckpts)}")
-                    print(f"   - best_iter_*.ckpt: {len(best_ckpts)}")
-                    print(f"   - final*.ckpt: {len(final_ckpts)}")
-                    print(f"   - temp_*.ckpt: {len(temp_ckpts)}")
+                    print(f"   - iter_*_*.ckpt (периодические): {len(iter_ckpts)}")
+                    print(f"   - best_iter_*_*.ckpt (лучшие): {len(best_ckpts)}")
+                    print(f"   - final_*.ckpt (финальный): {len(final_ckpts)}")
+                    print(f"   - temp_iter_*_*.ckpt (временные): {len(temp_ckpts)}")
+                    if other_ckpts:
+                        print(f"   - другие: {len(other_ckpts)}")
+                    
+                    if checkpoints:
+                        print("\n   Последние 5 (по времени создания):")
+                        # Сортируем по времени модификации
+                        checkpoints_by_time = sorted(checkpoints, key=lambda f: os.path.getmtime(os.path.join(checkpoints_dir, f)))
+                        for ckpt in checkpoints_by_time[-5:]:
+                            size_mb = os.path.getsize(os.path.join(checkpoints_dir, ckpt)) / (1024 * 1024)
+                            mtime = os.path.getmtime(os.path.join(checkpoints_dir, ckpt))
+                            from datetime import datetime
+                            time_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+                            print(f"   - {ckpt} ({size_mb:.2f} MB, {time_str})")
                 break
             
             if status == "error":
