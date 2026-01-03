@@ -1644,7 +1644,11 @@ class TrainingController {
                 btnStartUltra.textContent = '⏳ Запуск Ultra...';
             }
             
-            const response = await fetch('/api/training/probs/ultra/start', {
+            // Используем window.location.origin для правильного определения сервера
+            const apiUrl = `${window.location.origin}/api/training/probs/ultra/start`;
+            console.log('[PROBS Ultra] Requesting:', apiUrl);
+            
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config)
@@ -1652,6 +1656,15 @@ class TrainingController {
             
             if (!response.ok) {
                 const errorText = await response.text();
+                console.error('[PROBS Ultra] Error response:', response.status, errorText);
+                // Дополнительная диагностика
+                if (response.status === 404) {
+                    console.error('[PROBS Ultra] 404 - Endpoint not found. Check:');
+                    console.error('  1. Server URL:', window.location.origin);
+                    console.error('  2. Full URL:', apiUrl);
+                    console.error('  3. Is server updated? Run: git pull origin master');
+                    console.error('  4. Is server restarted?');
+                }
                 throw new Error(`Сервер вернул ошибку ${response.status}: ${errorText}`);
             }
             
