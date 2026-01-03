@@ -199,6 +199,21 @@ def create_agent(player_config: dict, env_name: str, device) -> helpers.BaseAgen
         return helpers.TwoStepLookaheadAgent()
     if kind == 'three_step_lookahead':
         return helpers.ThreeStepLookaheadAgent()
+    if kind == 'alphazero':
+        # AlphaZero оппонент для PROBS Ultra training
+        from probs_impl.alphazero_adapter import AlphaZeroAgent
+        checkpoint_path = player_config.get('checkpoint_path', None)
+        if checkpoint_path is None:
+            # Пытаемся найти лучший чекпойнт AlphaZero
+            import os
+            backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../gym-togyzkumalak-master/togyzkumalak-engine"))
+            checkpoint_path = os.path.join(backend_path, "models", "alphazero", "best.pth.tar")
+            if not os.path.exists(checkpoint_path):
+                # Альтернативный путь
+                checkpoint_path = os.path.join(backend_path, "models", "alphazero", "checkpoint_0.pth.tar")
+        
+        num_mcts_sims = player_config.get('num_mcts_sims', 50)
+        return AlphaZeroAgent(checkpoint_path, hidden_size=256, num_mcts_sims=num_mcts_sims)
     if kind == 'q_player':
         model_keeper = create_model_keeper(player_config['model'], env_name)
         model_keeper.eval()

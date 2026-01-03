@@ -253,6 +253,12 @@ class PROBSTaskManager:
         # Порог для принятия новой модели (механизм отката)
         update_threshold = config.get("update_threshold", 0.50)
         
+        # PROBS Ultra параметры
+        ultra_mode = config.get("ultra_mode", False)
+        vs_alphazero_ratio = config.get("vs_alphazero_ratio", 0.3)
+        alphazero_checkpoint = config.get("alphazero_checkpoint", None)
+        alphazero_mcts_sims = config.get("alphazero_mcts_sims", 50)
+        
         yaml_str = f"""name: probs_togyzkumalak
 env:
   name: togyzkumalak
@@ -279,6 +285,9 @@ train:
   alphazero_move_num_sampling_moves: {alphazero_move_num_sampling_moves}
   q_add_hardest_nodes_per_step: {q_add_hardest_nodes_per_step}
   update_threshold: {update_threshold}
+  ultra_mode: {str(ultra_mode).lower()}
+  vs_alphazero_ratio: {vs_alphazero_ratio}
+  alphazero_mcts_sims: {alphazero_mcts_sims}
 evaluate:
   evaluate_n_games: {evaluate_n_games}
   randomize_n_turns: 2
@@ -379,6 +388,43 @@ model:
             )
             log_print(f"Evaluation enemy: {probs_config['evaluate']['enemy']['kind']}")
             
+            # PROBS Ultra: Загружаем AlphaZero агента для смешанного обучения
+            alphazero_agent = None
+            ultra_mode = probs_config.get('train', {}).get('ultra_mode', False)
+            if ultra_mode:
+                try:
+                    # Пытаемся найти лучший чекпойнт AlphaZero
+                    az_checkpoint_path = probs_config.get('train', {}).get('alphazero_checkpoint', None)
+                    if az_checkpoint_path is None:
+                        # Ищем лучший чекпойнт AlphaZero
+                        az_models_dir = os.path.join(self.engine_dir, "models", "alphazero")
+                        best_path = os.path.join(az_models_dir, "best.pth.tar")
+                        if os.path.exists(best_path):
+                            az_checkpoint_path = best_path
+                        else:
+                            # Ищем любой чекпойнт
+                            import glob
+                            checkpoints = glob.glob(os.path.join(az_models_dir, "*.pth.tar"))
+                            if checkpoints:
+                                az_checkpoint_path = max(checkpoints, key=os.path.getmtime)
+                    
+                    if az_checkpoint_path and os.path.exists(az_checkpoint_path):
+                        from probs_impl.alphazero_adapter import AlphaZeroAgent
+                        num_mcts_sims = probs_config.get('train', {}).get('alphazero_mcts_sims', 50)
+                        alphazero_agent = AlphaZeroAgent(az_checkpoint_path, hidden_size=256, num_mcts_sims=num_mcts_sims)
+                        if alphazero_agent.is_loaded():
+                            log_print(f"✅ PROBS Ultra: Loaded AlphaZero from {az_checkpoint_path}")
+                        else:
+                            log_print(f"⚠️  PROBS Ultra: Failed to load AlphaZero from {az_checkpoint_path}")
+                            alphazero_agent = None
+                    else:
+                        log_print(f"⚠️  PROBS Ultra: AlphaZero checkpoint not found. Disabling Ultra mode.")
+                        ultra_mode = False
+                except Exception as e:
+                    log_print(f"⚠️  PROBS Ultra: Error loading AlphaZero: {e}. Disabling Ultra mode.")
+                    ultra_mode = False
+                    alphazero_agent = None
+            
             # Experience replay буфер
             experience_replay = helpers.ExperienceReplay(
                 max_episodes=probs_config['infra']['mem_max_episodes'], 
@@ -426,7 +472,8 @@ model:
                     probs_config, device, mk, metrics_enemy, i, 
                     tasks_queues=tasks_queues, 
                     results_queue=results_queue, 
-                    experience_replay=experience_replay
+                    experience_replay=experience_replay,
+                    alphazero_agent=alphazero_agent  # Передаем AlphaZero агента для Ultra режима
                 )
                 
                 # Обновляем LR schedulers после каждой итерации

@@ -1414,12 +1414,14 @@ class TrainingController {
         this.probsPollInterval = null;
         
         const btnStart = document.getElementById('btnStartPROBS');
+        const btnStartUltra = document.getElementById('btnStartPROBSUltra');
         const btnStop = document.getElementById('btnStopPROBS');
         const btnShowLogs = document.getElementById('btnShowPROBSLogs');
         const btnMonster = document.getElementById('btnMonsterConfig');
         const btnTournament = document.getElementById('btnStartPROBSTournament');
         
         btnStart?.addEventListener('click', () => this.startPROBS());
+        btnStartUltra?.addEventListener('click', () => this.startPROBSUltra());
         btnStop?.addEventListener('click', () => this.stopPROBS());
         btnShowLogs?.addEventListener('click', () => this.showPROBSLogs());
         btnMonster?.addEventListener('click', () => this.applyMonsterConfig());
@@ -1593,6 +1595,70 @@ class TrainingController {
             if (btnStart) {
                 btnStart.disabled = false;
                 btnStart.textContent = '🚀 Запустить PROBS';
+            }
+        }
+    }
+    
+    async startPROBSUltra() {
+        if (!confirm('⚡ Запустить PROBS Ultra?\n\nЭто смешанное обучение:\n- Self-play (70%)\n- Игры против AlphaZero (30%)\n\nТребуется загруженный AlphaZero чекпойнт.')) {
+            return;
+        }
+        
+        const config = {
+            n_high_level_iterations: parseInt(document.getElementById('probsIters')?.value) || 100,
+            v_train_episodes: parseInt(document.getElementById('probsVEpisodes')?.value) || 500,
+            q_train_episodes: parseInt(document.getElementById('probsQEpisodes')?.value) || 250,
+            mem_max_episodes: parseInt(document.getElementById('probsMemEpisodes')?.value) || 10000,
+            train_batch_size: parseInt(document.getElementById('probsBatchSize')?.value) || 64,
+            num_q_s_a_calls: parseInt(document.getElementById('probsQCalls')?.value) || 30,
+            max_depth: parseInt(document.getElementById('probsMaxDepth')?.value) || 50,
+            self_play_threads: parseInt(document.getElementById('probsThreads')?.value) || 4,
+            sub_processes_cnt: parseInt(document.getElementById('probsProcesses')?.value) || 4,
+            evaluate_n_games: parseInt(document.getElementById('probsEvalGames')?.value) || 20,
+            device: document.getElementById('probsDevice')?.value || 'cpu',
+            use_boost: document.getElementById('probsUseBoost')?.checked || false,
+            initial_checkpoint: document.getElementById('probsInitialCheckpoint')?.value || null,
+            vs_alphazero_ratio: 0.3  // 30% игр против AlphaZero
+        };
+        
+        try {
+            const btnStartUltra = document.getElementById('btnStartPROBSUltra');
+            if (btnStartUltra) {
+                btnStartUltra.disabled = true;
+                btnStartUltra.textContent = '⏳ Запуск Ultra...';
+            }
+            
+            const response = await fetch('/api/training/probs/ultra/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Сервер вернул ошибку ${response.status}: ${errorText}`);
+            }
+            
+            const data = await response.json();
+            this.probsTaskId = data.task_id;
+            
+            const progressSection = document.getElementById('probsProgressSection');
+            if (progressSection) progressSection.classList.remove('hidden');
+            
+            const btnStop = document.getElementById('btnStopPROBS');
+            if (btnStop) btnStop.classList.remove('hidden');
+            
+            this.startPROBSPolling();
+            
+            alert('✅ PROBS Ultra запущен! Task ID: ' + data.task_id + '\n\nРежим: Смешанное обучение (self-play + vs AlphaZero)');
+            
+        } catch (error) {
+            console.error('Error starting PROBS Ultra:', error);
+            alert('Ошибка запуска PROBS Ultra: ' + error.message);
+            const btnStartUltra = document.getElementById('btnStartPROBSUltra');
+            if (btnStartUltra) {
+                btnStartUltra.disabled = false;
+                btnStartUltra.textContent = '⚡ PROBS ULTRA';
             }
         }
     }
