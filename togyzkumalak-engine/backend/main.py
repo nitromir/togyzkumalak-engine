@@ -505,7 +505,8 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                     await websocket.send_json({
                         "type": "game_over",
                         "winner": state["winner"],
-                        "elo_change": player_change
+                        "elo_change": player_change,
+                        "board": state["board"]
                     })
             
             elif data["type"] == "request_analysis":
@@ -581,7 +582,8 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                         "type": "game_over",
                         "winner": state["winner"],
                         "elo_change": player_change,
-                        "resigned": True
+                        "resigned": True,
+                        "board": state["board"]
                     })
     
     except WebSocketDisconnect:
