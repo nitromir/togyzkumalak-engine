@@ -276,15 +276,15 @@ class VoiceService {
             return;
         }
 
-        // Only try to decode if we have enough data or it's the final attempt
-        if (!isFinal && this.currentAudioData.length < 10000) { // Need at least ~10KB for MP3 header
+        // For WAV files, we need at least the header (44 bytes) + some audio data
+        if (!isFinal && this.currentAudioData.length < 1000) { // Need at least header + some data
             return;
         }
 
         try {
             if (this.audioContext.state === 'suspended') await this.audioContext.resume();
 
-            // Try to decode the current audio data
+            // Try to decode the current WAV data
             const audioBuffer = await this.audioContext.decodeAudioData(
                 this.currentAudioData.buffer.slice(0, this.currentAudioData.length)
             );
@@ -309,22 +309,31 @@ class VoiceService {
             this.currentAudioData = new Uint8Array(0);
 
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:290',message:'started incremental audio playback',data:{duration:audioBuffer.duration},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:290',message:'started incremental WAV playback',data:{duration:audioBuffer.duration},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
             // #endregion
 
         } catch (e) {
             // If decoding failed and it's not final, just wait for more data
             if (!isFinal) {
                 // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'incremental decode failed, waiting for more data',data:{err:e.message,dataLen:this.currentAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+                fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'incremental WAV decode failed, waiting for more data',data:{err:e.message,dataLen:this.currentAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
                 // #endregion
                 return;
             }
 
-            // If it's final and still failed, log error
+            // If it's final and still failed, try to save the data for debugging
             console.error('[TTS] Final audio decoding error:', e);
+            // Save failed audio data for debugging
+            try {
+                const blob = new Blob([this.currentAudioData], { type: 'audio/wav' });
+                const url = URL.createObjectURL(blob);
+                console.log('[TTS] Failed audio data saved as blob:', url);
+            } catch (saveErr) {
+                console.error('[TTS] Could not save debug audio:', saveErr);
+            }
+
             // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'final incremental decode error',data:{err:e.message,dataLen:this.currentAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
+            fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:285',message:'final incremental WAV decode error',data:{err:e.message,dataLen:this.currentAudioData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'3'})}).catch(()=>{});
             // #endregion
             this.currentAudioData = new Uint8Array(0);
         }
