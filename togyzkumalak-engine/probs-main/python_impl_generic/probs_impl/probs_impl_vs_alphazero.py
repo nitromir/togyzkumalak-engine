@@ -152,6 +152,10 @@ def play_vs_alphazero(game_ids):
             next_game_i += 1
         else:
             # Батч-инференс для PROBS
+            # Убеждаемся, что модель на правильном устройстве
+            if GET_DATASET_DEVICE and SELF_LEARNING_MODEL is not None:
+                SELF_LEARNING_MODEL = SELF_LEARNING_MODEL.to(GET_DATASET_DEVICE)
+            
             inputs_collection = [to_eval_env[0] for it, to_eval_env, replay_episode, episode_stats in tasks_list]
             action_values_batch = probs_impl_common.get_q_a_multi_inputs(SELF_LEARNING_MODEL, inputs_collection, GET_DATASET_DEVICE)
 

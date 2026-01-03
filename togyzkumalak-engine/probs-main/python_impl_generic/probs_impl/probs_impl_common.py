@@ -80,6 +80,12 @@ def get_q_a_single_state(self_learning_model: helpers.BaseSelfLearningModel, env
 
 
 def get_q_a_multi_inputs(self_learning_model: helpers.BaseSelfLearningModel, inputs_collection, device):
+    # Убеждаемся, что модель на правильном устройстве
+    if device and device.startswith('cuda'):
+        self_learning_model = self_learning_model.to(device)
+    elif device == 'cpu':
+        self_learning_model = self_learning_model.to('cpu')
+    
     input_tensors = env_states_to_tensors(inputs_collection, device)
 
     action_values = self_learning_model.forward(*input_tensors)
