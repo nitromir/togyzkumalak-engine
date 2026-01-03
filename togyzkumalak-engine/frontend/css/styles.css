@@ -4156,7 +4156,6 @@ html, body {
 .dot.alphazero { background: #7000ff; }
 .dot.probs { background: #ff8800; }
 .dot.heuristic { background: #ff4444; }
-.dot.ensemble { background: linear-gradient(45deg, #00f2ff, #7000ff, #ff8800, #ff4444); }
 
 /* ============================================
    PROBS TRAINING DASHBOARD
