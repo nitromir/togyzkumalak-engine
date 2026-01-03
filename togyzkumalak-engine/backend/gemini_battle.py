@@ -78,12 +78,17 @@ def calculate_elo_change(player_elo: int, opponent_elo: int, result: str, k: int
 class GeminiPlayer:
     def __init__(self):
         self.client = None
-        self.model = "gemini-3-flash-preview"
+        self.model = "gemini-2.0-flash"
         if gemini_config.api_key:
             try:
                 from google import genai
                 self.client = genai.Client(api_key=gemini_config.api_key)
+                print(f"[Gemini] Initialized with model: {self.model}")
             except Exception as e: print(f"Failed to init Gemini: {e}")
+
+    def is_available(self) -> bool:
+        """Check if Gemini API is available."""
+        return self.client is not None
 
     def _format_board_for_move(self, board, color):
         state = board.get_state_dict()
