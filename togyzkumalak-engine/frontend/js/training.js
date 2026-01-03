@@ -1624,14 +1624,22 @@ class TrainingController {
                 btnStartUltra.textContent = '⏳ Запуск Ultra...';
             }
             
-            const response = await fetch('/api/training/probs/ultra/start', {
+            const url = '/api/training/probs/ultra/start';
+            console.log('[PROBS Ultra] Request URL:', window.location.origin + url);
+            console.log('[PROBS Ultra] Config:', config);
+            
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config)
             });
             
+            console.log('[PROBS Ultra] Response status:', response.status);
+            console.log('[PROBS Ultra] Response URL:', response.url);
+            
             if (!response.ok) {
                 const errorText = await response.text();
+                console.error('[PROBS Ultra] Error response:', errorText);
                 throw new Error(`Сервер вернул ошибку ${response.status}: ${errorText}`);
             }
             
