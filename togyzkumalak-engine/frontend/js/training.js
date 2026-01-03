@@ -1604,22 +1604,38 @@ class TrainingController {
             return;
         }
         
+        // Читаем значения из полей (те же, что использует обычный PROBS)
+        const getValue = (id, defaultValue) => {
+            const el = document.getElementById(id);
+            const value = el ? (el.value || el.textContent || defaultValue) : defaultValue;
+            const parsed = parseInt(value);
+            return isNaN(parsed) ? defaultValue : parsed;
+        };
+        
+        const getStringValue = (id, defaultValue) => {
+            const el = document.getElementById(id);
+            return el ? (el.value || defaultValue) : defaultValue;
+        };
+        
         const config = {
-            n_high_level_iterations: parseInt(document.getElementById('probsIters')?.value) || 100,
-            v_train_episodes: parseInt(document.getElementById('probsVEpisodes')?.value) || 500,
-            q_train_episodes: parseInt(document.getElementById('probsQEpisodes')?.value) || 250,
-            mem_max_episodes: parseInt(document.getElementById('probsMemEpisodes')?.value) || 10000,
-            train_batch_size: parseInt(document.getElementById('probsBatchSize')?.value) || 64,
-            num_q_s_a_calls: parseInt(document.getElementById('probsQCalls')?.value) || 30,
-            max_depth: parseInt(document.getElementById('probsMaxDepth')?.value) || 50,
-            self_play_threads: parseInt(document.getElementById('probsThreads')?.value) || 4,
-            sub_processes_cnt: parseInt(document.getElementById('probsProcesses')?.value) || 4,
-            evaluate_n_games: parseInt(document.getElementById('probsEvalGames')?.value) || 20,
-            device: document.getElementById('probsDevice')?.value || 'cpu',
+            n_high_level_iterations: getValue('probsIters', 100),
+            v_train_episodes: getValue('probsVEpisodes', 500),
+            q_train_episodes: getValue('probsQEpisodes', 250),
+            mem_max_episodes: getValue('probsMemEpisodes', 10000),
+            train_batch_size: getValue('probsBatchSize', 64),
+            num_q_s_a_calls: getValue('probsQCalls', 30),
+            max_depth: getValue('probsMaxDepth', 50),
+            self_play_threads: getValue('probsThreads', 4),
+            sub_processes_cnt: getValue('probsProcesses', 4),
+            evaluate_n_games: getValue('probsEvalGames', 20),
+            device: getStringValue('probsDevice', 'cpu'),
             use_boost: document.getElementById('probsUseBoost')?.checked || false,
             initial_checkpoint: document.getElementById('probsInitialCheckpoint')?.value || null,
             vs_alphazero_ratio: 0.3  // 30% игр против AlphaZero
         };
+        
+        // Логируем конфиг для отладки
+        console.log('[PROBS Ultra] Config:', config);
         
         try {
             const btnStartUltra = document.getElementById('btnStartPROBSUltra');
