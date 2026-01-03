@@ -305,7 +305,7 @@ async def suggest_move(game_id: str):
 async def get_elo_stats():
     """Get ELO statistics."""
     human_stats = elo_system.get_player_stats("human")
-    ai_elos = {f"level_{i}": elo_config.level_elos[i] for i in range(1, 6)}
+    ai_elos = {f"level_{i}": elo_config.level_elos[i] for i in range(1, 9)}
     
     return {
         "human": human_stats,

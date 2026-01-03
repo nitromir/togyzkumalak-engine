@@ -46,6 +46,9 @@ class ELOConfig:
             3: 1500,  # Basic NN
             4: 1800,  # Advanced NN
             5: 2100,  # Expert NN
+            6: 2400,  # Gemini AI
+            7: 2200,  # PROBS AI
+            8: 2500,  # Ensemble AI
         }
 
 
