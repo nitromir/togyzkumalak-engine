@@ -152,6 +152,7 @@ def play_vs_alphazero(game_ids):
             next_game_i += 1
         else:
             # Батч-инференс для PROBS
+            global SELF_LEARNING_MODEL
             # Убеждаемся, что модель на правильном устройстве
             if GET_DATASET_DEVICE and SELF_LEARNING_MODEL is not None:
                 SELF_LEARNING_MODEL = SELF_LEARNING_MODEL.to(GET_DATASET_DEVICE)
