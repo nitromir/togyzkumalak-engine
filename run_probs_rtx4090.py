@@ -193,7 +193,8 @@ def run_benchmark():
         reserved_memory = torch.cuda.memory_reserved(0) / 1024**3
         allocated_memory = torch.cuda.memory_allocated(0) / 1024**3
 
-        print(".1f"        print(".1f"        print(".1f"
+        print(f"📊 GPU Memory: Total={total_memory:.1f}GB, Reserved={reserved_memory:.1f}GB, Allocated={allocated_memory:.1f}GB")
+        
         # Тест скорости
         device = torch.device('cuda')
         x = torch.randn(1024, 1024).to(device)
@@ -205,7 +206,7 @@ def run_benchmark():
         torch.cuda.synchronize()
         elapsed = time.time() - start_time
 
-        print(".2f"
+        print(f"⚡ Matrix multiplication (100x): {elapsed*10:.2f} ms per operation")
 def main():
     parser = argparse.ArgumentParser(description="PROBS RTX 4090 Training Launcher")
     parser.add_argument("--benchmark", action="store_true", help="Запустить бенчмарк производительности")
