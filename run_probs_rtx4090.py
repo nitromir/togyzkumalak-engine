@@ -25,6 +25,20 @@ probs_path = os.path.abspath("probs-main/python_impl_generic")
 if probs_path not in sys.path:
     sys.path.insert(0, probs_path)
 
+# Добавляем путь к backend для togyzkumalak_env
+# Пробуем разные возможные пути
+possible_backend_paths = [
+    os.path.abspath("togyzkumalak-engine"),
+    os.path.abspath("gym-togyzkumalak-master/togyzkumalak-engine"),
+    os.path.abspath("../togyzkumalak-engine"),
+    os.path.abspath("../gym-togyzkumalak-master/togyzkumalak-engine"),
+]
+
+for backend_path in possible_backend_paths:
+    if os.path.exists(backend_path) and backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+        break
+
 import environments
 import helpers
 from probs_impl import probs_impl_common, probs_impl_main
