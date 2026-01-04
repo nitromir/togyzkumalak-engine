@@ -45,40 +45,43 @@ class TogyzkumalakApp {
     }
     
     /**
-     * Initialize multi-layered animated background elements for setup panel
+     * Initialize multi-layered animated background elements for all pages
      */
     initAnimatedBackground() {
-        const bgContainer = document.querySelector('.animated-bg-container');
-        if (!bgContainer) return;
-
-        const setupPanel = document.getElementById('setupPanel');
-        if (!setupPanel) return;
+        // Define all page backgrounds
+        const pages = [
+            { mode: 'playMode', prefix: 'animatedBg' },
+            { mode: 'replaysMode', prefix: 'replaysBg' },
+            { mode: 'trainingMode', prefix: 'trainingBg' },
+            { mode: 'geminiBattleMode', prefix: 'battleBg' },
+            { mode: 'analyticsMode', prefix: 'analyticsBg' }
+        ];
 
         // Define epic gaming layers with diverse symbols and effects
         const layers = [
             {
-                id: 'animatedBgLayer1',
+                suffix: 'Layer1',
                 symbols: ['→', '↑', '↗', '▶', '▲', '⇗'],
                 count: 8,
                 baseDelay: 0,
                 type: 'arrow'
             },
             {
-                id: 'animatedBgLayer2',
+                suffix: 'Layer2',
                 symbols: ['✦', '✧', '✩', '✪', '✫', '✬'],
                 count: 6,
                 baseDelay: -4,
                 type: 'star'
             },
             {
-                id: 'animatedBgLayer3',
+                suffix: 'Layer3',
                 symbols: ['⚡', '🔥', '💫', '⭐', '🌟', '✨'],
                 count: 5,
                 baseDelay: -8,
                 type: 'spark'
             },
             {
-                id: 'animatedBgLayer4',
+                suffix: 'Layer4',
                 symbols: ['◆', '◇', '◈', '◉', '◎', '●'],
                 count: 9,
                 baseDelay: -6,
@@ -86,36 +89,48 @@ class TogyzkumalakApp {
             }
         ];
 
-        // Create elements for each layer
-        layers.forEach(layer => {
-            const layerElement = document.getElementById(layer.id);
-            if (!layerElement) return;
+        // Initialize backgrounds for each page
+        pages.forEach(page => {
+            const pageElement = document.getElementById(page.mode);
+            if (!pageElement) return;
 
-            for (let i = 0; i < layer.count; i++) {
-                const el = document.createElement('div');
-                el.className = 'animated-bg-symbol';
-                el.textContent = layer.symbols[Math.floor(Math.random() * layer.symbols.length)];
-                el.setAttribute('data-type', layer.type);
-                el.style.left = `${Math.random() * 100}%`;
-                el.style.top = `${Math.random() * 100}%`;
-                el.style.animationDelay = `${layer.baseDelay + Math.random() * 12}s`;
-                el.style.transform = `rotate(${Math.random() * 360}deg)`;
-                layerElement.appendChild(el);
+            // Create elements for each layer
+            layers.forEach(layer => {
+                const layerElement = document.getElementById(page.prefix + layer.suffix);
+                if (!layerElement) return;
+
+                for (let i = 0; i < layer.count; i++) {
+                    const el = document.createElement('div');
+                    el.className = 'animated-bg-symbol';
+                    el.textContent = layer.symbols[Math.floor(Math.random() * layer.symbols.length)];
+                    el.setAttribute('data-type', layer.type);
+                    el.style.left = `${Math.random() * 100}%`;
+                    el.style.top = `${Math.random() * 100}%`;
+                    el.style.animationDelay = `${layer.baseDelay + Math.random() * 12}s`;
+                    el.style.transform = `rotate(${Math.random() * 360}deg)`;
+                    layerElement.appendChild(el);
+                }
+            });
+
+            // Observer for play mode (game start/stop)
+            if (page.mode === 'playMode') {
+                const bgContainer = pageElement.querySelector('.animated-bg-container');
+                const setupPanel = document.getElementById('setupPanel');
+
+                if (bgContainer && setupPanel) {
+                    const observer = new MutationObserver((mutations) => {
+                        if (setupPanel.classList.contains('hidden')) {
+                            bgContainer.style.display = 'none';
+                            document.body.classList.add('game-active');
+                        } else {
+                            bgContainer.style.display = 'block';
+                            document.body.classList.remove('game-active');
+                        }
+                    });
+                    observer.observe(setupPanel, { attributes: true, attributeFilter: ['class'] });
+                }
             }
         });
-
-        // Stop animation when game starts
-        const observer = new MutationObserver((mutations) => {
-            if (setupPanel.classList.contains('hidden')) {
-                bgContainer.style.display = 'none';
-                document.body.classList.add('game-active');
-            } else {
-                bgContainer.style.display = 'block';
-                document.body.classList.remove('game-active');
-            }
-        });
-
-        observer.observe(setupPanel, { attributes: true, attributeFilter: ['class'] });
     }
 
     /**
