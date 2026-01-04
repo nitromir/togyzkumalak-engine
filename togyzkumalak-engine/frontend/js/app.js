@@ -1074,47 +1074,43 @@ class TogyzkumalakApp {
     formatAnalysis(text) {
         if (!text) return '';
 
-        // Split text into paragraphs (double newlines or markdown sections)
-        const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
-
-        if (paragraphs.length <= 1) {
-            // Single paragraph - format normally
-            return this.formatSingleParagraph(text);
-        }
-
-        // Multiple paragraphs - format each in separate rounded box
-        return paragraphs.map(paragraph => {
-            const formatted = this.formatSingleParagraph(paragraph.trim());
-            return `<div class="analysis-paragraph">${formatted}</div>`;
-        }).join('');
-    }
-
-    formatSingleParagraph(text) {
         // IMPORTANT: Escape HTML from Gemini output to avoid accidental tag interpretation
         // (which can visually "truncate" the output if Gemini returns "<...>").
         const escaped = this.escapeHtml(text);
 
-        return escaped
-            // Handle markdown ## headings first (new format)
-            .replace(/^## (📊.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
-            .replace(/^## (🔍.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
-            .replace(/^## (🎯.*?)$/gm, '<h4 class="analysis-heading highlight">$1</h4>')
-            .replace(/^## (⚠️.*?)$/gm, '<h4 class="analysis-heading warning">$1</h4>')
-            .replace(/^## (💡.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
-            .replace(/^## (📋.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
-            // Newlines to breaks
-            .replace(/\n/g, '<br>')
-            // Bold text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            // Legacy format support
-            .replace(/EVALUATION:/g, '<strong>📊 ОЦЕНКА:</strong>')
-            .replace(/ОЦЕНКА:/g, '<strong>📊 ОЦЕНКА:</strong>')
-            .replace(/BEST MOVE:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
-            .replace(/ЛУЧШИЙ ХОД:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
-            .replace(/РЕКОМЕНДУЕМЫЙ ХОД:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
-            .replace(/ОБОСНОВАНИЕ:/g, '<strong>💡 ОБОСНОВАНИЕ:</strong>')
-            .replace(/ПОЧЕМУ ЭТОТ ХОД\?/g, '<strong>💡 ПОЧЕМУ ЭТОТ ХОД?</strong>')
-            .replace(/KEY FACTORS:/g, '<strong>🔑 КЛЮЧЕВЫЕ ФАКТОРЫ:</strong>')
+        // Split into paragraphs (separated by double newlines)
+        const paragraphs = escaped.split(/\n\s*\n/).filter(p => p.trim());
+
+        // Process each paragraph separately
+        const formattedParagraphs = paragraphs.map(paragraph => {
+            // Process markdown headings and formatting within each paragraph
+            const processed = paragraph
+                // Handle markdown ## headings first (new format)
+                .replace(/^## (📊.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
+                .replace(/^## (🔍.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
+                .replace(/^## (🎯.*?)$/gm, '<h4 class="analysis-heading highlight">$1</h4>')
+                .replace(/^## (⚠️.*?)$/gm, '<h4 class="analysis-heading warning">$1</h4>')
+                .replace(/^## (💡.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
+                .replace(/^## (📋.*?)$/gm, '<h4 class="analysis-heading">$1</h4>')
+                // Single newlines to breaks
+                .replace(/\n/g, '<br>')
+                // Bold text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Legacy format support
+                .replace(/EVALUATION:/g, '<strong>📊 ОЦЕНКА:</strong>')
+                .replace(/ОЦЕНКА:/g, '<strong>📊 ОЦЕНКА:</strong>')
+                .replace(/BEST MOVE:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
+                .replace(/ЛУЧШИЙ ХОД:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
+                .replace(/РЕКОМЕНДУЕМЫЙ ХОД:/g, '<strong>🎯 РЕКОМЕНДУЕМЫЙ ХОД:</strong>')
+                .replace(/ОБОСНОВАНИЕ:/g, '<strong>💡 ОБОСНОВАНИЕ:</strong>')
+                .replace(/ПОЧЕМУ ЭТОТ ХОД\?/g, '<strong>💡 ПОЧЕМУ ЭТОТ ХОД?</strong>')
+                .replace(/KEY FACTORS:/g, '<strong>🔑 КЛЮЧЕВЫЕ ФАКТОРЫ:</strong>');
+
+            // Wrap each paragraph in a styled container
+            return `<div class="analysis-paragraph">${processed}</div>`;
+        });
+
+        return formattedParagraphs.join('');
             .replace(/КЛЮЧЕВЫЕ ФАКТОРЫ:/g, '<strong>🔑 КЛЮЧЕВЫЕ ФАКТОРЫ:</strong>')
             .replace(/STRATEGIC ANALYSIS:/g, '<strong>🔍 СТРАТЕГИЧЕСКИЙ РАЗБОР:</strong>')
             .replace(/СТРАТЕГИЧЕСКИЙ АНАЛИЗ:/g, '<strong>🔍 СТРАТЕГИЧЕСКИЙ РАЗБОР:</strong>')
