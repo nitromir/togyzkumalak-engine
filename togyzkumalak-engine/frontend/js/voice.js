@@ -12,6 +12,7 @@ class VoiceService {
         this.isPaused = false;
         this.isRecording = false;
         this.playbackId = 0;
+        this.voiceMode = 'hybrid'; // 'hybrid', 'fast', 'cool'
         
         // Native Speech Synthesis
         this.synth = window.speechSynthesis;
@@ -80,6 +81,24 @@ class VoiceService {
             this.elements.recordBtn.addEventListener('mouseup', () => this.stopRecording());
             this.elements.recordBtn.addEventListener('mouseleave', () => { if (this.isRecording) this.stopRecording(); });
         }
+
+        // Voice mode selector
+        const voiceModeSelect = document.getElementById('voiceModeSelect');
+        if (voiceModeSelect) {
+            voiceModeSelect.value = this.voiceMode;
+            voiceModeSelect.addEventListener('change', (e) => {
+                this.voiceMode = e.target.value;
+                localStorage.setItem('voiceMode', this.voiceMode);
+                console.log(`[Voice] Mode changed to: ${this.voiceMode}`);
+            });
+        }
+
+        // Load saved voice mode
+        const savedMode = localStorage.getItem('voiceMode');
+        if (savedMode) {
+            this.voiceMode = savedMode;
+            if (voiceModeSelect) voiceModeSelect.value = savedMode;
+        }
     }
     
     toggleVoice() {
@@ -129,16 +148,29 @@ class VoiceService {
      */
     queueSpeak(sentence) {
         // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:125',message:'queueSpeak',data:{sentence,sentenceIndex:this.sentenceIndex,playbackId:this.playbackId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'1'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:125',message:'queueSpeak',data:{sentence,sentenceIndex:this.sentenceIndex,playbackId:this.playbackId,voiceMode:this.voiceMode},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'1'})}).catch(()=>{});
         // #endregion
         if (!this.isVoiceEnabled || !sentence) return;
-        
-        // First 4 sentences are fast (Native) - increased from 3 as requested
-        if (this.sentenceIndex < 4) {
-            this.speakNative(sentence, this.playbackId);
-        } else {
-            // Rest are high quality (Google)
-            this.speakGoogle(sentence, this.playbackId);
+
+        // Choose voice method based on selected mode
+        switch (this.voiceMode) {
+            case 'fast':
+                // Only native speech synthesis
+                this.speakNative(sentence, this.playbackId);
+                break;
+            case 'cool':
+                // Only Gemini TTS
+                this.speakGoogle(sentence, this.playbackId);
+                break;
+            case 'hybrid':
+            default:
+                // Hybrid: First sentences fast, rest cool (original logic)
+                if (this.sentenceIndex < 4) {
+                    this.speakNative(sentence, this.playbackId);
+                } else {
+                    this.speakGoogle(sentence, this.playbackId);
+                }
+                break;
         }
         this.sentenceIndex++;
     }

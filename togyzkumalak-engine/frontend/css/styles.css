@@ -1031,6 +1031,27 @@ body::after {
     opacity: 0.6;
 }
 
+.voice-mode-select {
+    font-size: 12px;
+    padding: 4px 8px;
+    height: 32px;
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    cursor: pointer;
+    min-width: 120px;
+}
+
+.voice-mode-select:hover {
+    background: var(--bg-hover);
+}
+
+.voice-mode-select:focus {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 1px;
+}
+
 .voice-controls .btn-icon.recording {
     background: #e74c3c;
     animation: pulse-record 1s infinite;
