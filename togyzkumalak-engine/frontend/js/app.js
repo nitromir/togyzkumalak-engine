@@ -59,19 +59,19 @@ class TogyzkumalakApp {
             {
                 id: 'animatedBgLayer1',
                 symbols: ['→', '↑', '↗'],
-                count: 12,
+                count: 8,
                 baseDelay: 0
             },
             {
                 id: 'animatedBgLayer2',
                 symbols: ['+', '/', '\\', '×'],
-                count: 8,
+                count: 6,
                 baseDelay: -5
             },
             {
                 id: 'animatedBgLayer3',
                 symbols: ['→', '↑', '↗', '+', '/', '\\', '×'],
-                count: 10,
+                count: 7,
                 baseDelay: -10
             }
         ];
