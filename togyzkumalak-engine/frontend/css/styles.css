@@ -4480,6 +4480,24 @@ body::after {
     align-items: flex-start;
 }
 
+/* Only show on play mode and desktop */
+#playMode .setup-content-wrapper {
+    display: flex;
+}
+
+/* Hide on other modes */
+#replaysMode .setup-content-wrapper,
+#trainingMode .setup-content-wrapper,
+#geminiBattleMode .setup-content-wrapper,
+#analyticsMode .setup-content-wrapper {
+    display: none !important;
+}
+
+.setup-main-content {
+    flex: 1;
+    min-width: 0; /* Allow shrinking */
+}
+
 .ai-info-panel {
     flex: 0 0 320px;
     padding: 20px;
@@ -4559,15 +4577,30 @@ body::after {
     font-size: 14px;
 }
 
-/* Desktop only - hide on mobile and make wrapper single column */
-@media (max-width: 768px) {
+/* Desktop layout adjustments */
+@media (min-width: 769px) {
     .ai-info-panel {
+        display: none; /* Will be shown when AI level selected */
+    }
+}
+
+/* Mobile layout - hide desktop wrapper and show mobile panel */
+@media (max-width: 768px) {
+    .setup-content-wrapper {
+        display: block !important;
+    }
+
+    .ai-info-panel.desktop-only {
         display: none !important;
     }
 
-    .setup-content-wrapper {
-        flex-direction: column;
-        gap: 20px;
+    .ai-info-panel.mobile-only {
+        display: none; /* Will be shown when AI level selected */
+        margin-top: 20px;
+    }
+
+    .setup-main-content {
+        width: 100%;
     }
 }
 

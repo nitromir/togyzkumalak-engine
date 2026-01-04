@@ -178,7 +178,7 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
             try:
                 tmp.set_start_method('spawn', force=True)
             except RuntimeError: pass
-            
+
             mp_ctx = tmp.get_context('spawn')
             results_queue = mp_ctx.Queue()
             processes = []
@@ -215,9 +215,9 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
                     continue
                     
                 replay_episodes, episodes_stats = res
-                for replay_episode in replay_episodes:
-                    experience_replay.append_replay_episode(replay_episode)
-                stats += episodes_stats
+                    for replay_episode in replay_episodes:
+                        experience_replay.append_replay_episode(replay_episode)
+                    stats += episodes_stats
 
             for p in processes:
                 p.join()
@@ -226,7 +226,7 @@ def go_self_play(value_model: helpers.BaseValueModel, self_learning_model: helpe
         raise RuntimeError("Self-play failed to collect any games. Check worker errors above.")
 
     if stats['greedy_action_cnt'] > 0:
-        helpers.TENSORBOARD.append_scalar('greedy_action_freq', stats['greedy_action_sum'] / stats['greedy_action_cnt'])
+    helpers.TENSORBOARD.append_scalar('greedy_action_freq', stats['greedy_action_sum'] / stats['greedy_action_cnt'])
 
     # Возвращаем модели на исходный девайс
     value_model.to(get_dataset_device)
