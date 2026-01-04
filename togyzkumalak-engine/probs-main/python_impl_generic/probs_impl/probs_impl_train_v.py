@@ -23,32 +23,32 @@ def train_value_model(value_model: helpers.BaseValueModel, device, optimizer, ex
     dataloader = helpers.torch_create_dataloader(dataset, device, batch_size=batch_size, shuffle=True, drop_last=True)
 
     predictions = defaultdict(list)
-    
+
     # Множественные эпохи для лучшего обучения
     for epoch in range(num_epochs):
         epoch_losses = []
-        for batch_input in dataloader:
-            # for inp_tensor in batch_input: print(f"[train_value_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}, {inp_tensor.device}")
+    for batch_input in dataloader:
+        # for inp_tensor in batch_input: print(f"[train_value_model] inp_tensor {inp_tensor.shape} {inp_tensor.dtype}, {inp_tensor.device}")
 
-            inputs = batch_input[:-1]
-            actual_values = batch_input[-1].view((-1, 1)).float()
+        inputs = batch_input[:-1]
+        actual_values = batch_input[-1].view((-1, 1)).float()
 
-            pred_state_value = value_model.forward(*inputs)
+        pred_state_value = value_model.forward(*inputs)
 
-            loss = torch.nn.functional.mse_loss(pred_state_value, actual_values)
+        loss = torch.nn.functional.mse_loss(pred_state_value, actual_values)
 
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
             # Gradient clipping для предотвращения gradient explosion
             grad_norm = torch.nn.utils.clip_grad_norm_(value_model.parameters(), max_norm=5.0)
-            optimizer.step()
+        optimizer.step()
 
-            actual_values = actual_values.detach().cpu().numpy()
-            pred_state_value = pred_state_value.detach().cpu().numpy()
-            for i in range(len(inputs)):
-                actual = float(actual_values[i, 0])
-                pred = float(pred_state_value[i, 0])
-                predictions[actual].append(pred)
+        actual_values = actual_values.detach().cpu().numpy()
+        pred_state_value = pred_state_value.detach().cpu().numpy()
+        for i in range(len(inputs)):
+            actual = float(actual_values[i, 0])
+            pred = float(pred_state_value[i, 0])
+            predictions[actual].append(pred)
 
             epoch_losses.append(loss.item())
             helpers.TENSORBOARD.append_scalar('value_loss', loss.item())

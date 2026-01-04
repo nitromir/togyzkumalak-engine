@@ -712,26 +712,6 @@ body::after {
     color: var(--accent-primary);
 }
 
-/* Analysis paragraphs styling */
-.analysis-paragraph {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    backdrop-filter: blur(10px);
-    transition: all 0.2s ease;
-}
-
-.analysis-paragraph:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
-}
-
-.analysis-paragraph:last-child {
-    margin-bottom: 0;
-}
-
 .analysis-content .analysis-heading {
     display: block;
     margin: 16px 0 8px 0;
@@ -758,6 +738,24 @@ body::after {
     background: linear-gradient(90deg, rgba(255, 136, 0, 0.15), transparent);
     border-left-color: var(--accent-orange);
     color: var(--accent-orange);
+}
+
+.analysis-content .analysis-paragraph {
+    margin: 12px 0;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.analysis-content .analysis-paragraph:first-child {
+    margin-top: 0;
+}
+
+.analysis-content .analysis-paragraph:last-child {
+    margin-bottom: 0;
 }
 
 /* Styled buttons for Analyze and Suggest */
