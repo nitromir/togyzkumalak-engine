@@ -607,6 +607,21 @@ body::after {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+}
+
+.board-wrapper.classic-active::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120%;
+    height: 120%;
+    background: rgba(200, 200, 200, 0.85);
+    border-radius: 50%;
+    z-index: -1;
+    pointer-events: none;
 }
 
 .board-wrapper.classic-active.board-glow {
