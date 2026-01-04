@@ -637,6 +637,14 @@ body::after {
     max-height: 150px;
     display: flex;
     flex-direction: column;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.5s ease;
+}
+
+.history-panel.lazy-loaded {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .history-panel h3 {
@@ -659,6 +667,29 @@ body::after {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.5s ease;
+}
+
+.analysis-panel.lazy-loaded {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Initially hide lazy elements */
+.history-panel,
+.analysis-panel {
+    opacity: 0 !important;
+    transform: translateY(30px) !important;
+}
+
+/* Show them when lazy-loaded class is added */
+.history-panel.lazy-loaded,
+.analysis-panel.lazy-loaded {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+}
 }
 
 .analysis-controls {
@@ -4018,36 +4049,74 @@ body::after {
 
 .confidence-selector-group {
     display: flex;
-    gap: 0;
+    gap: 2px;
     align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    padding: 4px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
 .confidence-selector-group #btnToggleConfidence {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.confidence-selector-group #btnToggleConfidence:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .confidence-select {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
-    background: #333333;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(5px);
     cursor: pointer;
     font-size: 13px;
-    padding: 0 10px;
-    height: 100%;
+    padding: 8px 12px;
+    height: 36px;
+    color: rgba(255, 255, 255, 0.9);
+    transition: all 0.3s ease;
+    min-width: 140px;
 }
 
 .confidence-select:hover {
-    background: #444444;
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.confidence-select:focus {
+    outline: none;
+    border-color: rgba(0, 242, 255, 0.5);
+    box-shadow: 0 0 0 3px rgba(0, 242, 255, 0.1);
 }
 
 .confidence-legend {
     display: flex;
-    gap: 15px;
-    font-size: 11px;
-    color: var(--text-muted);
+    gap: 20px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
     margin-left: 10px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.3s ease;
+}
+
+.confidence-legend:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateY(-1px);
 }
 
 /* ============================================
@@ -4188,22 +4257,22 @@ body::after {
 
 /* Layer 1: Fast moving arrows */
 .animated-bg-layer-1 .animated-bg-symbol {
-    font-size: 36px;
-    animation: float-diagonal-fast 15s linear infinite;
+    font-size: 120px;
+    animation: float-diagonal-fast 20s linear infinite;
 }
 
 /* Layer 2: Medium speed pluses and slashes */
 .animated-bg-layer-2 .animated-bg-symbol {
-    font-size: 48px;
-    animation: float-diagonal-medium 25s linear infinite;
-    animation-delay: -8s;
+    font-size: 160px;
+    animation: float-diagonal-medium 30s linear infinite;
+    animation-delay: -10s;
 }
 
 /* Layer 3: Slow moving mixed symbols */
 .animated-bg-layer-3 .animated-bg-symbol {
-    font-size: 42px;
-    animation: float-diagonal-slow 35s linear infinite;
-    animation-delay: -15s;
+    font-size: 140px;
+    animation: float-diagonal-slow 40s linear infinite;
+    animation-delay: -20s;
 }
 
 .animated-bg-symbol {
@@ -4215,51 +4284,57 @@ body::after {
 
 @keyframes float-diagonal-fast {
     0% {
-        transform: translate(-50px, 100vh) rotate(0deg) scale(0.8);
+        transform: translate(-100px, 100vh) rotate(0deg) scale(0.5);
         opacity: 0;
     }
-    10% {
-        opacity: 0.08;
+    20% {
+        opacity: 0.1;
+        transform: translate(20vw, 60vh) rotate(180deg) scale(0.8);
     }
-    90% {
-        opacity: 0.08;
+    80% {
+        opacity: 0.1;
+        transform: translate(60vw, 20vh) rotate(540deg) scale(1.0);
     }
     100% {
-        transform: translate(110vw, -100px) rotate(720deg) scale(1.2);
+        transform: translate(120vw, -50px) rotate(720deg) scale(1.2);
         opacity: 0;
     }
 }
 
 @keyframes float-diagonal-medium {
     0% {
-        transform: translate(-30px, 100vh) rotate(0deg);
+        transform: translate(-80px, 100vh) rotate(0deg) scale(0.6);
         opacity: 0;
     }
-    10% {
-        opacity: 0.06;
+    20% {
+        opacity: 0.08;
+        transform: translate(15vw, 65vh) rotate(120deg) scale(0.9);
     }
-    90% {
-        opacity: 0.06;
+    80% {
+        opacity: 0.08;
+        transform: translate(55vw, 25vh) rotate(300deg) scale(1.1);
     }
     100% {
-        transform: translate(105vw, -80px) rotate(360deg);
+        transform: translate(115vw, -40px) rotate(360deg) scale(0.9);
         opacity: 0;
     }
 }
 
 @keyframes float-diagonal-slow {
     0% {
-        transform: translate(-40px, 100vh) rotate(0deg) scale(1.1);
+        transform: translate(-120px, 100vh) rotate(0deg) scale(0.7);
         opacity: 0;
     }
-    10% {
-        opacity: 0.04;
+    20% {
+        opacity: 0.06;
+        transform: translate(10vw, 70vh) rotate(60deg) scale(1.0);
     }
-    90% {
-        opacity: 0.04;
+    80% {
+        opacity: 0.06;
+        transform: translate(50vw, 30vh) rotate(180deg) scale(0.8);
     }
     100% {
-        transform: translate(115vw, -120px) rotate(180deg) scale(0.9);
+        transform: translate(110vw, -60px) rotate(180deg) scale(0.8);
         opacity: 0;
     }
 }

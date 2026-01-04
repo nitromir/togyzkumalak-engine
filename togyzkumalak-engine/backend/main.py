@@ -602,10 +602,21 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
 @app.get("/api/replays")
 async def get_replays():
     """Get list of available replays from gym simulations."""
-    replay_file = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), 
-        "..", "..", "visualizer", "replay.json"
-    )
+    # Try multiple possible paths for the replay file
+    possible_paths = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "visualizer", "replay.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "visualizer", "replay.json"),
+        "visualizer/replay.json"
+    ]
+
+    replay_file = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            replay_file = path
+            break
+
+    if not replay_file:
+        return {"replays": [], "error": "No replay file found"}
     
     if not os.path.exists(replay_file):
         return {"replays": [], "error": "No replay file found"}

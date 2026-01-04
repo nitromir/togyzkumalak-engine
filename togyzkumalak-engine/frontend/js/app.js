@@ -59,19 +59,19 @@ class TogyzkumalakApp {
             {
                 id: 'animatedBgLayer1',
                 symbols: ['→', '↑', '↗'],
-                count: 8,
+                count: 4,
                 baseDelay: 0
             },
             {
                 id: 'animatedBgLayer2',
                 symbols: ['+', '/', '\\', '×'],
-                count: 6,
+                count: 3,
                 baseDelay: -5
             },
             {
                 id: 'animatedBgLayer3',
                 symbols: ['→', '↑', '↗', '+', '/', '\\', '×'],
-                count: 7,
+                count: 4,
                 baseDelay: -10
             }
         ];
@@ -1346,7 +1346,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize panel expand buttons
     initPanelExpandButtons();
-    
+
+    // Initialize lazy loading for side panels
+    initLazyLoading();
+
     // Initialize theme switcher
     initThemeSwitcher();
 });
@@ -1509,6 +1512,39 @@ function handleBackdropClick(e) {
     if (e.target.id === 'fullscreenModal') {
         closeFullscreenModal();
     }
+}
+
+/**
+ * Initialize lazy loading for side panel elements
+ */
+function initLazyLoading() {
+    const lazyElements = document.querySelectorAll('.history-panel, .analysis-panel');
+
+    if (lazyElements.length === 0) return;
+
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                // Add a small delay for smooth animation
+                setTimeout(() => {
+                    entry.target.classList.add('lazy-loaded');
+                }, 100);
+
+                // Stop observing this element
+                observer.unobserve(entry.target);
+            }
+        });
+    }, observerOptions);
+
+    // Start observing all lazy elements
+    lazyElements.forEach(element => {
+        observer.observe(element);
+    });
 }
 
 // Expose to global scope for inline onclick handlers
