@@ -13,9 +13,6 @@ class VoiceService {
         this.isRecording = false;
         this.playbackId = 0;
         
-        // Voice mode: 'fast' (Native) or 'cool' (Google Gemini TTS)
-        this.voiceMode = 'fast'; // Default to fast
-        
         // Native Speech Synthesis
         this.synth = window.speechSynthesis;
         this.nativeVoice = null;
@@ -76,12 +73,7 @@ class VoiceService {
     }
     
     setupEventListeners() {
-        if (this.elements.toggleBtn) {
-            this.elements.toggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.showVoiceModeMenu();
-            });
-        }
+        if (this.elements.toggleBtn) this.elements.toggleBtn.addEventListener('click', () => this.toggleVoice());
         if (this.elements.pauseBtn) this.elements.pauseBtn.addEventListener('click', () => this.togglePause());
         if (this.elements.recordBtn) {
             this.elements.recordBtn.addEventListener('mousedown', () => this.startRecording());
@@ -90,87 +82,10 @@ class VoiceService {
         }
     }
     
-    showVoiceModeMenu() {
-        // Remove existing menu if any
-        const existingMenu = document.getElementById('voiceModeMenu');
-        if (existingMenu) {
-            existingMenu.remove();
-            return;
-        }
-        
-        // Create menu
-        const menu = document.createElement('div');
-        menu.id = 'voiceModeMenu';
-        menu.className = 'voice-mode-menu';
-        menu.innerHTML = `
-            <div class="voice-mode-option ${this.isVoiceEnabled ? '' : 'disabled'}" data-mode="fast">
-                <span class="mode-icon">⚡</span>
-                <span class="mode-label">Fast (Native)</span>
-                <span class="mode-desc">Быстрая озвучка</span>
-            </div>
-            <div class="voice-mode-option ${this.isVoiceEnabled ? '' : 'disabled'}" data-mode="cool">
-                <span class="mode-icon">🎤</span>
-                <span class="mode-label">Cool (Gemini)</span>
-                <span class="mode-desc">Высокое качество</span>
-            </div>
-            <div class="voice-mode-divider"></div>
-            <div class="voice-mode-option" data-action="toggle">
-                <span class="mode-icon">${this.isVoiceEnabled ? '🔇' : '🔊'}</span>
-                <span class="mode-label">${this.isVoiceEnabled ? 'Выключить' : 'Включить'}</span>
-            </div>
-        `;
-        
-        // Position menu near button
-        const btn = this.elements.toggleBtn;
-        const rect = btn.getBoundingClientRect();
-        menu.style.position = 'fixed';
-        menu.style.top = `${rect.bottom + 5}px`;
-        menu.style.left = `${rect.left}px`;
-        menu.style.zIndex = '10000';
-        
-        document.body.appendChild(menu);
-        
-        // Handle clicks
-        menu.querySelectorAll('.voice-mode-option').forEach(option => {
-            option.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const mode = option.dataset.mode;
-                const action = option.dataset.action;
-                
-                if (action === 'toggle') {
-                    this.toggleVoice();
-                } else if (mode && !option.classList.contains('disabled')) {
-                    this.voiceMode = mode;
-                    this.updateVoiceModeIndicator();
-                }
-                
-                menu.remove();
-            });
-        });
-        
-        // Close menu on outside click
-        setTimeout(() => {
-            document.addEventListener('click', function closeMenu(e) {
-                if (!menu.contains(e.target) && e.target !== btn) {
-                    menu.remove();
-                    document.removeEventListener('click', closeMenu);
-                }
-            });
-        }, 0);
-    }
-    
-    updateVoiceModeIndicator() {
-        if (this.elements.toggleBtn) {
-            const icon = this.elements.toggleBtn.querySelector('.voice-icon');
-            if (icon) {
-                icon.setAttribute('data-mode', this.voiceMode);
-            }
-        }
-    }
-    
     toggleVoice() {
         this.isVoiceEnabled = !this.isVoiceEnabled;
         if (this.elements.toggleBtn) {
+            // Toggle class for SVG icon visibility (no text change needed)
             this.elements.toggleBtn.classList.toggle('voice-on', this.isVoiceEnabled);
         }
         if (!this.isVoiceEnabled) this.stopPlayback();
@@ -214,15 +129,15 @@ class VoiceService {
      */
     queueSpeak(sentence) {
         // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:125',message:'queueSpeak',data:{sentence,sentenceIndex:this.sentenceIndex,playbackId:this.playbackId,voiceMode:this.voiceMode},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'1'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:125',message:'queueSpeak',data:{sentence,sentenceIndex:this.sentenceIndex,playbackId:this.playbackId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'1'})}).catch(()=>{});
         // #endregion
         if (!this.isVoiceEnabled || !sentence) return;
         
-        // Use selected voice mode for all sentences
-        if (this.voiceMode === 'fast') {
+        // First 4 sentences are fast (Native) - increased from 3 as requested
+        if (this.sentenceIndex < 4) {
             this.speakNative(sentence, this.playbackId);
         } else {
-            // Cool mode: use Google Gemini TTS with chunking
+            // Rest are high quality (Google)
             this.speakGoogle(sentence, this.playbackId);
         }
         this.sentenceIndex++;

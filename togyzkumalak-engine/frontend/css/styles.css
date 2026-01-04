@@ -1058,55 +1058,6 @@ body::after {
 }
 
 /* Modern Voice Toggle Button */
-/* Voice Mode Menu */
-.voice-mode-menu {
-    background: var(--bg-secondary);
-    border: 1px solid var(--accent-primary);
-    border-radius: 8px;
-    padding: 8px;
-    min-width: 200px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.voice-mode-option {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.voice-mode-option:hover:not(.disabled) {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.voice-mode-option.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.voice-mode-option .mode-icon {
-    font-size: 20px;
-}
-
-.voice-mode-option .mode-label {
-    flex: 1;
-    font-weight: 500;
-}
-
-.voice-mode-option .mode-desc {
-    font-size: 12px;
-    opacity: 0.7;
-}
-
-.voice-mode-divider {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.1);
-    margin: 4px 0;
-}
-
 .btn-voice-toggle {
     position: relative;
 }
@@ -3403,7 +3354,7 @@ body::after {
 }
 
 /* Gemini Level Button */
-.level-btn.level-gemini { background: linear-gradient(135deg, rgba(66, 133, 244, 0.85) 0%, rgba(52, 168, 83, 0.85) 50%, rgba(251, 188, 5, 0.85) 75%, rgba(234, 67, 53, 0.85) 100%); border: 2px solid rgba(66, 133, 244, 0.85); }
+.level-btn.level-gemini { background: linear-gradient(135deg, rgba(66, 133, 244, 0.85) 0%, rgba(52, 168, 83, 0.85) 50%, rgba(251, 188, 5, 0.85) 75%, rgba(234, 67, 53, 0.85) 100%); border: 2px solid #4285f4; }
 .level-btn.level-gemini:hover { transform: scale(1.08); box-shadow: 0 0 20px rgba(66, 133, 244, 0.5); }
 .level-btn.level-gemini.active { box-shadow: 0 0 25px rgba(66, 133, 244, 0.8); border-color: #fff; }
 
@@ -3810,45 +3761,6 @@ body::after {
     gap: 10px;
 }
 
-/* Animated Background for Setup Panel */
-.setup-panel {
-    position: relative;
-    overflow: hidden;
-}
-
-.animated-bg-elements {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 0;
-}
-
-.animated-bg-symbol {
-    position: absolute;
-    font-size: 24px;
-    color: var(--accent-primary);
-    opacity: 0.15;
-    animation: moveToCorner 8s linear infinite;
-    font-weight: bold;
-}
-
-@keyframes moveToCorner {
-    0% {
-        transform: translate(0, 0) rotate(0deg);
-    }
-    100% {
-        transform: translate(calc(100vw - 100px), calc(-100vh + 100px)) rotate(360deg);
-    }
-}
-
-.setup-panel > * {
-    position: relative;
-    z-index: 1;
-}
-
 /* Active Model Info Box */
 .active-model-info {
     display: flex;
@@ -4226,6 +4138,75 @@ body::after {
 .move-list, .analysis-content, .checkpoints-list, .replay-list, .sessions-list {
     max-height: 500px;
     overflow-y: auto;
+}
+
+/* ============================================
+   SETUP PANEL CHALLENGE MESSAGE
+   ============================================ */
+
+.challenge-message {
+    background: linear-gradient(135deg, rgba(0, 242, 255, 0.1), rgba(112, 0, 255, 0.1));
+    border: 1px solid rgba(0, 242, 255, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.challenge-message p {
+    margin: 8px 0;
+    color: var(--text-primary);
+}
+
+.challenge-message strong {
+    color: var(--accent-primary);
+    font-size: 16px;
+}
+
+/* ============================================
+   ANIMATED BACKGROUND ELEMENTS
+   ============================================ */
+
+.animated-bg-elements {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: -1;
+    overflow: hidden;
+}
+
+.animated-bg-symbol {
+    position: absolute;
+    font-size: 24px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.1);
+    animation: float-diagonal 20s linear infinite;
+    user-select: none;
+}
+
+@keyframes float-diagonal {
+    0% {
+        transform: translate(0, 100vh) rotate(0deg);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.1;
+    }
+    90% {
+        opacity: 0.1;
+    }
+    100% {
+        transform: translate(100vw, -50px) rotate(360deg);
+        opacity: 0;
+    }
+}
+
+/* Hide animated background when game starts */
+.game-active .animated-bg-elements {
+    display: none;
 }
 
 /* Принудительно включаем скролл на body */

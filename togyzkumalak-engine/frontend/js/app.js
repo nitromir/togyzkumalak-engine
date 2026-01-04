@@ -40,7 +40,8 @@ class TogyzkumalakApp {
         this.loadEloStats();
         this.loadConfidenceSetting();  // Apply saved preference at startup
         this.loadAutoAnalyzeSetting(); // Load auto-analyze preference
-        this.initAnimatedBackground();
+        this.loadActiveModelInfo();    // Load active model info for setup panel
+        this.initAnimatedBackground(); // Initialize animated background
     }
     
     /**
@@ -49,14 +50,14 @@ class TogyzkumalakApp {
     initAnimatedBackground() {
         const bgContainer = document.getElementById('animatedBgElements');
         if (!bgContainer) return;
-        
+
         const setupPanel = document.getElementById('setupPanel');
         if (!setupPanel) return;
-        
+
         // Create animated elements
         const symbols = ['→', '↑', '↗', '+', '/', '\\', '×'];
         const count = 15;
-        
+
         for (let i = 0; i < count; i++) {
             const el = document.createElement('div');
             el.className = 'animated-bg-symbol';
@@ -67,17 +68,45 @@ class TogyzkumalakApp {
             el.style.opacity = `${0.1 + Math.random() * 0.2}`;
             bgContainer.appendChild(el);
         }
-        
+
         // Stop animation when game starts
         const observer = new MutationObserver((mutations) => {
             if (setupPanel.classList.contains('hidden')) {
                 bgContainer.style.display = 'none';
+                document.body.classList.add('game-active');
             } else {
                 bgContainer.style.display = 'block';
+                document.body.classList.remove('game-active');
             }
         });
-        
+
         observer.observe(setupPanel, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    /**
+     * Load and display active model info in setup panel.
+     */
+    async loadActiveModelInfo() {
+        try {
+            const response = await fetch('/api/ai/model-info?level=5');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const modelNameEl = document.getElementById('activeModelName');
+            
+            if (modelNameEl) {
+                const typeIcon = data.type === 'alphazero' ? '🦾' : '🧠';
+                const name = data.name || 'default (встроенная)';
+                modelNameEl.textContent = `${typeIcon} ${name}`;
+                
+                // Add styling based on type
+                modelNameEl.className = 'model-name ' + (data.type === 'alphazero' ? 'alphazero' : 'gym');
+            }
+        } catch (e) {
+            console.error('Error loading active model info:', e);
+            const modelNameEl = document.getElementById('activeModelName');
+            if (modelNameEl) modelNameEl.textContent = '🧠 default';
+        }
     }
 
     /**
