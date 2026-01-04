@@ -296,7 +296,9 @@ class GeminiAnalyzer:
         Analyze the current position and yield text chunks (streaming).
         Uses a queue to properly async iterate over synchronous Gemini stream.
         """
+        print(f"[Gemini Analysis] Starting position analysis")
         if not self.client:
+            print(f"[Gemini Analysis] Client not available")
             yield "Gemini not configured."
             return
         
@@ -307,7 +309,7 @@ class GeminiAnalyzer:
         
         try:
             gen_cfg = self._build_generate_config(
-                max_output_tokens=600,  # Short response: ~3 paragraphs
+                max_output_tokens=4000,  # Increased for comprehensive analysis: ~20 paragraphs
                 temperature=0.6,
             )
 
@@ -379,7 +381,7 @@ class GeminiAnalyzer:
         
         try:
             gen_cfg = self._build_generate_config(
-                max_output_tokens=500,  # Short response: ~3 paragraphs
+                max_output_tokens=3000,  # Increased for detailed move suggestions: ~15 paragraphs
                 temperature=0.4,
             )
             
