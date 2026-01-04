@@ -4471,10 +4471,10 @@ body::after {
 }
 
 /* ============================================
-   GAME SETUP CONTAINER & AI INFO PANEL
+   SETUP CONTENT WRAPPER & AI INFO PANEL
    ============================================ */
 
-.game-setup-container {
+.setup-content-wrapper {
     display: flex;
     gap: 30px;
     align-items: flex-start;
@@ -4559,13 +4559,13 @@ body::after {
     font-size: 14px;
 }
 
-/* Desktop only - hide on mobile and make container single column */
+/* Desktop only - hide on mobile and make wrapper single column */
 @media (max-width: 768px) {
     .ai-info-panel {
         display: none !important;
     }
 
-    .game-setup-container {
+    .setup-content-wrapper {
         flex-direction: column;
         gap: 20px;
     }
