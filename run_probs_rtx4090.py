@@ -172,7 +172,7 @@ def run_optimized_training():
         probs_impl_main.go_train(config, device, model_keeper, enemy)
 
         elapsed = time.time() - start_time
-        print(".1f"
+        print(f"✅ Обучение завершено за {elapsed:.1f} часов!")
     except KeyboardInterrupt:
         print("\n⏹️  Обучение прервано пользователем")
     except Exception as e:
