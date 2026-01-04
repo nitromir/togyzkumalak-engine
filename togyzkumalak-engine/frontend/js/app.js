@@ -40,33 +40,44 @@ class TogyzkumalakApp {
         this.loadEloStats();
         this.loadConfidenceSetting();  // Apply saved preference at startup
         this.loadAutoAnalyzeSetting(); // Load auto-analyze preference
-        this.loadActiveModelInfo();    // Load active model info for setup panel
+        this.initAnimatedBackground();
     }
     
     /**
-     * Load and display active model info in setup panel.
+     * Initialize animated background elements for setup panel
      */
-    async loadActiveModelInfo() {
-        try {
-            const response = await fetch('/api/ai/model-info?level=5');
-            if (!response.ok) return;
-            
-            const data = await response.json();
-            const modelNameEl = document.getElementById('activeModelName');
-            
-            if (modelNameEl) {
-                const typeIcon = data.type === 'alphazero' ? '🦾' : '🧠';
-                const name = data.name || 'default (встроенная)';
-                modelNameEl.textContent = `${typeIcon} ${name}`;
-                
-                // Add styling based on type
-                modelNameEl.className = 'model-name ' + (data.type === 'alphazero' ? 'alphazero' : 'gym');
-            }
-        } catch (e) {
-            console.error('Error loading active model info:', e);
-            const modelNameEl = document.getElementById('activeModelName');
-            if (modelNameEl) modelNameEl.textContent = '🧠 default';
+    initAnimatedBackground() {
+        const bgContainer = document.getElementById('animatedBgElements');
+        if (!bgContainer) return;
+        
+        const setupPanel = document.getElementById('setupPanel');
+        if (!setupPanel) return;
+        
+        // Create animated elements
+        const symbols = ['→', '↑', '↗', '+', '/', '\\', '×'];
+        const count = 15;
+        
+        for (let i = 0; i < count; i++) {
+            const el = document.createElement('div');
+            el.className = 'animated-bg-symbol';
+            el.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+            el.style.left = `${Math.random() * 100}%`;
+            el.style.top = `${Math.random() * 100}%`;
+            el.style.animationDelay = `${Math.random() * 5}s`;
+            el.style.opacity = `${0.1 + Math.random() * 0.2}`;
+            bgContainer.appendChild(el);
         }
+        
+        // Stop animation when game starts
+        const observer = new MutationObserver((mutations) => {
+            if (setupPanel.classList.contains('hidden')) {
+                bgContainer.style.display = 'none';
+            } else {
+                bgContainer.style.display = 'block';
+            }
+        });
+        
+        observer.observe(setupPanel, { attributes: true, attributeFilter: ['class'] });
     }
 
     /**
@@ -1354,7 +1365,8 @@ function initThemeSwitcher() {
  */
 function initPanelExpandButtons() {
     // Select all panels that should have expand functionality
-    const panels = document.querySelectorAll('.panel');
+    // Exclude game-panel (Panel 2) from having expand button
+    const panels = document.querySelectorAll('.panel:not(.game-panel)');
     
     panels.forEach((panel, index) => {
         // Get panel title for modal header

@@ -13,6 +13,9 @@ class VoiceService {
         this.isRecording = false;
         this.playbackId = 0;
         
+        // Voice mode: 'fast' (Native) or 'cool' (Google Gemini TTS)
+        this.voiceMode = 'fast'; // Default to fast
+        
         // Native Speech Synthesis
         this.synth = window.speechSynthesis;
         this.nativeVoice = null;
@@ -28,9 +31,6 @@ class VoiceService {
         // Sentence processing for Hybrid TTS
         this.sentenceIndex = 0;
         this.isProcessingQueue = false;
-        this.voiceMode = 'fast'; // 'fast' (Native) or 'cool' (Gemini TTS)
-        this.sentenceQueue = []; // Queue for sequential playback
-        this.isPlayingSentence = false; // Track if currently playing a sentence
         
         // STT
         this.mediaRecorder = null;
@@ -76,7 +76,12 @@ class VoiceService {
     }
     
     setupEventListeners() {
-        if (this.elements.toggleBtn) this.elements.toggleBtn.addEventListener('click', () => this.toggleVoice());
+        if (this.elements.toggleBtn) {
+            this.elements.toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showVoiceModeMenu();
+            });
+        }
         if (this.elements.pauseBtn) this.elements.pauseBtn.addEventListener('click', () => this.togglePause());
         if (this.elements.recordBtn) {
             this.elements.recordBtn.addEventListener('mousedown', () => this.startRecording());
@@ -85,73 +90,90 @@ class VoiceService {
         }
     }
     
-    toggleVoice() {
-        // Show voice mode selection menu
-        if (!this.isVoiceEnabled) {
-            // If voice is disabled, just enable it with current mode
-            this.isVoiceEnabled = true;
-            if (this.elements.toggleBtn) {
-                this.elements.toggleBtn.classList.add('voice-on');
-            }
-            return;
-        }
-
-        // If voice is enabled, show mode selection
-        this.showVoiceModeMenu();
-    }
-
     showVoiceModeMenu() {
         // Remove existing menu if any
         const existingMenu = document.getElementById('voiceModeMenu');
         if (existingMenu) {
             existingMenu.remove();
+            return;
         }
-
-        // Create new menu
+        
+        // Create menu
         const menu = document.createElement('div');
         menu.id = 'voiceModeMenu';
         menu.className = 'voice-mode-menu';
-            menu.innerHTML = `
-                <div class="voice-mode-option ${this.voiceMode === 'fast' ? 'active' : ''}" data-mode="fast">
-                    <span class="mode-icon">⚡</span>
-                    <span class="mode-name">Fast (Native)</span>
-                </div>
-                <div class="voice-mode-option ${this.voiceMode === 'cool' ? 'active' : ''}" data-mode="cool">
-                    <span class="mode-icon">🎵</span>
-                    <span class="mode-name">Cool (Gemini TTS)</span>
-                </div>
-            `;
-            document.body.appendChild(menu);
-
-            // Position menu near button
-            if (this.elements.toggleBtn) {
-                const rect = this.elements.toggleBtn.getBoundingClientRect();
-                menu.style.position = 'fixed';
-                menu.style.top = `${rect.bottom + window.scrollY + 5}px`;
-                menu.style.left = `${rect.left + window.scrollX}px`;
-            }
-
-            // Handle clicks
-            menu.querySelectorAll('.voice-mode-option').forEach(option => {
-                option.addEventListener('click', (e) => {
-                    const mode = e.currentTarget.dataset.mode;
+        menu.innerHTML = `
+            <div class="voice-mode-option ${this.isVoiceEnabled ? '' : 'disabled'}" data-mode="fast">
+                <span class="mode-icon">⚡</span>
+                <span class="mode-label">Fast (Native)</span>
+                <span class="mode-desc">Быстрая озвучка</span>
+            </div>
+            <div class="voice-mode-option ${this.isVoiceEnabled ? '' : 'disabled'}" data-mode="cool">
+                <span class="mode-icon">🎤</span>
+                <span class="mode-label">Cool (Gemini)</span>
+                <span class="mode-desc">Высокое качество</span>
+            </div>
+            <div class="voice-mode-divider"></div>
+            <div class="voice-mode-option" data-action="toggle">
+                <span class="mode-icon">${this.isVoiceEnabled ? '🔇' : '🔊'}</span>
+                <span class="mode-label">${this.isVoiceEnabled ? 'Выключить' : 'Включить'}</span>
+            </div>
+        `;
+        
+        // Position menu near button
+        const btn = this.elements.toggleBtn;
+        const rect = btn.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.top = `${rect.bottom + 5}px`;
+        menu.style.left = `${rect.left}px`;
+        menu.style.zIndex = '10000';
+        
+        document.body.appendChild(menu);
+        
+        // Handle clicks
+        menu.querySelectorAll('.voice-mode-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const mode = option.dataset.mode;
+                const action = option.dataset.action;
+                
+                if (action === 'toggle') {
+                    this.toggleVoice();
+                } else if (mode && !option.classList.contains('disabled')) {
                     this.voiceMode = mode;
-                    this.sentenceIndex = 0; // Reset for new mode
-                    menu.remove();
-                    this.updateStatus(`Режим: ${mode === 'fast' ? 'Fast' : 'Cool'}`);
-                });
+                    this.updateVoiceModeIndicator();
+                }
+                
+                menu.remove();
             });
-
-            // Close menu on outside click
-            setTimeout(() => {
-                const closeMenu = (e) => {
-                    if (!menu.contains(e.target) && e.target !== this.elements.toggleBtn) {
-                        menu.remove();
-                        document.removeEventListener('click', closeMenu);
-                    }
-                };
-                document.addEventListener('click', closeMenu);
-            }, 100);
+        });
+        
+        // Close menu on outside click
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu(e) {
+                if (!menu.contains(e.target) && e.target !== btn) {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }, 0);
+    }
+    
+    updateVoiceModeIndicator() {
+        if (this.elements.toggleBtn) {
+            const icon = this.elements.toggleBtn.querySelector('.voice-icon');
+            if (icon) {
+                icon.setAttribute('data-mode', this.voiceMode);
+            }
+        }
+    }
+    
+    toggleVoice() {
+        this.isVoiceEnabled = !this.isVoiceEnabled;
+        if (this.elements.toggleBtn) {
+            this.elements.toggleBtn.classList.toggle('voice-on', this.isVoiceEnabled);
+        }
+        if (!this.isVoiceEnabled) this.stopPlayback();
     }
     
     togglePause() {
@@ -178,8 +200,6 @@ class VoiceService {
         this.currentAudioData = new Uint8Array(0);
         this.audioChunks = [];
         this.sentenceIndex = 0;
-        this.sentenceQueue = []; // Clear sentence queue
-        this.isPlayingSentence = false; // Reset playing state
         this.isPaused = false;
         
         if (this.elements.pauseBtn) {
@@ -198,76 +218,14 @@ class VoiceService {
         // #endregion
         if (!this.isVoiceEnabled || !sentence) return;
         
-        // Add sentence to queue
-        this.sentenceQueue.push(sentence);
-        this.sentenceIndex++;
-        
-        // Process queue if not already playing
-        if (!this.isPlayingSentence) {
-            this.processSentenceQueue();
-        }
-    }
-
-    async processSentenceQueue() {
-        if (this.sentenceQueue.length === 0) {
-            this.isPlayingSentence = false;
-            return;
-        }
-
-        this.isPlayingSentence = true;
-        const sentence = this.sentenceQueue.shift();
-        const pid = this.playbackId;
-
-        // Use selected voice mode
+        // Use selected voice mode for all sentences
         if (this.voiceMode === 'fast') {
-            // Wait for Native to finish
-            await this.speakNativeAsync(sentence, pid);
+            this.speakNative(sentence, this.playbackId);
         } else {
-            // Cool mode: Use Gemini TTS with chunking
-            await this.speakGoogleAsync(sentence, pid);
+            // Cool mode: use Google Gemini TTS with chunking
+            this.speakGoogle(sentence, this.playbackId);
         }
-
-        // Process next sentence
-        if (this.playbackId === pid) {
-            this.processSentenceQueue();
-        } else {
-            this.isPlayingSentence = false;
-        }
-    }
-
-    async speakNativeAsync(text, pid) {
-        return new Promise((resolve) => {
-            const clean = this.cleanText(text);
-            if (!clean) {
-                resolve();
-                return;
-            }
-
-            const utterance = new SpeechSynthesisUtterance(clean);
-            if (this.nativeVoice) utterance.voice = this.nativeVoice;
-            utterance.lang = 'ru-RU';
-            utterance.rate = 1.1;
-
-            utterance.onstart = () => {
-                if (this.playbackId !== pid) {
-                    this.synth.cancel();
-                    resolve();
-                    return;
-                }
-                this.updateStatus('Озвучка (Fast)...');
-                if (this.elements.pauseBtn) this.elements.pauseBtn.disabled = false;
-            };
-
-            utterance.onend = () => {
-                resolve();
-            };
-
-            utterance.onerror = () => {
-                resolve();
-            };
-
-            this.synth.speak(utterance);
-        });
+        this.sentenceIndex++;
     }
 
     /**
@@ -304,18 +262,9 @@ class VoiceService {
         this.synth.speak(utterance);
     }
 
-    async speakGoogleAsync(text, pid) {
-        return new Promise((resolve) => {
-            this.speakGoogle(text, pid, resolve);
-        });
-    }
-
-    async speakGoogle(text, pid, onComplete = null) {
+    async speakGoogle(text, pid) {
         const clean = this.cleanText(text);
-        if (!clean) {
-            if (onComplete) onComplete();
-            return;
-        }
+        if (!clean) return;
 
         // #region agent log
         fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:175',message:'speakGoogle entry',data:{clean,pid,sentenceIndex:this.sentenceIndex},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
@@ -336,10 +285,7 @@ class VoiceService {
             fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:185',message:'speakGoogle response',data:{status:response.status,ok:response.ok,pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
             // #endregion
 
-            if (!response.ok) {
-                if (onComplete) onComplete();
-                return;
-            }
+            if (!response.ok) return;
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -350,7 +296,6 @@ class VoiceService {
                     fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:195',message:'speakGoogle cancelled due to playbackId mismatch',data:{current:this.playbackId,pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
                     // #endregion
                     await reader.cancel();
-                    if (onComplete) onComplete();
                     return;
                 }
                 const { done, value } = await reader.read();
@@ -395,18 +340,12 @@ class VoiceService {
                 await this.tryDecodeAndPlayIncremental(pid, true);
             }
             
-            // Wait for all audio to finish playing
             const check = () => {
-                if (this.playbackId !== pid) {
-                    if (onComplete) onComplete();
-                    return;
-                }
-                // In cool mode, we only check audioQueue (no synth.speaking check)
-                if (this.audioQueue.length > 0 || this.currentSource) {
+                if (this.playbackId !== pid) return;
+                if (!this.synth.speaking && this.audioQueue.length > 0 && !this.currentSource) {
+                    this.playNextChunk(pid);
+                } else if (this.synth.speaking || this.currentSource || this.audioQueue.length > 0) {
                     setTimeout(check, 100);
-                } else {
-                    // All audio finished
-                    if (onComplete) onComplete();
                 }
             };
             check();
@@ -414,7 +353,6 @@ class VoiceService {
             // #region agent log
             fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:245',message:'speakGoogle fatal error',data:{err:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
             // #endregion
-            if (onComplete) onComplete();
         }
     }
 
