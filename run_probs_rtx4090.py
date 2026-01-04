@@ -93,7 +93,7 @@ def create_optimized_config():
             "evaluate_n_games": 100,
             "randomize_n_turns": 2,
             "enemy": {
-                "kind": "one_step_lookahead"
+                "kind": "two_step_lookahead"  # Как в оригинальном PROBS
             }
         },
         "model": {

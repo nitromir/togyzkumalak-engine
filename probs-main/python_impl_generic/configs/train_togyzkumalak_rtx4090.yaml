@@ -37,7 +37,7 @@ evaluate:
   evaluate_n_games: 100                  # Статистически значимая оценка
   randomize_n_turns: 2                   # Рандомизация первых ходов
   enemy:
-    kind: one_step_lookahead             # Сильный противник для оценки
+    kind: two_step_lookahead            # Как в оригинальном PROBS - более сильный противник для точной оценки
 
 model:
   value:
