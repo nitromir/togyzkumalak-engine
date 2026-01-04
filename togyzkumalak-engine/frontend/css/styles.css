@@ -4233,7 +4233,7 @@ body::after {
 }
 
 /* ============================================
-   MULTI-LAYERED ANIMATED BACKGROUND
+   EPIC GAMING-STYLE ANIMATED BACKGROUND
    ============================================ */
 
 .animated-bg-container {
@@ -4245,6 +4245,23 @@ body::after {
     pointer-events: none;
     z-index: -1;
     overflow: hidden;
+    background:
+        radial-gradient(ellipse at 20% 80%, rgba(0, 242, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(255, 107, 0, 0.03) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 40%, rgba(138, 43, 226, 0.04) 0%, transparent 50%);
+    animation: background-shift 20s ease-in-out infinite;
+}
+
+@keyframes background-shift {
+    0%, 100% {
+        background-position: 0% 0%, 100% 100%, 50% 50%;
+    }
+    33% {
+        background-position: 100% 100%, 0% 0%, 80% 20%;
+    }
+    66% {
+        background-position: 50% 50%, 50% 50%, 20% 80%;
+    }
 }
 
 .animated-bg-layer {
@@ -4255,86 +4272,196 @@ body::after {
     height: 100%;
 }
 
-/* Layer 1: Fast moving arrows */
+/* Layer 1: Ultra Fast Gaming Arrows */
 .animated-bg-layer-1 .animated-bg-symbol {
-    font-size: 120px;
-    animation: float-diagonal-fast 20s linear infinite;
+    font-size: 80px;
+    animation: epic-float-1 12s linear infinite;
+    filter: drop-shadow(0 0 10px rgba(0, 242, 255, 0.3));
 }
 
-/* Layer 2: Medium speed pluses and slashes */
+/* Layer 2: Power Symbols */
 .animated-bg-layer-2 .animated-bg-symbol {
-    font-size: 160px;
-    animation: float-diagonal-medium 30s linear infinite;
-    animation-delay: -10s;
+    font-size: 120px;
+    animation: epic-float-2 18s linear infinite;
+    animation-delay: -6s;
+    filter: drop-shadow(0 0 15px rgba(255, 107, 0, 0.4));
 }
 
-/* Layer 3: Slow moving mixed symbols */
+/* Layer 3: Mystic Elements */
 .animated-bg-layer-3 .animated-bg-symbol {
-    font-size: 140px;
-    animation: float-diagonal-slow 40s linear infinite;
-    animation-delay: -20s;
+    font-size: 100px;
+    animation: epic-float-3 25s linear infinite;
+    animation-delay: -12s;
+    filter: drop-shadow(0 0 20px rgba(138, 43, 226, 0.5));
+}
+
+/* Layer 4: Chaos Particles */
+.animated-bg-layer-4 .animated-bg-symbol {
+    font-size: 60px;
+    animation: epic-float-4 15s linear infinite;
+    animation-delay: -8s;
+    filter: drop-shadow(0 0 8px rgba(255, 0, 255, 0.6));
+}
+
+/* Special effects for different symbol types */
+.animated-bg-symbol[data-type="arrow"] {
+    color: rgba(0, 242, 255, 0.25);
+    animation-duration: 16s !important;
+}
+
+.animated-bg-symbol[data-type="star"] {
+    color: rgba(255, 215, 0, 0.3);
+    animation-duration: 22s !important;
+    animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.animated-bg-symbol[data-type="spark"] {
+    color: rgba(255, 107, 0, 0.35);
+    animation-duration: 14s !important;
+    animation-timing-function: ease-in-out !important;
+}
+
+.animated-bg-symbol[data-type="shape"] {
+    color: rgba(138, 43, 226, 0.25);
+    animation-duration: 19s !important;
+    animation-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55) !important;
+}
+
+/* Rainbow effect for special symbols */
+.animated-bg-symbol:nth-child(3n) {
+    animation: rainbow-shift 8s linear infinite;
+}
+
+@keyframes rainbow-shift {
+    0% { filter: hue-rotate(0deg) drop-shadow(0 0 10px rgba(255, 0, 255, 0.5)); }
+    25% { filter: hue-rotate(90deg) drop-shadow(0 0 10px rgba(0, 255, 0, 0.5)); }
+    50% { filter: hue-rotate(180deg) drop-shadow(0 0 10px rgba(0, 255, 255, 0.5)); }
+    75% { filter: hue-rotate(270deg) drop-shadow(0 0 10px rgba(255, 0, 0, 0.5)); }
+    100% { filter: hue-rotate(360deg) drop-shadow(0 0 10px rgba(255, 0, 255, 0.5)); }
+}
+
+/* Pulsing effect for every 7th symbol */
+.animated-bg-symbol:nth-child(7n) {
+    animation: epic-pulse 4s ease-in-out infinite;
+}
+
+@keyframes epic-pulse {
+    0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.1; }
+    50% { transform: scale(1.5) rotate(180deg); opacity: 0.3; }
+}
+
+/* Warp effect for every 11th symbol */
+.animated-bg-symbol:nth-child(11n) {
+    animation: warp-drive 6s linear infinite;
+}
+
+@keyframes warp-drive {
+    0% { transform: scale(0.5) rotate(0deg); opacity: 0; }
+    20% { transform: scale(1.2) rotate(72deg); opacity: 0.4; }
+    40% { transform: scale(0.8) rotate(144deg); opacity: 0.2; }
+    60% { transform: scale(1.4) rotate(216deg); opacity: 0.3; }
+    80% { transform: scale(0.9) rotate(288deg); opacity: 0.1; }
+    100% { transform: scale(0.5) rotate(360deg); opacity: 0; }
 }
 
 .animated-bg-symbol {
     position: absolute;
     font-weight: bold;
-    color: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.15);
     user-select: none;
+    text-shadow: 0 0 20px currentColor;
 }
 
-@keyframes float-diagonal-fast {
+/* EPIC GAMING ANIMATIONS */
+@keyframes epic-float-1 {
     0% {
-        transform: translate(-100px, 100vh) rotate(0deg) scale(0.5);
+        transform: translate(-50px, 110vh) rotate(0deg) scale(0.3);
         opacity: 0;
+        filter: hue-rotate(0deg) brightness(1);
     }
-    20% {
+    15% {
+        opacity: 0.2;
+        transform: translate(15vw, 75vh) rotate(90deg) scale(0.8);
+        filter: hue-rotate(60deg) brightness(1.2);
+    }
+    40% {
+        opacity: 0.15;
+        transform: translate(35vw, 50vh) rotate(180deg) scale(1.1);
+        filter: hue-rotate(120deg) brightness(1.5);
+    }
+    70% {
         opacity: 0.1;
-        transform: translate(20vw, 60vh) rotate(180deg) scale(0.8);
-    }
-    80% {
-        opacity: 0.1;
-        transform: translate(60vw, 20vh) rotate(540deg) scale(1.0);
+        transform: translate(65vw, 20vh) rotate(270deg) scale(1.3);
+        filter: hue-rotate(180deg) brightness(1.8);
     }
     100% {
-        transform: translate(120vw, -50px) rotate(720deg) scale(1.2);
+        transform: translate(130vw, -30px) rotate(360deg) scale(0.5);
+        opacity: 0;
+        filter: hue-rotate(240deg) brightness(2);
+    }
+}
+
+@keyframes epic-float-2 {
+    0% {
+        transform: translate(-80px, 120vh) rotate(45deg) scale(0.2);
+        opacity: 0;
+    }
+    20% {
+        opacity: 0.25;
+        transform: translate(20vw, 80vh) rotate(135deg) scale(0.9);
+    }
+    50% {
+        opacity: 0.18;
+        transform: translate(45vw, 45vh) rotate(225deg) scale(1.4);
+    }
+    85% {
+        opacity: 0.08;
+        transform: translate(75vw, 15vh) rotate(315deg) scale(1.6);
+    }
+    100% {
+        transform: translate(140vw, -40px) rotate(405deg) scale(0.8);
         opacity: 0;
     }
 }
 
-@keyframes float-diagonal-medium {
+@keyframes epic-float-3 {
     0% {
-        transform: translate(-80px, 100vh) rotate(0deg) scale(0.6);
+        transform: translate(-60px, 130vh) rotate(-30deg) scale(0.4);
         opacity: 0;
     }
-    20% {
-        opacity: 0.08;
-        transform: translate(15vw, 65vh) rotate(120deg) scale(0.9);
+    25% {
+        opacity: 0.12;
+        transform: translate(25vw, 85vh) rotate(60deg) scale(1.0);
     }
-    80% {
+    60% {
         opacity: 0.08;
-        transform: translate(55vw, 25vh) rotate(300deg) scale(1.1);
+        transform: translate(55vw, 35vh) rotate(150deg) scale(1.2);
+    }
+    90% {
+        opacity: 0.05;
+        transform: translate(85vw, 10vh) rotate(240deg) scale(1.4);
     }
     100% {
-        transform: translate(115vw, -40px) rotate(360deg) scale(0.9);
+        transform: translate(125vw, -50px) rotate(330deg) scale(0.6);
         opacity: 0;
     }
 }
 
-@keyframes float-diagonal-slow {
+@keyframes epic-float-4 {
     0% {
-        transform: translate(-120px, 100vh) rotate(0deg) scale(0.7);
+        transform: translate(-40px, 100vh) rotate(0deg) scale(0.5);
         opacity: 0;
     }
-    20% {
-        opacity: 0.06;
-        transform: translate(10vw, 70vh) rotate(60deg) scale(1.0);
+    30% {
+        opacity: 0.3;
+        transform: translate(30vw, 60vh) rotate(120deg) scale(1.2);
     }
-    80% {
-        opacity: 0.06;
-        transform: translate(50vw, 30vh) rotate(180deg) scale(0.8);
+    65% {
+        opacity: 0.15;
+        transform: translate(60vw, 25vh) rotate(240deg) scale(1.5);
     }
     100% {
-        transform: translate(110vw, -60px) rotate(180deg) scale(0.8);
+        transform: translate(115vw, -20px) rotate(360deg) scale(0.7);
         opacity: 0;
     }
 }

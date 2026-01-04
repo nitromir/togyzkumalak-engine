@@ -54,25 +54,35 @@ class TogyzkumalakApp {
         const setupPanel = document.getElementById('setupPanel');
         if (!setupPanel) return;
 
-        // Define layers with different symbols and counts
+        // Define epic gaming layers with diverse symbols and effects
         const layers = [
             {
                 id: 'animatedBgLayer1',
-                symbols: ['→', '↑', '↗'],
-                count: 4,
-                baseDelay: 0
+                symbols: ['→', '↑', '↗', '▶', '▲', '⇗'],
+                count: 8,
+                baseDelay: 0,
+                type: 'arrow'
             },
             {
                 id: 'animatedBgLayer2',
-                symbols: ['+', '/', '\\', '×'],
-                count: 3,
-                baseDelay: -5
+                symbols: ['✦', '✧', '✩', '✪', '✫', '✬'],
+                count: 6,
+                baseDelay: -4,
+                type: 'star'
             },
             {
                 id: 'animatedBgLayer3',
-                symbols: ['→', '↑', '↗', '+', '/', '\\', '×'],
-                count: 4,
-                baseDelay: -10
+                symbols: ['⚡', '🔥', '💫', '⭐', '🌟', '✨'],
+                count: 5,
+                baseDelay: -8,
+                type: 'spark'
+            },
+            {
+                id: 'animatedBgLayer4',
+                symbols: ['◆', '◇', '◈', '◉', '◎', '●'],
+                count: 9,
+                baseDelay: -6,
+                type: 'shape'
             }
         ];
 
@@ -85,9 +95,11 @@ class TogyzkumalakApp {
                 const el = document.createElement('div');
                 el.className = 'animated-bg-symbol';
                 el.textContent = layer.symbols[Math.floor(Math.random() * layer.symbols.length)];
+                el.setAttribute('data-type', layer.type);
                 el.style.left = `${Math.random() * 100}%`;
                 el.style.top = `${Math.random() * 100}%`;
-                el.style.animationDelay = `${layer.baseDelay + Math.random() * 10}s`;
+                el.style.animationDelay = `${layer.baseDelay + Math.random() * 12}s`;
+                el.style.transform = `rotate(${Math.random() * 360}deg)`;
                 layerElement.appendChild(el);
             }
         });
