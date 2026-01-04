@@ -71,79 +71,9 @@
                 <div id="animatedBgLayer4" class="animated-bg-layer animated-bg-layer-4"></div>
             </div>
 
-            <!-- Game Setup Panel (shown initially) -->
-            <div id="setupPanel" class="panel setup-panel">
-                <h2>🎯 Новая Игра</h2>
-                
-                <!-- Challenge Message -->
-                <div class="challenge-message">
-                    <p>🧠 <strong>Брось вызов нашей ИИ модели!</strong></p>
-                    <p>Сыграй против алгоритма, который учится и развивается вместе с тобой.</p>
-                </div>
-                
-                <div class="setup-section">
-                    <label>Играть за:</label>
-                    <div class="color-selector">
-                        <button class="color-btn active" data-color="white">
-                            ⚪ Белые (Бастаушы)
-                        </button>
-                        <button class="color-btn" data-color="black">
-                            ⚫ Чёрные (Қостаушы)
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setup-section">
-                    <label>Уровень ИИ:</label>
-                    <div class="level-selector">
-                        <button class="level-btn" data-level="1">
-                            <span class="level-num">1</span>
-                            <span class="level-name">Случайный</span>
-                            <span class="level-elo">~800</span>
-                        </button>
-                        <button class="level-btn" data-level="2">
-                            <span class="level-num">2</span>
-                            <span class="level-name">Начинающий</span>
-                            <span class="level-elo">~1200</span>
-                        </button>
-                        <button class="level-btn active" data-level="3">
-                            <span class="level-num">3</span>
-                            <span class="level-name">Средний</span>
-                            <span class="level-elo">~1500</span>
-                        </button>
-                        <button class="level-btn" data-level="4">
-                            <span class="level-num">4</span>
-                            <span class="level-name">Продвинутый</span>
-                            <span class="level-elo">~1800</span>
-                        </button>
-                        <button class="level-btn" data-level="5">
-                            <span class="level-num">5</span>
-                            <span class="level-name">Эксперт</span>
-                            <span class="level-elo">~2100</span>
-                        </button>
-                        <button class="level-btn level-gemini" data-level="6">
-                            <span class="level-num">🤖</span>
-                            <span class="level-name">Gemini AI</span>
-                            <span class="level-elo">~2400</span>
-                        </button>
-                        <button class="level-btn level-probs" data-level="7">
-                            <span class="level-num">🎯</span>
-                            <span class="level-name">PROBS AI</span>
-                            <span class="level-elo">~2200</span>
-                        </button>
-                        <button class="level-btn level-ensemble" data-level="8">
-                            <span class="level-num">🎭</span>
-                            <span class="level-name">Ensemble AI</span>
-                            <span class="level-elo">~2500</span>
-                        </button>
-                    </div>
-                </div>
-
-                <button id="btnStartGame" class="btn btn-primary btn-large">
-                    ▶️ Начать Игру
-                </button>
-
-                <!-- AI Info Panel (desktop only) -->
+            <!-- Game Setup Container with AI Info Panel -->
+            <div class="game-setup-container">
+                <!-- AI Info Panel (desktop only, left side) -->
                 <div id="aiInfoPanel" class="ai-info-panel desktop-only">
                     <div class="ai-info-header">
                         <div class="ai-avatar" id="aiAvatar">🤖</div>
@@ -160,14 +90,87 @@
                     </div>
                 </div>
 
-                <!-- Panel Annotation -->
-                <div class="panel-annotation">
-                    <h4>📖 About this panel</h4>
-                    <p><strong>New Game</strong> - Start a game against the AI at different difficulty levels.</p>
-                    <p><strong>Levels 1-2:</strong> Simple heuristics, good for learning the rules.</p>
-                    <p><strong>Levels 3-5:</strong> Neural network AI. Level 5 uses the currently loaded model (shown above).</p>
-                    <p><strong>Gemini AI:</strong> Google's LLM plays via API - unpredictable but educational.</p>
-                    <p><strong>Tip:</strong> Load a trained model in the Training tab to improve Level 5 AI.</p>
+                <!-- Game Setup Panel (shown initially, right side) -->
+                <div id="setupPanel" class="panel setup-panel">
+                    <h2>🎯 Новая Игра</h2>
+
+                    <!-- Challenge Message -->
+                    <div class="challenge-message">
+                        <p>🧠 <strong>Брось вызов нашей ИИ модели!</strong></p>
+                        <p>Сыграй против алгоритма, который учится и развивается вместе с тобой.</p>
+                    </div>
+
+                    <div class="setup-section">
+                        <label>Играть за:</label>
+                        <div class="color-selector">
+                            <button class="color-btn active" data-color="white">
+                                ⚪ Белые (Бастаушы)
+                            </button>
+                            <button class="color-btn" data-color="black">
+                                ⚫ Чёрные (Қостаушы)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="setup-section">
+                        <label>Уровень ИИ:</label>
+                        <div class="level-selector">
+                            <button class="level-btn" data-level="1">
+                                <span class="level-num">1</span>
+                                <span class="level-name">Случайный</span>
+                                <span class="level-elo">~800</span>
+                            </button>
+                            <button class="level-btn" data-level="2">
+                                <span class="level-num">2</span>
+                                <span class="level-name">Начинающий</span>
+                                <span class="level-elo">~1200</span>
+                            </button>
+                            <button class="level-btn active" data-level="3">
+                                <span class="level-num">3</span>
+                                <span class="level-name">Средний</span>
+                                <span class="level-elo">~1500</span>
+                            </button>
+                            <button class="level-btn" data-level="4">
+                                <span class="level-num">4</span>
+                                <span class="level-name">Продвинутый</span>
+                                <span class="level-elo">~1800</span>
+                            </button>
+                            <button class="level-btn" data-level="5">
+                                <span class="level-num">5</span>
+                                <span class="level-name">Эксперт</span>
+                                <span class="level-elo">~2100</span>
+                            </button>
+                            <button class="level-btn level-gemini" data-level="6">
+                                <span class="level-num">🤖</span>
+                                <span class="level-name">Gemini AI</span>
+                                <span class="level-elo">~2400</span>
+                            </button>
+                            <button class="level-btn level-probs" data-level="7">
+                                <span class="level-num">🎯</span>
+                                <span class="level-name">PROBS AI</span>
+                                <span class="level-elo">~2200</span>
+                            </button>
+                            <button class="level-btn level-ensemble" data-level="8">
+                                <span class="level-num">🎭</span>
+                                <span class="level-name">Ensemble AI</span>
+                                <span class="level-elo">~2500</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="btnStartGame" class="btn btn-primary btn-large">
+                        ▶️ Начать Игру
+                    </button>
+
+                    <!-- Panel Annotation -->
+                    <div class="panel-annotation">
+                        <h4>📖 About this panel</h4>
+                        <p><strong>New Game</strong> - Start a game against the AI at different difficulty levels.</p>
+                        <p><strong>Levels 1-2:</strong> Simple heuristics, good for learning the rules.</p>
+                        <p><strong>Levels 3-5:</strong> Neural network AI. Level 5 uses the currently loaded model (shown above).</p>
+                        <p><strong>Gemini AI:</strong> Google's LLM plays via API - unpredictable but educational.</p>
+                        <p><strong>Tip:</strong> Load a trained model in the Training tab to improve Level 5 AI.</p>
+                    </div>
                 </div>
             </div>
 
