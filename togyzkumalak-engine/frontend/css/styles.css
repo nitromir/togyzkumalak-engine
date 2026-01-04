@@ -1316,7 +1316,7 @@ body::after {
 .color-selector {
     display: flex;
     gap: 16px;
-    justify-content: center;
+    justify-content: flex-start;
 }
 
 .color-btn {
@@ -4508,6 +4508,9 @@ body::after {
     display: none; /* Hidden by default, shown when AI level selected */
     animation: aiInfoSlideIn 0.5s ease-out;
     height: fit-content;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 400px;
 }
 
 @keyframes aiInfoSlideIn {
@@ -4571,10 +4574,14 @@ body::after {
 }
 
 .ai-description p {
-    margin: 0;
+    margin: 0 0 12px 0;
     color: rgba(255, 255, 255, 0.8);
     line-height: 1.6;
     font-size: 14px;
+}
+
+.ai-description p:last-child {
+    margin-bottom: 0;
 }
 
 /* Desktop layout adjustments */
