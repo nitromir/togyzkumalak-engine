@@ -1,0 +1,95 @@
+Signature-Version: 1.0
+Created-By: 1.0 (Android)
+SHA-256-Digest-Manifest: dMHzBrAHKc1HFevERn9H68qugvog3rGQpLNqKku1NgM=
+X-Android-APK-Signed: 2, 3
+
+Name: AndroidManifest.xml
+SHA-256-Digest: BWCPYTBGtxBBkyXxmLLPlPl5Uh/zzaTmo1sXOGwalNQ=
+
+Name: assets/deployinfo/deployedassets.txt
+SHA-256-Digest: wCQDD0eesfqF0T1899NrRSFvunUsT4lH7qXxmreTpp8=
+
+Name: assets/internal/2.yerlite
+SHA-256-Digest: I1C0Daik4Q7n9rbjWJyotkTC6HEgpRqEKPou5WuIgI8=
+
+Name: assets/internal/3.yerlite
+SHA-256-Digest: jP9ozkzk8OLo11hZxgV8hsG6poZJSRp8X6UgyhUgrPw=
+
+Name: assets/internal/4.yerlite
+SHA-256-Digest: HteCjYGLiZOgllaBhgQVdjo1S+ncBtfNL273NO1KMwE=
+
+Name: assets/internal/5.yerlite
+SHA-256-Digest: OqWCwr5ucct90Cgrm/UtuHYE4Zn7biJFEdD3+CqSFhQ=
+
+Name: assets/internal/6.yerlite
+SHA-256-Digest: lrHvmhIO8nsNf15T9qSkA/4224jbJzlm+n5al0r388Q=
+
+Name: assets/internal/7.yerlite
+SHA-256-Digest: Bhtv7RGelzsDxT9EKFptELy7pRDKW9ONnaGo1pWmxlA=
+
+Name: assets/internal/8.yerlite
+SHA-256-Digest: fH0mJ94TtcIE3on9dk3cBCEvS6A8jdh0Wa7p1ZoD/2A=
+
+Name: assets/internal/9.yerlite
+SHA-256-Digest: 7QJb4VAypV9DSI+ztbZmv4+rjNqiHTXbHzADXKQakBo=
+
+Name: classes.dex
+SHA-256-Digest: MpIFzk0NpHMqbXosDBRt77xESp3j1jcc8Hjp4LzwzyQ=
+
+Name: lib/arm64-v8a/libopentk2.so
+SHA-256-Digest: s0Rs+L0gkRZCTTBJ/RCfp8DcFZSFdIiV7xCaf3A/OzI=
+
+Name: lib/armeabi-v7a/libopentk2.so
+SHA-256-Digest: HnzUHiwfrJ2UbPV73B18VlY/HOEWhruKCvR7F4+y4ak=
+
+Name: res/drawable-hdpi-v4/ic_launcher.png
+SHA-256-Digest: KpGiHMEkw+htFvq7o+Iz3BUxkpRef0TScT/WUzHPPik=
+
+Name: res/drawable-hdpi-v4/ic_notification.png
+SHA-256-Digest: V1ELG/JSdGc918lfmShwCYzOxeOV7oD2/tt6n0FWFS8=
+
+Name: res/drawable-large-v4/splash_image.png
+SHA-256-Digest: epVuQi9qtawIlFgcUh9wVOFgV7rCykqj2koC1XdPw8I=
+
+Name: res/drawable-ldpi-v4/ic_launcher.png
+SHA-256-Digest: Mk5hlPtS0+U+f58p9/hbAu8GK8zl06YdVVcb+K5OhP4=
+
+Name: res/drawable-mdpi-v4/ic_launcher.png
+SHA-256-Digest: yYCsV/7j2oti4A009IjJWq+YzhJFRSTDa9bsV0n0IxM=
+
+Name: res/drawable-mdpi-v4/ic_notification.png
+SHA-256-Digest: 0ciWGI1DXgoV8f1C5OysGf16HBQq8VTRnvYj3Tr1H7Q=
+
+Name: res/drawable-normal-v4/splash_image.png
+SHA-256-Digest: SpF2BZssqZxFryKN+fBRUECmziiRDtsGBU8Pe3yqzMg=
+
+Name: res/drawable-small-v4/splash_image.png
+SHA-256-Digest: G8nHBD8M7h1di5J/h7lmL8G1jGfpkuPoRkPAsZTnays=
+
+Name: res/drawable-xhdpi-v4/ic_launcher.png
+SHA-256-Digest: semVU1irBgm+KGBjmON6MUTV2Uh9LcL6yz9HP5riWKI=
+
+Name: res/drawable-xhdpi-v4/ic_notification.png
+SHA-256-Digest: VWNre+4q1HmnsjBLS+DlgpZ2xi8/j1NRXx39jb3RnLE=
+
+Name: res/drawable-xlarge-v4/splash_image.png
+SHA-256-Digest: aNzDTg5hvI+XWQda2Uvb9DaGAIGo7hjIyqsTTcGDSbc=
+
+Name: res/drawable-xxhdpi-v4/ic_launcher.png
+SHA-256-Digest: WWrPgFa1lYZHYQTTporBnC/m4xi02BYX+g4OVviApqg=
+
+Name: res/drawable-xxhdpi-v4/ic_notification.png
+SHA-256-Digest: rWHaFxwRjIrEkdXTR0/S3FbBODGboLCbwQt/lzAwv0g=
+
+Name: res/drawable-xxxhdpi-v4/ic_notification.png
+SHA-256-Digest: KDxIt3gD8T9FpAk+nwRRQgBr4e07rWBq7w5HsiR4gjE=
+
+Name: res/xml/splits0.xml
+SHA-256-Digest: CZHd16EaYLDYp7tui4TSG3CcfA/Q591/92xIh1oli2s=
+
+Name: resources.arsc
+SHA-256-Digest: b5GIwiMyD/9FYaf17p9r11qrJAbJQ2VSAAtnO8gz9Vs=
+
+Name: stamp-cert-sha256
+SHA-256-Digest: L0p4Bm/NGffFWX26fUKi8jlq3aKsfwyEBtSavY6F0c0=
+

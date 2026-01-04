@@ -1,0 +1,50 @@
+# PROBS Training Config for Togyzkumalak - RTX 4090 OPTIMIZED
+# Оптимизирован для RTX 4090 (48GB VRAM) + 64-core CPU без бустинга
+# Максимальная загрузка GPU и минимизация однопоточных операций
+
+name: train_togyzkumalak_rtx4090
+env:
+  name: togyzkumalak
+  n_max_episode_steps: 200
+
+cmd: train
+
+infra:
+  log: tf
+  device: cuda                           # GPU
+  sub_processes_cnt: 32                  # 32 процесса для загрузки 64 ядер CPU (не все 64, чтобы не перегружать)
+  self_play_threads: 1                   # ВАЖНО: 1 для GPU (PyTorch не поддерживает многопоточность на GPU)
+  mem_max_episodes: 250000               # Огромный буфер для минимизации I/O операций
+  threads_cnt: 32                        # Для баттлов
+
+train:
+  n_high_level_iterations: 500           # Больше итераций для лучшей сходимости
+  v_train_episodes: 8000                 # Увеличено для GPU (быстрее генерация данных)
+  q_train_episodes: 4000                 # Увеличено для лучшего Q-обучения
+  q_dataset_episodes_sub_iter: 4         # Разбиваем на подитерации для экономии RAM
+  dataset_drop_ratio: 0.3                # Меньше дропаута для лучшего обучения
+  checkpoints_dir: checkpoints/togyzkumalak_rtx4090
+  train_batch_size: 1024                 # Огромный батч для максимального использования 48GB VRAM
+  self_learning_batch_size: 2048         # Еще больше для self-play данных
+  get_q_dataset_batch_size: 512          # Разумный размер для Q-датасета
+  num_q_s_a_calls: 60                    # Глубже beam search для лучшей оценки
+  max_depth: 80                          # Глубже дерево поиска
+  alphazero_move_num_sampling_moves: 12  # Больше exploration в начале игры
+  q_add_hardest_nodes_per_step: 15       # Больше сложных узлов для Q-обучения
+  # update_threshold: 0.52               # УБРАНО: PROBS обучается непрерывно без откатов!
+
+evaluate:
+  evaluate_n_games: 100                  # Статистически значимая оценка
+  randomize_n_turns: 2                   # Рандомизация первых ходов
+  enemy:
+    kind: one_step_lookahead             # Сильный противник для оценки
+
+model:
+  value:
+    class: ValueModelTK_v1
+    learning_rate: 0.0005                # Выше LR для быстрого обучения на GPU
+    weight_decay: 0.00005                # Меньше регуляризации
+  self_learner:
+    class: SelfLearningModelTK_v1
+    learning_rate: 0.0005                # Выше LR для быстрого обучения
+    weight_decay: 0.00005                # Меньше регуляризации

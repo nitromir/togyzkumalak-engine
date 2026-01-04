@@ -1,0 +1,6 @@
+﻿{
+    "remote_url": "http://localhost",
+    "ports": [8000, 8080],
+    "interval": 30,
+    "enabled": true
+}

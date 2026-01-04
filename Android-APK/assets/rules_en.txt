@@ -1,0 +1,28 @@
+Toguz Kumalak is played on a board, which consists of two rows of nine holes. Between these rows are two parallel furrows called kazan ("boilers") in the middle of the board to store the captures. The players own the kazan in the other half of the board. The holes are usually made in such a way that it is evident whether the contents are odd or even.
+
+At the beginning there are nine balls in each hole, except the kazans, which are still empty. Players need a total of 162 balls.
+
+Initial Position
+
+On his turn, a player takes all the balls of one of his holes, which is not a tuzdik (see below) and distribute them anticlockwise, one by one, into the following holes. The first ball must be dropped into the hole, which was just emptied.
+
+However, if the move began from a hole, which contained only one ball, this ball is put into the next hole.
+
+If the last ball falls into a hole on the opponent's side, and this hole then contains an even number of balls, these balls are captured and stored in the player's kazan.
+
+If the last ball falls into a hole of the opponent, which then has three balls, the hole is marked as a tuzdik ("sacred place" in Kazakh; or tuz in Kyrgyz, which means "salt").
+
+There are a few restrictions:
+
+A player may only create one tuzdik in each game.
+The last hole of the opponent (his ninth or rightmost hole) cannot be turned into a tuzdik.
+A tuzdik cannot be made if it is symmetrical to the opponent's one (for instance, if the opponent's third hole is a tuzdik, you cannot turn your third hole into one).
+It is permitted to make such a move, but it wouldn't create a tuzdik.
+
+The balls that fall into a tuzdik are captured by its owner. He may transfer its contents at any time to his kazan.
+
+The game ends when a player can't move at his turn because all the holes on his side, which are not tuzdik, are empty.
+
+When the game is over, the remaining balls, which are not yet in a kazan or in a tuzdik are won by the player on whose side they are.
+
+The winner is the player who, at the end of the game, has captured more balls in their tuzdik and their kazan. When both players have 81 balls, the game is a draw.
