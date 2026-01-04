@@ -4164,10 +4164,10 @@ body::after {
 }
 
 /* ============================================
-   ANIMATED BACKGROUND ELEMENTS
+   MULTI-LAYERED ANIMATED BACKGROUND
    ============================================ */
 
-.animated-bg-elements {
+.animated-bg-container {
     position: fixed;
     top: 0;
     left: 0;
@@ -4178,25 +4178,68 @@ body::after {
     overflow: hidden;
 }
 
+.animated-bg-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Layer 1: Fast moving arrows */
+.animated-bg-layer-1 .animated-bg-symbol {
+    font-size: 20px;
+    animation: float-diagonal-fast 15s linear infinite;
+}
+
+/* Layer 2: Medium speed pluses and slashes */
+.animated-bg-layer-2 .animated-bg-symbol {
+    font-size: 28px;
+    animation: float-diagonal-medium 25s linear infinite;
+    animation-delay: -8s;
+}
+
+/* Layer 3: Slow moving mixed symbols */
+.animated-bg-layer-3 .animated-bg-symbol {
+    font-size: 24px;
+    animation: float-diagonal-slow 35s linear infinite;
+    animation-delay: -15s;
+}
+
 .animated-bg-symbol {
     position: absolute;
-    font-size: 24px;
     font-weight: bold;
-    color: rgba(255, 255, 255, 0.1);
-    animation: float-diagonal 20s linear infinite;
+    color: rgba(255, 255, 255, 0.08);
     user-select: none;
 }
 
-@keyframes float-diagonal {
+@keyframes float-diagonal-fast {
+    0% {
+        transform: translate(-20px, 100vh) rotate(0deg) scale(0.8);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.08;
+    }
+    90% {
+        opacity: 0.08;
+    }
+    100% {
+        transform: translate(100vw, -50px) rotate(720deg) scale(1.2);
+        opacity: 0;
+    }
+}
+
+@keyframes float-diagonal-medium {
     0% {
         transform: translate(0, 100vh) rotate(0deg);
         opacity: 0;
     }
     10% {
-        opacity: 0.1;
+        opacity: 0.06;
     }
     90% {
-        opacity: 0.1;
+        opacity: 0.06;
     }
     100% {
         transform: translate(100vw, -50px) rotate(360deg);
@@ -4204,8 +4247,24 @@ body::after {
     }
 }
 
-/* Hide animated background when game starts */
-.game-active .animated-bg-elements {
+@keyframes float-diagonal-slow {
+    0% {
+        transform: translate(20px, 100vh) rotate(0deg) scale(1.1);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.04;
+    }
+    90% {
+        opacity: 0.04;
+    }
+    100% {
+        transform: translate(100vw, -50px) rotate(180deg) scale(0.9);
+        opacity: 0;
+    }
+}
+
+.game-active .animated-bg-container {
     display: none;
 }
 

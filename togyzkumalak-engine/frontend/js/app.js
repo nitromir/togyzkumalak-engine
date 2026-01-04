@@ -45,29 +45,52 @@ class TogyzkumalakApp {
     }
     
     /**
-     * Initialize animated background elements for setup panel
+     * Initialize multi-layered animated background elements for setup panel
      */
     initAnimatedBackground() {
-        const bgContainer = document.getElementById('animatedBgElements');
+        const bgContainer = document.querySelector('.animated-bg-container');
         if (!bgContainer) return;
 
         const setupPanel = document.getElementById('setupPanel');
         if (!setupPanel) return;
 
-        // Create animated elements
-        const symbols = ['→', '↑', '↗', '+', '/', '\\', '×'];
-        const count = 15;
+        // Define layers with different symbols and counts
+        const layers = [
+            {
+                id: 'animatedBgLayer1',
+                symbols: ['→', '↑', '↗'],
+                count: 12,
+                baseDelay: 0
+            },
+            {
+                id: 'animatedBgLayer2',
+                symbols: ['+', '/', '\\', '×'],
+                count: 8,
+                baseDelay: -5
+            },
+            {
+                id: 'animatedBgLayer3',
+                symbols: ['→', '↑', '↗', '+', '/', '\\', '×'],
+                count: 10,
+                baseDelay: -10
+            }
+        ];
 
-        for (let i = 0; i < count; i++) {
-            const el = document.createElement('div');
-            el.className = 'animated-bg-symbol';
-            el.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-            el.style.left = `${Math.random() * 100}%`;
-            el.style.top = `${Math.random() * 100}%`;
-            el.style.animationDelay = `${Math.random() * 5}s`;
-            el.style.opacity = `${0.1 + Math.random() * 0.2}`;
-            bgContainer.appendChild(el);
-        }
+        // Create elements for each layer
+        layers.forEach(layer => {
+            const layerElement = document.getElementById(layer.id);
+            if (!layerElement) return;
+
+            for (let i = 0; i < layer.count; i++) {
+                const el = document.createElement('div');
+                el.className = 'animated-bg-symbol';
+                el.textContent = layer.symbols[Math.floor(Math.random() * layer.symbols.length)];
+                el.style.left = `${Math.random() * 100}%`;
+                el.style.top = `${Math.random() * 100}%`;
+                el.style.animationDelay = `${layer.baseDelay + Math.random() * 10}s`;
+                layerElement.appendChild(el);
+            }
+        });
 
         // Stop animation when game starts
         const observer = new MutationObserver((mutations) => {
@@ -1394,8 +1417,8 @@ function initThemeSwitcher() {
  */
 function initPanelExpandButtons() {
     // Select all panels that should have expand functionality
-    // Exclude game-panel (Panel 2) from having expand button
-    const panels = document.querySelectorAll('.panel:not(.game-panel)');
+    // Exclude game-panel and setup-panel from having expand button
+    const panels = document.querySelectorAll('.panel:not(.game-panel):not(.setup-panel)');
     
     panels.forEach((panel, index) => {
         // Get panel title for modal header
