@@ -604,9 +604,12 @@ async def get_replays():
     """Get list of available replays from gym simulations."""
     # Try multiple possible paths for the replay file
     possible_paths = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "visualizer", "replay.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "visualizer", "replay.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "visualizer", "replay.json"),
-        "visualizer/replay.json"
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "visualizer", "replay.json"),
+        "visualizer/replay.json",
+        "../visualizer/replay.json",
+        "../../visualizer/replay.json"
     ]
 
     replay_file = None
@@ -644,12 +647,23 @@ async def get_replays():
 @app.get("/api/replays/{game_id}")
 async def get_replay(game_id: int):
     """Get full replay data for a specific game."""
-    replay_file = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), 
-        "..", "..", "visualizer", "replay.json"
-    )
-    
-    if not os.path.exists(replay_file):
+    # Try multiple possible paths for the replay file
+    possible_paths = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "visualizer", "replay.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "visualizer", "replay.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "visualizer", "replay.json"),
+        "visualizer/replay.json",
+        "../visualizer/replay.json",
+        "../../visualizer/replay.json"
+    ]
+
+    replay_file = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            replay_file = path
+            break
+
+    if not replay_file:
         raise HTTPException(status_code=404, detail="No replay file found")
     
     try:
