@@ -1574,6 +1574,37 @@ function initLazyLoading() {
     });
 }
 
+/**
+ * Switch to a specific mode/page
+ */
+function switchToMode(mode) {
+    // Hide all modes
+    const modes = document.querySelectorAll('.main-content');
+    modes.forEach(m => m.classList.add('hidden'));
+
+    // Remove active class from all tabs
+    const tabs = document.querySelectorAll('.mode-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+
+    // Show selected mode
+    const targetMode = document.getElementById(mode + 'Mode');
+    if (targetMode) {
+        targetMode.classList.remove('hidden');
+    }
+
+    // Add active class to corresponding tab
+    const targetTab = document.querySelector(`.mode-tab[data-mode="${mode}"]`);
+    if (targetTab) {
+        targetTab.classList.add('active');
+    }
+
+    // Update URL hash without triggering navigation
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, null, '#' + mode);
+    }
+}
+
 // Expose to global scope for inline onclick handlers
 window.openFullscreenModal = openFullscreenModal;
 window.closeFullscreenModal = closeFullscreenModal;
+window.switchToMode = switchToMode;
