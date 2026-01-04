@@ -4616,13 +4616,15 @@ body::after {
    ============================================ */
 
 /* Large headings use Chess Sans */
-h1, h2, h3, h4, h5, h6,
+h1, h2, h3,
 .panel h2, .panel h3,
 .logo h1,
 .btn-large,
 .level-btn,
 .color-btn,
-.ai-info-content h3 {
+.ai-info-content h3,
+.ai-name,
+.ai-level {
     font-family: 'Chess Sans', sans-serif !important;
 }
 
@@ -4641,7 +4643,7 @@ h4, h5, h6,
 /* Regular text and header buttons use Segoe UI */
 body,
 p, span, div,
-.btn, .btn-icon, .btn-voice-toggle,
+.btn, .btn-icon, .btn-voice-toggle, .mode-tab,
 .header-stats,
 .voice-status,
 .replay-info,
