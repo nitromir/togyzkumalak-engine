@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Togyzkumalak Engine - AI Game</title>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chess+Sans:wght@400;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Background Tech Grid -->
+    <div class="tech-grid"></div>
+    
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo" onclick="switchToMode('play')" style="cursor: pointer;">
+                <span class="logo-icon">🎮</span>
+                <h1>Тоғыз Құмалақ</h1>
+            </div>
+            
+            <!-- Mode Tabs -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" data-mode="play">🎯 Играть</button>
+                <button class="mode-tab" data-mode="replays">📼 Реплеи</button>
+                <button class="mode-tab" data-mode="training">🧠 Тренировка</button>
+                <button class="mode-tab" data-mode="gemini-battle">⚔️ VS Arena</button>
+                <button class="mode-tab" data-mode="analytics">📊 Аналитика</button>
+            </div>
+            
+            <!-- Statistics in header -->
+            <div class="header-stats" id="headerStats">
+                <div class="stat-item">
+                    <span class="stat-label">ELO:</span>
+                    <span class="stat-value" id="currentElo">1500</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Игры:</span>
+                    <span class="stat-value" id="totalGames">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Победы:</span>
+                    <span class="stat-value" id="totalWins">0</span>
+                </div>
+            </div>
+            
+            <!-- Theme Switcher -->
+            <button class="theme-switcher" id="themeSwitcher" title="Сменить тему">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                </svg>
+                <span class="theme-label" id="themeLabel">Тема</span>
+            </button>
+        </header>
+
+        <!-- ============================================ -->
+        <!-- PLAY MODE -->
+        <!-- ============================================ -->
+        <main class="main-content" id="playMode">
+            <!-- Epic Gaming-Style Animated Background -->
+            <div class="animated-bg-container">
+                <div id="animatedBgLayer1" class="animated-bg-layer animated-bg-layer-1"></div>
+                <div id="animatedBgLayer2" class="animated-bg-layer animated-bg-layer-2"></div>
+                <div id="animatedBgLayer3" class="animated-bg-layer animated-bg-layer-3"></div>
+                <div id="animatedBgLayer4" class="animated-bg-layer animated-bg-layer-4"></div>
+            </div>
+
+            <!-- Game Setup Panel (shown initially) -->
+            <div id="setupPanel" class="panel setup-panel">
+                <!-- Desktop Layout Wrapper -->
+                <div class="setup-content-wrapper desktop-only-flex">
+                    <!-- AI Info Panel (desktop only, left side) -->
+                    <div id="aiInfoPanel" class="ai-info-panel desktop-only">
+                        <div class="ai-info-header">
+                            <div class="ai-avatar" id="aiAvatar">⚔️</div>
+                            <div class="ai-info-content">
+                                <h3 id="aiName">Опытный Игрок</h3>
+                                <div class="ai-stats">
+                                    <span class="ai-level" id="aiLevel">Уровень 3</span>
+                                    <span class="ai-elo" id="aiEloDisplay">ELO: ~1500</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ai-description">
+                            <div id="aiLegend">
+                                <p>Бывалый воин степей, прошедший через множество сражений у костра. Он знает тактику атаки и защиты, умеет жертвовать малым ради большого. Этот алгоритм представляет мудрость аксакала, советующего молодым игрокам в искусстве стратегического мышления и терпеливого ожидания правильного момента для решающего удара.</p>
+                                <p>Его стратегия основана на балансе между агрессией и обороной. Он никогда не торопится с решениями, предпочитая тщательно просчитывать последствия каждого хода. В его игре чувствуется опыт многих поколений игроков, передавших ему секреты мастерства через цифровые поколения.</p>
+                                <p>Психологически он стабилен и предсказуем - качества, которые делают его идеальным соперником для отработки тактических навыков. Он не паникует в критические моменты и всегда находит выход из сложных ситуаций.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Setup Content (right side) -->
+                    <div class="setup-main-content">
+                        <h2>🎯 Новая Игра</h2>
+                
+                <!-- Challenge Message -->
+                <div class="challenge-message">
+                    <p>🧠 <strong>Брось вызов нашей ИИ модели!</strong></p>
+                    <p>Сыграй против алгоритма, который учится и развивается вместе с тобой.</p>
+                </div>
+                
+                <div class="setup-section">
+                    <label>Играть за:</label>
+                    <div class="color-selector">
+                        <button class="color-btn active" data-color="white">
+                            ⚪ Белые (Бастаушы)
+                        </button>
+                        <button class="color-btn" data-color="black">
+                            ⚫ Чёрные (Қостаушы)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <label>Уровень ИИ:</label>
+                    <div class="level-selector">
+                        <button class="level-btn" data-level="1">
+                            <span class="level-num">1</span>
+                            <span class="level-name">Случайный</span>
+                            <span class="level-elo">~800</span>
+                        </button>
+                        <button class="level-btn" data-level="2">
+                            <span class="level-num">2</span>
+                            <span class="level-name">Начинающий</span>
+                            <span class="level-elo">~1200</span>
+                        </button>
+                        <button class="level-btn active" data-level="3">
+                            <span class="level-num">3</span>
+                            <span class="level-name">Средний</span>
+                            <span class="level-elo">~1500</span>
+                        </button>
+                        <button class="level-btn" data-level="4">
+                            <span class="level-num">4</span>
+                            <span class="level-name">Продвинутый</span>
+                            <span class="level-elo">~1800</span>
+                        </button>
+                        <button class="level-btn" data-level="5">
+                            <span class="level-num">5</span>
+                            <span class="level-name">Эксперт</span>
+                            <span class="level-elo">~2100</span>
+                        </button>
+                        <button class="level-btn level-gemini" data-level="6">
+                            <span class="level-num">🤖</span>
+                            <span class="level-name">Gemini AI</span>
+                            <span class="level-elo">~2400</span>
+                        </button>
+                        <button class="level-btn level-probs" data-level="7">
+                            <span class="level-num">🎯</span>
+                            <span class="level-name">PROBS AI</span>
+                            <span class="level-elo">~2200</span>
+                        </button>
+                        <button class="level-btn level-ensemble" data-level="8">
+                            <span class="level-num">🎭</span>
+                            <span class="level-name">Ensemble AI</span>
+                            <span class="level-elo">~2500</span>
+                        </button>
+                    </div>
+                </div>
+
+                        <button id="btnStartGame" class="btn btn-primary btn-large">
+                            ▶️ Начать Игру
+                        </button>
+
+                        <!-- Panel Annotation -->
+                        <div class="panel-annotation">
+                            <h4>📖 About this panel</h4>
+                            <p><strong>New Game</strong> - Start a game against the AI at different difficulty levels.</p>
+                            <p><strong>Levels 1-2:</strong> Simple heuristics, good for learning the rules.</p>
+                            <p><strong>Levels 3-5:</strong> Neural network AI. Level 5 uses the currently loaded model (shown above).</p>
+                            <p><strong>Gemini AI:</strong> Google's LLM plays via API - unpredictable but educational.</p>
+                            <p><strong>Tip:</strong> Load a trained model in the Training tab to improve Level 5 AI.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mobile Layout - AI Info Panel (shown below on mobile) -->
+                <div id="aiInfoPanelMobile" class="ai-info-panel mobile-only">
+                    <div class="ai-info-header">
+                        <div class="ai-avatar" id="aiAvatarMobile">⚔️</div>
+                        <div class="ai-info-content">
+                            <h3 id="aiNameMobile">Опытный Игрок</h3>
+                            <div class="ai-stats">
+                                <span class="ai-level" id="aiLevelMobile">Уровень 3</span>
+                                <span class="ai-elo" id="aiEloDisplayMobile">ELO: ~1500</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-description">
+                        <div id="aiLegendMobile">
+                            <p>Бывалый воин степей, прошедший через множество сражений у костра. Он знает тактику атаки и защиты, умеет жертвовать малым ради большого.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel Annotation (mobile only, duplicate for mobile layout) -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>New Game</strong> - Start a game against the AI at different difficulty levels.</p>
+                    <p><strong>Levels 1-2:</strong> Simple heuristics, good for learning the rules.</p>
+                    <p><strong>Levels 3-5:</strong> Neural network AI. Level 5 uses the currently loaded model (shown above).</p>
+                    <p><strong>Gemini AI:</strong> Google's LLM plays via API - unpredictable but educational.</p>
+                    <p><strong>Tip:</strong> Load a trained model in the Training tab to improve Level 5 AI.</p>
+                </div>
+            </div>
+
+            <!-- Game Panel (hidden initially) -->
+            <div id="gamePanel" class="panel game-panel hidden">
+                <!-- Score Panel (Kazans) -->
+                <div class="score-panel" id="scorePanel">
+                    <!-- Left Avatar (Black side) -->
+                    <div class="score-avatar" id="leftAvatar">
+                        <div class="avatar-icon">👤</div>
+                        <div class="avatar-label">ВЫ</div>
+                    </div>
+
+                    <div class="score-side score-black">
+                        <div class="score-label">ЧЁРНЫЕ</div>
+                        <div class="score-value" id="blackKazan">0</div>
+                        <div class="score-bar">
+                            <div class="score-bar-fill black-bar" id="blackBarFill"></div>
+                        </div>
+                        <div class="score-kumalaks" id="blackKumalaks"></div>
+                    </div>
+                    <div class="score-center">
+                        <div class="score-vs">VS</div>
+                        <div class="score-target">Цель: 82</div>
+                    </div>
+                    <div class="score-side score-white">
+                        <div class="score-label">БЕЛЫЕ</div>
+                        <div class="score-value" id="whiteKazan">0</div>
+                        <div class="score-bar">
+                            <div class="score-bar-fill white-bar" id="whiteBarFill"></div>
+                        </div>
+                        <div class="score-kumalaks" id="whiteKumalaks"></div>
+                    </div>
+
+                    <!-- Right Avatar (White side) -->
+                    <div class="score-avatar" id="rightAvatar">
+                        <div class="avatar-icon">🤖</div>
+                        <div class="avatar-label">AI</div>
+                    </div>
+                </div>
+
+                <!-- Info Bar -->
+                <div class="info-bar">
+                    <div class="player-info player-black">
+                        <div class="player-label">⚫ ҚАРА (AI)</div>
+                        <div class="player-elo" id="aiElo">ELO: 1500</div>
+                    </div>
+                    <div class="game-status">
+                        <div class="turn-indicator" id="turnIndicator">Ваш Ход</div>
+                        <div class="move-counter" id="moveCounter">Ход: 0</div>
+                    </div>
+                    <div class="player-info player-white">
+                        <div class="player-label">⚪ АҚ (Вы)</div>
+                        <div class="player-elo" id="playerElo">ELO: 1500</div>
+                    </div>
+                </div>
+
+                <!-- Board Container - Only Classic View -->
+                <div class="board-wrapper classic-active">
+                    <canvas id="classicBoard" class="board-classic" width="900" height="450"></canvas>
+                </div>
+
+                <!-- Last Move Info -->
+                <div class="last-move" id="lastMove">
+                    Последний ход: -
+                </div>
+
+                <!-- Game Controls -->
+                <div class="game-controls">
+                    <button id="btnUndo" class="btn btn-secondary" disabled>↩️ Отменить</button>
+                    <button id="btnNewGame" class="btn btn-secondary">🔄 Новая Игра</button>
+                    <div class="confidence-selector-group">
+                        <button id="btnToggleConfidence" class="btn btn-secondary" title="Показать/скрыть индикатор уверенности">
+                            📊 Уверенность: ON
+                        </button>
+                        <select id="selectConfidenceModel" class="btn btn-secondary confidence-select" title="Выберите нейросеть для анализа">
+                            <option value="all">📊 Все три сразу</option>
+                            <option value="polynet">🧠 PolyNet</option>
+                            <option value="alphazero">🦾 AlphaZero</option>
+                            <option value="probs">🎯 PROBS</option>
+                        </select>
+                    </div>
+                    <div class="confidence-legend">
+                        <span class="legend-item"><i class="dot polynet"></i> PolyNet</span>
+                        <span class="legend-item"><i class="dot alphazero"></i> AlphaZero</span>
+                        <span class="legend-item"><i class="dot probs"></i> PROBS</span>
+                    </div>
+                    <button id="btnResign" class="btn btn-danger">🏳️ Сдаться</button>
+                </div>
+            </div>
+
+            <!-- Side Panel -->
+            <aside class="side-panel">
+                <!-- Move History -->
+                <div class="panel history-panel">
+                    <h3>📜 История Ходов</h3>
+                    <div class="move-list" id="moveList">
+                        <!-- Moves will be added here -->
+                    </div>
+                    
+                    <!-- Panel Annotation -->
+                    <div class="panel-annotation">
+                        <h4>📖 About this panel</h4>
+                        <p><strong>Move History</strong> - A chronological list of all moves made in the current game.</p>
+                        <p><strong>Notation:</strong> Each entry shows the pit number (1-9) selected by the player.</p>
+                        <p><strong>Interactive:</strong> Clicking on a move in the list allows you to jump back to that state (if supported by the mode).</p>
+                    </div>
+                </div>
+
+                <!-- Gemini Analysis Panel -->
+                <div class="panel analysis-panel">
+                    <h3>🤖 AI Анализ</h3>
+                    <div class="analysis-controls">
+                        <button id="btnAnalyze" class="btn btn-small btn-analyze-styled">Анализировать</button>
+                        <button id="btnSuggest" class="btn btn-small btn-suggest-styled">Предложить Ход</button>
+                        <label class="auto-analysis-toggle" title="Автоматически анализировать позицию после каждого хода ИИ">
+                            <input type="checkbox" id="checkAutoAnalyze" checked>
+                            <span>Авто-анализ</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Voice Controls -->
+                    <div class="voice-controls" id="voiceControls">
+                        <button id="btnVoiceToggle" class="btn btn-icon btn-voice-toggle voice-on" title="Включить/выключить голос">
+                            <svg class="voice-icon voice-on-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                            </svg>
+                            <svg class="voice-icon voice-off-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                            </svg>
+                        </button>
+                        <button id="btnVoicePause" class="btn btn-icon" title="Пауза/Продолжить" disabled>
+                            ⏸️
+                        </button>
+                        <button id="btnVoiceRecord" class="btn btn-icon" title="Говорить с AI (удерживайте)">
+                            🎤
+                        </button>
+                        <span class="voice-status" id="voiceStatus"></span>
+                    </div>
+                    
+                    <div class="analysis-content" id="analysisContent">
+                        <p class="placeholder">Нажмите "Анализировать" для получения анализа от Gemini.</p>
+                    </div>
+                    
+                    <!-- Panel Annotation -->
+                    <div class="panel-annotation">
+                        <h4>📖 About this panel</h4>
+                        <p><strong>AI Analysis</strong> - Real-time strategic insights provided by the Gemini Large Language Model.</p>
+                        <p><strong>Features:</strong></p>
+                        <ul>
+                            <li><strong>Analyze:</strong> Provides a deep dive into the current board state, identifying threats and opportunities.</li>
+                            <li><strong>Suggest:</strong> Gemini recommends the best move based on its tactical understanding.</li>
+                        </ul>
+                        <p><strong>Tip:</strong> Use this during practice games to understand expert-level Togyzkumalak logic.</p>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- ============================================ -->
+        <!-- REPLAYS MODE -->
+        <!-- ============================================ -->
+        <main class="main-content hidden" id="replaysMode">
+            <!-- Epic Gaming-Style Animated Background -->
+            <div class="animated-bg-container">
+                <div id="replaysBgLayer1" class="animated-bg-layer animated-bg-layer-1"></div>
+                <div id="replaysBgLayer2" class="animated-bg-layer animated-bg-layer-2"></div>
+                <div id="replaysBgLayer3" class="animated-bg-layer animated-bg-layer-3"></div>
+                <div id="replaysBgLayer4" class="animated-bg-layer animated-bg-layer-4"></div>
+            </div>
+
+            <!-- Replay Selector -->
+            <div class="panel replay-selector-panel">
+                <h2>📼 Записанные Партии (Gym Simulations)</h2>
+                <div class="replay-list" id="replayList">
+                    <p class="placeholder">Загрузка списка партий...</p>
+                </div>
+                
+                <!-- Gemini Battle Replays Section -->
+                <h3 style="margin-top: 24px; color: var(--accent-secondary);">🤖 Батлы против Gemini</h3>
+                <div class="replay-list" id="geminiBattleReplayList">
+                    <p class="placeholder">Загрузка игр против Gemini...</p>
+                </div>
+                
+                <!-- Custom Move Parser Section -->
+                <div class="custom-replay-section">
+                    <h3>📝 Разобрать свою партию</h3>
+                    <p class="section-hint">Вставьте запись ходов в формате: 1.e4 e5 2.Nf3... или 1,5,3,7...</p>
+                    <textarea id="customMovesInput" class="custom-moves-input" placeholder="Пример: 1,5,3,7,2,6,4,8,9 или 1.1 5 2.3 7..."></textarea>
+                    <button id="btnParseCustomMoves" class="btn btn-secondary">🔍 Разобрать на доске</button>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Replays</strong> - Review past games to learn and improve.</p>
+                    <p><strong>Gym Simulations:</strong> Games played during self-play training (AI vs AI).</p>
+                    <p><strong>Gemini Battles:</strong> Games where your model played against Google's Gemini LLM.</p>
+                    <p><strong>Custom Parser:</strong> Paste your own game notation to visualize on the board.</p>
+                    <p><strong>Tip:</strong> Use replay controls to step through moves and analyze positions.</p>
+                </div>
+            </div>
+
+            <!-- Replay Viewer Wrapper -->
+            <div id="replayViewer" class="replay-viewer hidden">
+                <!-- Replay Info Bar -->
+                <div class="info-bar" style="max-width: 900px; width: 100%;">
+                    <div class="player-info player-black">
+                        <div class="player-label">⚫ ҚАРА (Black)</div>
+                        <div class="player-elo" id="replayBlackScore">Казан: 0</div>
+                    </div>
+                    <div class="game-status">
+                        <div class="turn-indicator" id="replayCurrentPlayer">WHITE</div>
+                        <div class="move-counter" id="replayStepCounter">Шаг: 0 / 0</div>
+                    </div>
+                    <div class="player-info player-white">
+                        <div class="player-label">⚪ АҚ (White)</div>
+                        <div class="player-elo" id="replayWhiteScore">Казан: 0</div>
+                    </div>
+                </div>
+
+                <!-- Replay Board -->
+                <div class="board-wrapper classic-active">
+                    <canvas id="replayBoard" class="board-classic" width="900" height="450"></canvas>
+                </div>
+
+                <!-- Replay Controls Container -->
+                <div class="replay-controls-container">
+                    <div class="replay-progress">
+                        <div class="progress-bar" id="replayProgressBar">
+                            <div class="progress-fill" id="replayProgressFill"></div>
+                        </div>
+                    </div>
+
+                    <div class="replay-controls">
+                        <button id="btnReplayFirst" class="btn btn-secondary">⏮ Начало</button>
+                        <button id="btnReplayPrev" class="btn btn-secondary">⏪ Назад</button>
+                        <button id="btnReplayPlay" class="btn btn-primary">▶️ Воспроизвести</button>
+                        <button id="btnReplayNext" class="btn btn-secondary">⏩ Вперёд</button>
+                        <button id="btnReplayLast" class="btn btn-secondary">⏭ Конец</button>
+                    </div>
+
+                    <div class="speed-control">
+                        <label>Скорость: </label>
+                        <input type="range" id="replaySpeed" min="100" max="2000" value="500">
+                        <span id="replaySpeedValue" style="margin-left: 10px;">500ms</span>
+                    </div>
+                </div>
+
+                <!-- Winner Banner -->
+                <div class="winner-banner hidden" id="replayWinnerBanner" style="max-width: 900px; width: 100%;">
+                    🏆 Победитель: WHITE (83:57) 🏆
+                </div>
+
+                <!-- Replay Info Panels -->
+                <div class="replay-bottom-info">
+                    <div class="panel">
+                        <h3>📊 Информация о Партии</h3>
+                        <div id="replayInfo" class="replay-info">
+                            <p class="placeholder">Выберите партию для просмотра</p>
+                        </div>
+                        
+                        <!-- Panel Annotation -->
+                        <div class="panel-annotation">
+                            <h4>📖 About this panel</h4>
+                            <p><strong>Game Metadata</strong> - Displays technical details about the recorded game.</p>
+                            <p><strong>Content:</strong> Final scores, winning side, model versions, and total steps taken. This is essential for distinguishing between human-like and AI-only games.</p>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <h3>🔍 Последнее Действие</h3>
+                        <div id="replayLastAction" class="last-action-info">
+                            -
+                        </div>
+                        
+                        <!-- Panel Annotation -->
+                        <div class="panel-annotation">
+                            <h4>📖 About this panel</h4>
+                            <p><strong>Action Inspector</strong> - Shows the detailed logic of the most recent move.</p>
+                            <p><strong>Details:</strong> Pit number, captures made, and any special board rules (like <em>Tuzdyk</em>) that were triggered during the move distribution.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Training Logs Modal -->
+        <div id="trainingLogsModal" class="modal hidden">
+            <div class="modal-content" style="max-width: 90%; max-height: 90vh;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 id="trainingLogsTitle">📋 Логи обучения</h2>
+                    <button id="btnCloseTrainingLogs" class="btn btn-secondary">Закрыть</button>
+                </div>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button id="btnRefreshLogs" class="btn btn-primary">🔄 Обновить</button>
+                    <button id="btnCopyLogs" class="btn btn-secondary">📋 Копировать</button>
+                </div>
+                <div id="trainingLogsContent" style="
+                    background: #1e1e1e;
+                    color: #d4d4d4;
+                    padding: 15px;
+                    border-radius: 8px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 12px;
+                    max-height: 70vh;
+                    overflow-y: auto;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                ">Загрузка логов...</div>
+            </div>
+        </div>
+
+        <!-- Game Over Modal -->
+        <!-- Optimal Config Modal -->
+        <div id="optimalConfigModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>⚡ Автоматическая конфигурация</h2>
+                <p>Сколько часов доступно для обучения?</p>
+                <input type="number" id="hoursInput" value="1" min="0.5" max="24" step="0.5" class="input-field" style="width: 200px; margin: 20px 0;">
+                <div class="modal-buttons">
+                    <button id="btnApplyOptimalConfig" class="btn btn-primary">Применить</button>
+                    <button id="btnCancelOptimalConfig" class="btn btn-secondary">Отмена</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="gameOverModal" class="modal hidden">
+            <div class="modal-content">
+                <h2 id="gameOverTitle">🎉 Игра Окончена!</h2>
+                <div class="game-result" id="gameResult">
+                    <p class="winner-text" id="winnerText">Вы Победили!</p>
+                    <p class="score-text" id="scoreText">Счёт: 82 - 80</p>
+                    <p class="elo-change" id="eloChangeText">ELO: +15</p>
+                </div>
+                <div class="modal-buttons">
+                    <button id="btnPlayAgain" class="btn btn-primary">Играть Снова</button>
+                    <button id="btnCloseModal" class="btn btn-secondary">Закрыть</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TRAINING MODE -->
+        <!-- ============================================ -->
+        <main class="main-content hidden" id="trainingMode">
+            <!-- Epic Gaming-Style Animated Background -->
+            <div class="animated-bg-container">
+                <div id="trainingBgLayer1" class="animated-bg-layer animated-bg-layer-1"></div>
+                <div id="trainingBgLayer2" class="animated-bg-layer animated-bg-layer-2"></div>
+                <div id="trainingBgLayer3" class="animated-bg-layer animated-bg-layer-3"></div>
+                <div id="trainingBgLayer4" class="animated-bg-layer animated-bg-layer-4"></div>
+            </div>
+
+            <!-- Training Data Panel -->
+            <div class="panel training-data-panel">
+                <h2>📂 Тренировочные Данные</h2>
+                <p class="panel-description">Управление данными для дообучения модели</p>
+                
+                <div class="data-stats-grid" id="trainingDataStats">
+                    <div class="data-stat-card">
+                        <div class="stat-icon">📚</div>
+                        <div class="stat-value" id="statOpeningBook">0</div>
+                        <div class="stat-label">Дебютная книга</div>
+                    </div>
+                    <div class="data-stat-card">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-value" id="statTournament">0</div>
+                        <div class="stat-label">Турниры</div>
+                    </div>
+                    <div class="data-stat-card">
+                        <div class="stat-icon">🎮</div>
+                        <div class="stat-value" id="statPlayOK">0</div>
+                        <div class="stat-label">PlayOK</div>
+                    </div>
+                    <div class="data-stat-card highlight">
+                        <div class="stat-icon">Σ</div>
+                        <div class="stat-value" id="statTotalGamesData">0</div>
+                        <div class="stat-label">Всего игр</div>
+                    </div>
+                    <div class="data-stat-card">
+                        <div class="stat-icon">↔️</div>
+                        <div class="stat-value" id="statTransitions">0</div>
+                        <div class="stat-label">Переходов</div>
+                    </div>
+                </div>
+                
+                <div class="data-files-section">
+                    <h3>📁 Файлы данных</h3>
+                    <div class="upload-section">
+                        <input type="file" id="uploadTrainingFile" accept=".jsonl,.json" multiple style="display: none;">
+                        <button class="action-btn" onclick="document.getElementById('uploadTrainingFile').click()">
+                            📤 Загрузить файлы данных (.jsonl)
+                        </button>
+                        <span id="uploadStatus" class="upload-status"></span>
+                    </div>
+                    <div id="dataFilesList" class="data-files-list">
+                        <p class="empty-text">Загрузка...</p>
+                    </div>
+                </div>
+                
+                <!-- Training Configuration -->
+                <div class="human-training-config">
+                    <h3>⚙️ Параметры дообучения</h3>
+                    <div class="config-grid">
+                        <div class="config-item config-item-wide">
+                            <label for="humanBaseModel">Базовая модель:</label>
+                            <select id="humanBaseModel" class="input-field">
+                                <option value="">🆕 Новая модель (с нуля)</option>
+                            </select>
+                            <small>продолжить дообучение существующей</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="humanEpochs">Эпохи:</label>
+                            <input type="number" id="humanEpochs" value="50" min="10" max="200" class="input-field">
+                            <small>(рек. 50-100)</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="humanBatchSize">Batch:</label>
+                            <input type="number" id="humanBatchSize" value="128" min="32" max="512" step="32" class="input-field">
+                            <small>(рек. 128)</small>
+                        </div>
+                        <div class="config-item">
+                            <label for="humanLearningRate">LR:</label>
+                            <input type="number" id="humanLearningRate" value="0.001" min="0.0001" max="0.01" step="0.0001" class="input-field">
+                            <small>(рек. 0.001)</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="data-actions">
+                    <button id="btnParseData" class="btn btn-secondary">
+                        🔄 Обновить парсинг
+                    </button>
+                    <button id="btnTrainOnHuman" class="btn btn-primary btn-large">
+                        🎓 Дообучить на человеческих данных
+                    </button>
+                    <button id="btnOpenFaq" class="btn btn-secondary" title="Открыть FAQ">
+                        ❓ FAQ
+                    </button>
+                </div>
+                
+                <div id="humanTrainingProgress" class="human-training-progress hidden">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="humanTrainingBar"></div>
+                    </div>
+                    <p class="progress-text" id="humanTrainingText">Подготовка...</p>
+                    
+                    <!-- Training Chart -->
+                    <div class="training-chart-container">
+                        <canvas id="trainingChart" height="150"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Human Training Data</strong> - Train your model on real human games.</p>
+                    <p><strong>Data sources:</strong> Opening books (debut strategies), tournament games, PlayOK online games.</p>
+                    <p><strong>Workflow:</strong></p>
+                    <ol>
+                        <li>Click "🔄 Обновить парсинг" to parse new game files</li>
+                        <li>Select base model (or start fresh)</li>
+                        <li>Set epochs (50-100), batch size (128), learning rate (0.001)</li>
+                        <li>Click "🎓 Дообучить" to start training</li>
+                    </ol>
+                    <p><strong>Expected results:</strong> Accuracy 30-40% is typical. Higher epochs may overfit.</p>
+                </div>
+                
+            </div>
+            
+            <!-- Training Configuration Panel -->
+            <div class="panel training-config-panel">
+                <h2>⚙️ Self-Play Тренировка (PolicyNetwork)</h2>
+                
+                <div class="config-section active-model-indicator">
+                    <p class="config-info">ℹ️ <strong>Активная модель:</strong> <span id="selfPlayActiveModel">policy_net (default)</span></p>
+                    <p class="config-warning" id="selfPlayArchWarning" style="display:none;">⚠️ AlphaZero модели несовместимы с Self-Play! Используйте AlphaZero тренировку ниже.</p>
+                </div>
+                
+                <div class="config-section">
+                    <label for="numGames">Количество игр:</label>
+                    <input type="number" id="numGames" min="1" max="1000" value="10" class="input-field">
+                </div>
+                
+                <div class="config-section">
+                    <label for="epsilon">Epsilon (исследование):</label>
+                    <input type="number" id="epsilon" min="0" max="1" step="0.05" value="0.2" class="input-field">
+                    <small>0.0 = жадный, 1.0 = случайный</small>
+                </div>
+                
+                <div class="config-section">
+                    <label for="hiddenSize">Размер скрытого слоя:</label>
+                    <input type="number" id="hiddenSize" min="32" max="256" step="32" value="64" class="input-field">
+                </div>
+                
+                <div class="config-section">
+                    <label for="modelName">Имя модели:</label>
+                    <input type="text" id="modelName" value="policy_net" class="input-field">
+                </div>
+                
+                <div class="config-section">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="saveReplays" checked>
+                        <span>Сохранять реплеи (первые 3 игры)</span>
+                    </label>
+                </div>
+                
+                <button id="btnStartTraining" class="btn btn-primary btn-large">
+                    🚀 Запустить Self-Play
+                </button>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Self-Play Training (PolicyNetwork)</strong> - Basic reinforcement learning where the AI plays against itself to improve.</p>
+                    <p><strong>When to use:</strong> Use this for rapid iteration or testing changes in the <code>PolicyNetwork</code> architecture before moving to more intensive AlphaZero training.</p>
+                    <p><strong>Parameters:</strong></p>
+                    <ul>
+                        <li><strong>Epsilon:</strong> Chance of making a random move. Lower values (0.1-0.2) make the AI focus on what it already knows.</li>
+                        <li><strong>Hidden Size:</strong> Number of neurons in the network layers (64-128 recommended).</li>
+                    </ul>
+                    <p><strong>Workflow:</strong> Set games count, click 🚀, and watch the win rates evolve in the progress panel.</p>
+                </div>
+            </div>
+            
+            <!-- Training Progress Panel -->
+            <div class="panel training-progress-panel">
+                <h2>📊 Прогресс Тренировки</h2>
+                
+                <div id="trainingStatus" class="training-status">
+                    <p class="status-text">Ожидание запуска...</p>
+                </div>
+                
+                <div id="trainingProgress" class="progress-container hidden">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="trainingProgressBar"></div>
+                    </div>
+                    <p class="progress-text" id="trainingProgressText">0 / 10 игр</p>
+                </div>
+                
+                <div id="trainingStats" class="training-stats hidden">
+                    <div class="stat-row">
+                        <span class="stat-label">Побед белых:</span>
+                        <span class="stat-value" id="whiteWins">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Побед чёрных:</span>
+                        <span class="stat-value" id="blackWins">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Ничьи:</span>
+                        <span class="stat-value" id="draws">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Средняя длина:</span>
+                        <span class="stat-value" id="avgSteps">0</span>
+                    </div>
+                </div>
+                
+                <h3>💾 Сохранённые Модели</h3>
+                <div id="modelsList" class="models-list">
+                    <p class="empty-text">Нет сохранённых моделей</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Training Progress & Models</strong> - Real-time tracking of the current self-play session and management of saved model weights.</p>
+                    <p><strong>Functionality:</strong></p>
+                    <ul>
+                        <li><strong>Progress Bar:</strong> Shows how many games are completed in the current run.</li>
+                        <li><strong>Stats Table:</strong> Displays the distribution of wins/losses/draws.</li>
+                        <li><strong>Model List:</strong> Your library of saved <code>.pt</code> and <code>.pth.tar</code> files.</li>
+                    </ul>
+                    <p><strong>Actions:</strong> Use the "Загрузить" button on any model card to make it active for play or further training.</p>
+                </div>
+            </div>
+            
+            <!-- Training Sessions Panel -->
+            <div class="panel training-sessions-panel">
+                <h2>📝 История Тренировок</h2>
+                <div id="sessionsList" class="sessions-list">
+                    <p class="empty-text">Нет завершённых сессий</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Training History</strong> - Logs of completed <code>Gym</code> reinforcement learning sessions.</p>
+                    <p><strong>Information:</strong> Each card represents a session, showing the win/loss distribution and average game length. This helps you identify which training parameters yielded the most competitive AI.</p>
+                </div>
+            </div>
+
+            <!-- ============================================ -->
+            <!-- ALPHAZERO DASHBOARD -->
+            <!-- ============================================ -->
+            <!-- SYNC DASHBOARD -->
+            <!-- ============================================ -->
+            <div class="panel sync-panel">
+                <h2>📡 Синхронизация Чекпоинтов</h2>
+                <div class="sync-status-bar">
+                    <div id="syncIndicator" class="sync-indicator disconnected">
+                        <span class="dot"></span>
+                        <span class="text">Синхронизация: ОТКЛЮЧЕНА</span>
+                    </div>
+                    <div id="syncLastTime" class="sync-last-time">-</div>
+                </div>
+                
+                <div class="sync-config-grid">
+                    <div class="config-item" style="grid-column: span 3;">
+                        <label for="syncRemoteUrl">Remote Base URL:</label>
+                        <input type="text" id="syncRemoteUrl" value="http://localhost" class="input-field" placeholder="Пример: http://localhost">
+                    </div>
+                    <div class="config-item" style="grid-column: span 2;">
+                        <label for="syncPorts">Порты (через запятую):</label>
+                        <input type="text" id="syncPorts" value="8000, 8080" class="input-field" placeholder="8000, 8080">
+                    </div>
+                </div>
+
+                <div class="sync-actions">
+                    <button id="btnSaveSyncConfig" class="btn btn-primary">💾 Сохранить и Запустить</button>
+                    <button id="btnRestartSync" class="btn btn-secondary">🔄 Перезапуск</button>
+                </div>
+            </div>
+
+            <!-- ============================================ -->
+            <div class="panel alphazero-panel">
+                <button class="panel-expand-btn" title="Развернуть">⛶</button>
+                <h2>🦾 AlphaZero - Глубокое Обучение</h2>
+                <p class="panel-description">Self-Play обучение с поиском по дереву (MCTS)</p>
+                
+                <!-- GPU Info Banner -->
+                <div id="gpuInfo" class="gpu-info-banner">
+                    <span class="gpu-status loading">🔍 Определение GPU...</span>
+                </div>
+                
+                <div class="alphazero-config-grid">
+                    <div class="config-item">
+                        <label for="azIters">Итерации:</label>
+                        <input type="number" id="azIters" value="100" min="1" max="1000" class="input-field">
+                        <small class="input-hint">Больше = качественнее</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="azEps">Игр/итер:</label>
+                        <input type="number" id="azEps" value="100" min="1" max="500" class="input-field">
+                        <small class="input-hint">Больше данных за итерацию</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="azSims">MCTS Симуляции:</label>
+                        <input type="number" id="azSims" value="100" min="10" max="800" class="input-field">
+                        <small class="input-hint">Глубина поиска</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="azCpuct">Exploration (cpuct):</label>
+                        <input type="number" id="azCpuct" value="1.0" step="0.1" min="0.1" max="5.0" class="input-field">
+                    </div>
+                    <div class="config-item">
+                        <label for="azBatchSize">Batch Size:</label>
+                        <input type="number" id="azBatchSize" value="256" min="32" max="1024" class="input-field">
+                        <small class="input-hint">Масштаб с GPU</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="azHiddenSize">Hidden Size:</label>
+                        <input type="number" id="azHiddenSize" value="256" min="64" max="1024" class="input-field">
+                        <small class="input-hint">Размер сети</small>
+                    </div>
+                </div>
+
+                <div class="alphazero-settings-row">
+                    <div class="alphazero-settings">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="azUseBootstrap" checked>
+                            <span>📚 Bootstrap с человеческими данными</span>
+                        </label>
+                    </div>
+                    <div class="alphazero-settings">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="azParallel" checked>
+                            <span>⚡ Параллельный self-play</span>
+                        </label>
+                    </div>
+                    <div class="alphazero-settings">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="azUseMcts" checked>
+                            <span>🎯 MCTS для игры</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="alphazero-actions">
+                    <button id="btnLoadOptimalConfig" class="btn btn-secondary">
+                        ⚡ Авто-конфиг для GPU
+                    </button>
+                    <button id="btnStartAlphaZero" class="btn btn-primary btn-large">
+                        🚀 Запустить AlphaZero
+                    </button>
+                    <button id="btnStopAlphaZero" class="btn btn-danger hidden">
+                        ⏹️ Остановить
+                    </button>
+                    <button id="btnShowTrainingLogsAlways" class="btn btn-secondary">
+                        📋 Логи обучения
+                    </button>
+                    <button id="btnStartAlphaZeroTournament" class="btn btn-warning" title="Запустить турнир между всеми чекпойнтами AlphaZero">
+                        🏆 Турнир AlphaZero
+                    </button>
+                </div>
+                
+                <!-- System Update Button -->
+                <div class="system-update-section" style="margin-top: 20px; padding: 15px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 10px; justify-content: space-between;">
+                        <div style="flex: 1;">
+                            <strong>🔄 Обновление системы</strong>
+                            <div id="gitStatusInfo" style="font-size: 0.9em; color: var(--text-secondary); margin-top: 5px;">
+                                Проверка статуса...
+                            </div>
+                            <div style="font-size: 0.85em; color: #ffa500; margin-top: 8px; padding: 8px; background: rgba(255,165,0,0.1); border-radius: 4px;">
+                                ⚠️ <strong>Важно:</strong> Если сервер запущен в Jupyter Notebook, перезапусти его там!<br>
+                                Обновление страницы в браузере не перезапускает сервер.
+                            </div>
+                        </div>
+                        <button id="btnUpdateAndRestart" class="btn btn-primary">
+                            📥 Обновить с GitHub и перезапустить
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Last Training Metrics Summary -->
+                <div id="azLastMetrics" class="az-last-metrics">
+                    <h3>📊 Последняя тренировка</h3>
+                    <div class="metrics-summary-grid">
+                        <div class="metric-box">
+                            <span class="metric-label">Policy Loss</span>
+                            <span class="metric-value" id="lastPolicyLoss">—</span>
+                            <span class="metric-target">Цель: &lt; 1.0</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="metric-label">Value Loss</span>
+                            <span class="metric-value" id="lastValueLoss">—</span>
+                            <span class="metric-target">Цель: &lt; 0.1</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="metric-label">Win Rate</span>
+                            <span class="metric-value" id="lastWinRate">—</span>
+                            <span class="metric-target">Цель: &gt; 55%</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="metric-label">Примеров</span>
+                            <span class="metric-value" id="totalExamples">—</span>
+                            <span class="metric-target">Больше = лучше</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Best checkpoint recommendation -->
+                    <div id="bestCheckpointInfo" class="best-checkpoint-info"></div>
+                    
+                    <!-- Checkpoints list -->
+                    <div class="checkpoints-section">
+                        <h4>💾 AlphaZero Чекпоинты</h4>
+                        <div id="azCheckpointsList" class="checkpoints-list"></div>
+                    </div>
+                </div>
+
+                <!-- Training Progress (shown during training) -->
+                <div id="azProgressSection" class="az-progress-section hidden">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3>📊 Прогресс обучения</h3>
+                        <button id="btnShowTrainingLogs" class="btn btn-secondary">
+                            📋 Показать логи
+                        </button>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="azProgressBar"></div>
+                    </div>
+                    <div class="az-stats-grid">
+                        <div class="az-stat-item">
+                            <span class="label">Итерация:</span>
+                            <span class="value" id="azCurrentIter">0 / 0</span>
+                        </div>
+                        <div class="az-stat-item">
+                            <span class="label">Статус:</span>
+                            <span class="value" id="azStatusText">Обучение...</span>
+                        </div>
+                        <div class="az-stat-item">
+                            <span class="label">Время:</span>
+                            <span class="value" id="azElapsedTime">0м 0с</span>
+                        </div>
+                        <div class="az-stat-item">
+                            <span class="label">GPU:</span>
+                            <span class="value" id="azGpuUsed">—</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Live checkpoints during training -->
+                    <div id="azLiveCheckpoints" class="live-checkpoints-section hidden">
+                        <h4>💾 Доступные чекпоинты (скачайте пока идет обучение!)</h4>
+                        <p class="checkpoint-tip">⚠️ Скачивайте чекпоинты прямо сейчас - если время на сервере закончится, вы сохраните прогресс!</p>
+                        <div id="azCheckpointsList" class="checkpoints-list"></div>
+                    </div>
+                </div>
+                
+                <!-- Charts (always visible when data exists) -->
+                <div id="azChartsSection" class="az-charts-container">
+                    <div class="chart-box">
+                        <h3>📉 Loss (Policy & Value)</h3>
+                        <canvas id="azLossChart" height="150"></canvas>
+                    </div>
+                    <div class="chart-box">
+                        <h3>📈 Win Rate %</h3>
+                        <canvas id="azEloChart" height="150"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Panel Annotation (shown in fullscreen mode) -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>AlphaZero Deep Learning</strong> trains a neural network using self-play and Monte Carlo Tree Search (MCTS).</p>
+                    <p><strong>When to use:</strong> After you have some human training data, use AlphaZero to create a stronger model through reinforcement learning.</p>
+                    <p><strong>Workflow:</strong></p>
+                    <ol>
+                        <li>Set iterations (50-100 recommended for CPU)</li>
+                        <li>Enable "Bootstrap with human data" for better starting point</li>
+                        <li>Click "⚔️ Запустить AlphaZero" to start training</li>
+                        <li>Monitor Loss charts - lower is better</li>
+                        <li>After training, load best checkpoint from the list</li>
+                    </ol>
+                    <p><strong>Key metrics:</strong> Policy Loss &lt;1.0 is good, Win Rate &gt;55% means model improved.</p>
+                </div>
+            </div>
+
+            <!-- ============================================ -->
+            <!-- PROBS TRAINING DASHBOARD -->
+            <!-- ============================================ -->
+            <div class="panel probs-panel">
+                <h2>🎯 PROBS - Beam Search Обучение</h2>
+                <p class="panel-description">PROBS: Predict Result of Beam Search (2024 алгоритм)</p>
+                
+                <div class="probs-info-banner">
+                    <p>🔬 <strong>PROBS</strong> — новый алгоритм, альтернатива AlphaZero. Использует Beam Search вместо MCTS, две отдельные сети (Value и Q-Value).</p>
+                </div>
+                
+                <div class="probs-config-grid">
+                    <div class="config-item">
+                        <label for="probsIters">Итерации:</label>
+                        <input type="number" id="probsIters" value="100" min="1" max="500" class="input-field">
+                        <small class="input-hint">High-level итерации</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="probsVEpisodes">V-train эпизоды:</label>
+                        <input type="number" id="probsVEpisodes" value="500" min="10" max="5000" class="input-field">
+                        <small class="input-hint">Обучение Value модели</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="probsQEpisodes">Q-train эпизоды:</label>
+                        <input type="number" id="probsQEpisodes" value="250" min="10" max="2500" class="input-field">
+                        <small class="input-hint">Обучение Q модели</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="probsMemEpisodes">Memory размер:</label>
+                        <input type="number" id="probsMemEpisodes" value="10000" min="500" max="50000" class="input-field">
+                        <small class="input-hint">Макс. эпизодов в памяти</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="probsBatchSize">Batch Size:</label>
+                        <input type="number" id="probsBatchSize" value="64" min="16" max="512" class="input-field">
+                    </div>
+                    <div class="config-item">
+                        <label for="probsQCalls">Q(s,a) вызовы:</label>
+                        <input type="number" id="probsQCalls" value="30" min="5" max="100" class="input-field">
+                        <small class="input-hint">Глубина beam search</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="probsMaxDepth">Max Depth:</label>
+                        <input type="number" id="probsMaxDepth" value="50" min="3" max="200" class="input-field">
+                        <small class="input-hint">Макс. глубина поиска</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="probsThreads">Self-play потоки:</label>
+                        <input type="number" id="probsThreads" value="4" min="1" max="16" class="input-field">
+                    </div>
+                    <div class="config-item">
+                        <label for="probsEvalGames">Игр для оценки:</label>
+                        <input type="number" id="probsEvalGames" value="20" min="1" max="100" class="input-field">
+                    </div>
+                    <div class="config-item">
+                        <label for="probsProcesses">Процессы Q-train:</label>
+                        <input type="number" id="probsProcesses" value="4" min="0" max="16" class="input-field">
+                        <small class="input-hint">0 = один поток</small>
+                    </div>
+                    <div class="config-item">
+                        <label for="probsDevice">Device:</label>
+                        <select id="probsDevice" class="input-field">
+                            <option value="cpu">CPU</option>
+                            <option value="cuda">CUDA (GPU)</option>
+                            <option value="auto">Auto</option>
+                        </select>
+                    </div>
+                    <div class="config-item" style="grid-column: span 2;">
+                        <label for="probsInitialCheckpoint">Продолжить с:</label>
+                        <select id="probsInitialCheckpoint" class="input-field">
+                            <option value="">🆕 Новая модель (с нуля)</option>
+                        </select>
+                        <small class="input-hint">Выберите базовые веса</small>
+                    </div>
+                    <div class="config-item full-width" style="grid-column: span 5; display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px; background: rgba(0, 242, 255, 0.05); border-radius: 8px; border: 1px dashed var(--border-color);">
+                        <input type="checkbox" id="probsUseBoost" checked style="width: 20px; height: 20px; cursor: pointer;">
+                        <label for="probsUseBoost" style="cursor: pointer; margin-bottom: 0;">
+                            🚀 <strong>Supervised Boosting</strong>: Пре-тренировка на человеческих данных перед RL
+                        </label>
+                    </div>
+                </div>
+
+                <div class="probs-actions">
+                    <button id="btnStartPROBS" class="btn btn-primary btn-large">
+                        🚀 Запустить PROBS
+                    </button>
+                    <button id="btnMonsterConfig" class="btn btn-secondary" style="background: linear-gradient(45deg, #ff0055, #7000ff); color: white; border: none;" title="Оптимизировать под 64 ядра и 4x GPU">
+                        🔥 МОНСТР-КОНФИГ
+                    </button>
+                    <button id="btnStopPROBS" class="btn btn-danger hidden">
+                        ⏹️ Остановить
+                    </button>
+                    <button id="btnShowPROBSLogs" class="btn btn-secondary">
+                        📋 Логи
+                    </button>
+                    <button id="btnStartPROBSTournament" class="btn btn-warning" title="Запустить турнир между всеми чекпойнтами PROBS">
+                        🏆 Турнир PROBS
+                    </button>
+                </div>
+                
+                <!-- Training Progress (shown during training) -->
+                <div id="probsProgressSection" class="probs-progress-section hidden">
+                    <h3>📊 Прогресс обучения PROBS</h3>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="probsProgressBar"></div>
+                    </div>
+                    <div class="probs-stats-grid">
+                        <div class="probs-stat-item">
+                            <span class="label">Итерация:</span>
+                            <span class="value" id="probsCurrentIter">0 / 0</span>
+                        </div>
+                        <div class="probs-stat-item">
+                            <span class="label">Статус:</span>
+                            <span class="value" id="probsStatusText">Обучение...</span>
+                        </div>
+                        <div class="probs-stat-item">
+                            <span class="label">Время:</span>
+                            <span class="value" id="probsElapsedTime">0м 0с</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PROBS Checkpoints -->
+                <div class="probs-checkpoints-section">
+                    <h3>💾 PROBS Чекпоинты</h3>
+                    <div id="probsCheckpointsList" class="checkpoints-list">
+                        <p class="empty-text">Нет сохранённых чекпоинтов PROBS</p>
+                    </div>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>PROBS (Predict Result of Beam Search)</strong> — экспериментальный алгоритм 2024 года как альтернатива AlphaZero.</p>
+                    <p><strong>Преимущества:</strong></p>
+                    <ul>
+                        <li>Менее требователен к вычислительным ресурсам</li>
+                        <li>Использует Beam Search вместо MCTS</li>
+                        <li>Две раздельные сети: Value (оценка позиции) и Q-Value (оценка действий)</li>
+                    </ul>
+                    <p><strong>Как играть:</strong> После обучения, выберите "PROBS AI" (уровень 7) в меню создания игры.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- ============================================ -->
+        <!-- GEMINI BATTLE MODE -->
+        <!-- ============================================ -->
+        <main class="main-content hidden" id="geminiBattleMode">
+            <!-- Epic Gaming-Style Animated Background -->
+            <div class="animated-bg-container">
+                <div id="battleBgLayer1" class="animated-bg-layer animated-bg-layer-1"></div>
+                <div id="battleBgLayer2" class="animated-bg-layer animated-bg-layer-2"></div>
+                <div id="battleBgLayer3" class="animated-bg-layer animated-bg-layer-3"></div>
+                <div id="battleBgLayer4" class="animated-bg-layer animated-bg-layer-4"></div>
+            </div>
+
+            <!-- Battle Configuration Panel -->
+            <div class="panel battle-config-panel">
+                <h2>⚔️ VS Arena - Соревнования моделей</h2>
+                
+                <div class="config-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Player 1 Selection -->
+                    <div class="config-section">
+                        <label for="battleModelSelect" class="label">Игрок 1 (Белые):</label>
+                        <select id="battleModelSelect" class="input-field model-selector">
+                            <optgroup label="Системные">
+                                <option value="default">🧠 Активная модель (Gym)</option>
+                                <option value="gemini">✨ Google Gemini AI</option>
+                            </optgroup>
+                            <optgroup label="PROBS Чекпоинты" id="arenaProbsList1"></optgroup>
+                            <optgroup label="AlphaZero Чекпоинты" id="arenaAzList1"></optgroup>
+                        </select>
+                    </div>
+                    
+                    <!-- Player 2 Selection -->
+                    <div class="config-section">
+                        <label for="battleModel2Select" class="label">Игрок 2 (Чёрные):</label>
+                        <select id="battleModel2Select" class="input-field model-selector">
+                            <optgroup label="Системные">
+                                <option value="gemini">✨ Google Gemini AI</option>
+                                <option value="default">🧠 Активная модель (Gym)</option>
+                            </optgroup>
+                            <optgroup label="PROBS Чекпоинты" id="arenaProbsList2"></optgroup>
+                            <optgroup label="AlphaZero Чекпоинты" id="arenaAzList2"></optgroup>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="config-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 15px;">
+                    <div class="config-item">
+                        <label for="battleNumGames">Количество игр:</label>
+                        <input type="number" id="battleNumGames" min="1" max="100" value="10" class="input-field">
+                    </div>
+                    <div class="config-item">
+                        <label for="battleTimeout">Таймаут Gemini (сек):</label>
+                        <input type="number" id="battleTimeout" min="10" max="120" value="30" class="input-field">
+                    </div>
+                    <div class="config-item" style="display: flex; align-items: flex-end;">
+                        <label class="checkbox-label" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="battleSaveReplays" checked>
+                            <span>Сохранять реплеи</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="battle-actions" style="margin-top: 25px; display: flex; gap: 15px;">
+                    <button id="btnStartBattle" class="btn btn-primary btn-large" style="flex: 2;">
+                        ⚔️ Начать Соревнование
+                    </button>
+                    <button id="btnStopBattle" class="btn btn-danger hidden">
+                        ⏹ Остановить
+                    </button>
+                    <button id="btnExportGeminiData" class="btn btn-secondary" style="flex: 1;">
+                        📤 Экспорт данных
+                    </button>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>VS Arena</strong> - Битва титанов! Сравните силу PROBS, AlphaZero и Gemini.</p>
+                    <p><strong>Workflow:</strong> Выберите модели из списков (поддерживаются все ваши чекпоинты), установите количество игр и жмите ⚔️.</p>
+                </div>
+            </div>
+            
+            <!-- Battle Progress Panel -->
+            <div class="panel battle-progress-panel">
+                <h2>📊 Прогресс Батла</h2>
+                
+                <div id="battleStatus" class="battle-status">
+                    <div id="arenaMatchupDisplay" style="font-size: 1.1rem; font-weight: bold; color: var(--accent-primary); margin-bottom: 10px; text-align: center;">
+                        Ожидание запуска...
+                    </div>
+                    <div id="currentGameSides" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-family: monospace; font-size: 13px;">
+                        -
+                    </div>
+                </div>
+                
+                <div id="battleProgress" class="progress-container hidden">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="battleProgressBar"></div>
+                    </div>
+                    <p class="progress-text" id="battleProgressText">0 / 10 игр</p>
+                </div>
+                
+                <div id="battleStats" class="battle-stats hidden">
+                    <div class="stat-row highlight">
+                        <span class="stat-label">ELO Игрока 1:</span>
+                        <span class="stat-value" id="modelElo">1500</span>
+                        <span class="stat-category" id="modelCategory"></span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label" id="labelP1Wins">Побед Игрока 1:</span>
+                        <span class="stat-value win" id="battleModelWins">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label" id="labelP2Wins">Побед Игрока 2:</span>
+                        <span class="stat-value loss" id="battleGeminiWins">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Ничьи:</span>
+                        <span class="stat-value" id="battleDraws">0</span>
+                    </div>
+                </div>
+                
+                <button id="btnStopBattle" class="btn btn-danger hidden">
+                    ⏹️ Остановить Батл
+                </button>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Battle Progress</strong> - Monitors the ongoing competition.</p>
+                    <p><strong>Key Metrics:</strong></p>
+                    <ul>
+                        <li><strong>ELO Rating:</strong> Calculated dynamically based on wins/losses against the opponent.</li>
+                        <li><strong>Category:</strong> Your model's rank (from Novice to Grandmaster) based on its ELO.</li>
+                    </ul>
+                    <p><strong>Tip:</strong> If the model is losing consistently, stop the battle and try further training with different parameters.</p>
+                </div>
+            </div>
+            
+            <!-- ELO Chart Panel -->
+            <div class="panel battle-chart-panel">
+                <h2>📈 График ELO Рейтинга</h2>
+                <div class="chart-container">
+                    <canvas id="eloChart" width="600" height="300"></canvas>
+                </div>
+                <div class="elo-legend">
+                    <div class="legend-item"><span class="legend-line gm"></span> Гроссмейстер (2400+)</div>
+                    <div class="legend-item"><span class="legend-line im"></span> ММ (2200)</div>
+                    <div class="legend-item"><span class="legend-line master"></span> Мастер (2000)</div>
+                    <div class="legend-item"><span class="legend-line cm"></span> КМС (1800)</div>
+                    <div class="legend-item"><span class="legend-line club"></span> Клубный (1400)</div>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>ELO Rating Chart</strong> - Visual history of model's performance trends.</p>
+                    <p><strong>Stage:</strong> Useful during "Validation" stage to see if new model versions are truly better or just lucky in a few games.</p>
+                    <p><strong>Interpretation:</strong> Upward trend means the model is learning effective strategies against the opponent (Gemini or Local).</p>
+                </div>
+            </div>
+            
+            <!-- Last Game Summary Panel -->
+            <div class="panel battle-summary-panel">
+                <h2>📝 Резюме Последней Игры</h2>
+                <div id="lastGameSummary" class="game-summary">
+                    <p class="placeholder">Резюме появится после завершения игры...</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Last Game Summary</strong> - AI-generated commentary on the most recent match.</p>
+                    <p><strong>Content:</strong> Key mistakes, brilliant moves, and tactical shifts observed during the game.</p>
+                    <p><strong>Benefit:</strong> Helps you understand <em>why</em> a model won or lost beyond just looking at the final score.</p>
+                </div>
+            </div>
+            
+            <!-- Game Visualizer Panel -->
+            <div class="panel battle-visualizer-panel">
+                <h2>🎬 Визуализатор Партии</h2>
+                <p class="panel-description">Просмотр игры на доске с пошаговой навигацией</p>
+                
+                <!-- Game Selection -->
+                <div class="visualizer-controls">
+                    <div class="control-group">
+                        <label>Выберите игру:</label>
+                        <select id="visualizerGameSelect" class="input-field">
+                            <option value="">-- Выберите из истории --</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Или вставьте ходы:</label>
+                        <textarea id="visualizerMovesInput" class="moves-input" placeholder="Формат: 1,5,3,7,2,6... или разделённые пробелами"></textarea>
+                        <button id="btnLoadCustomMoves" class="btn btn-secondary">📥 Загрузить ходы</button>
+                    </div>
+                </div>
+                
+                <!-- Visualizer Board -->
+                <div class="visualizer-board-container">
+                    <div class="visualizer-info-bar">
+                        <div class="visualizer-player black-player">
+                            <span class="player-icon">⚫</span>
+                            <span class="player-label">ЧЁРНЫЕ</span>
+                            <span class="player-score" id="vizBlackScore">0</span>
+                        </div>
+                        <div class="visualizer-status">
+                            <span class="move-counter" id="vizMoveCounter">Ход: 0 / 0</span>
+                            <span class="current-player" id="vizCurrentPlayer">Белые</span>
+                        </div>
+                        <div class="visualizer-player white-player">
+                            <span class="player-icon">⚪</span>
+                            <span class="player-label">БЕЛЫЕ</span>
+                            <span class="player-score" id="vizWhiteScore">0</span>
+                        </div>
+                    </div>
+                    
+                    <canvas id="visualizerBoard" class="visualizer-canvas" width="800" height="400"></canvas>
+                    
+                    <div class="visualizer-nav">
+                        <button id="btnVizFirst" class="btn btn-small">⏮</button>
+                        <button id="btnVizPrev" class="btn btn-small">◀</button>
+                        <button id="btnVizPlay" class="btn btn-primary">▶️</button>
+                        <button id="btnVizNext" class="btn btn-small">▶</button>
+                        <button id="btnVizLast" class="btn btn-small">⏭</button>
+                        <input type="range" id="vizSlider" class="viz-slider" min="0" max="100" value="0">
+                    </div>
+                </div>
+                
+                <!-- Move History -->
+                <div class="visualizer-moves-list" id="vizMovesList">
+                    <p class="placeholder">Выберите игру или вставьте ходы для просмотра</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Game Visualizer</strong> - Step through any game move by move on the board.</p>
+                    <p><strong>How to use:</strong></p>
+                    <ol>
+                        <li>Select a game from dropdown (loaded from battle history)</li>
+                        <li>Or paste custom moves in format: 1,5,3,7... (pit numbers 1-9)</li>
+                        <li>Use navigation buttons or slider to step through moves</li>
+                        <li>▶️ button auto-plays the game</li>
+                    </ol>
+                    <p><strong>Move format:</strong> Numbers 1-9 representing pit to play from. White plays from bottom row, Black from top.</p>
+                </div>
+            </div>
+            
+            <!-- Battle Sessions History -->
+            <div class="panel battle-sessions-panel">
+                <h2>📜 История Батлов</h2>
+                <div id="battleSessionsList" class="sessions-list">
+                    <p class="empty-text">Нет завершённых батлов</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Battle History</strong> - Record of all completed model competitions.</p>
+                    <p><strong>Stats shown:</strong> Win/Loss/Draw count, ELO changes, model versions used.</p>
+                    <p><strong>Tip:</strong> Click any battle to load its games into the Visualizer above.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- ============================================ -->
+        <!-- ANALYTICS MODE - REAL DATA ONLY -->
+        <!-- ============================================ -->
+        <main class="main-content hidden" id="analyticsMode">
+            <!-- Epic Gaming-Style Animated Background -->
+            <div class="animated-bg-container">
+                <div id="analyticsBgLayer1" class="animated-bg-layer animated-bg-layer-1"></div>
+                <div id="analyticsBgLayer2" class="animated-bg-layer animated-bg-layer-2"></div>
+                <div id="analyticsBgLayer3" class="animated-bg-layer animated-bg-layer-3"></div>
+                <div id="analyticsBgLayer4" class="animated-bg-layer animated-bg-layer-4"></div>
+            </div>
+
+            <!-- Controls Panel -->
+            <div class="panel analytics-controls-panel">
+                <h2>📊 Реальные Метрики</h2>
+                <p class="panel-description">Все данные из реальных файлов игр. Никаких моков.</p>
+                
+                <div class="controls-row">
+                    <button id="btnRefreshMetrics" class="btn btn-primary">
+                        🔄 Обновить
+                    </button>
+                    <button id="btnAutoRefresh" class="btn btn-secondary">
+                        ▶️ Авто
+                    </button>
+                    <button id="btnSyncWandB" class="btn btn-secondary">
+                        ☁️ Синхр. W&B
+                    </button>
+                    <span id="metricsTimestamp" class="timestamp">Ожидание...</span>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Real Metrics</strong> - The command center for the analytics dashboard.</p>
+                    <p><strong>Workflow:</strong></p>
+                    <ul>
+                        <li><strong>Refresh:</strong> Manually trigger a rescan of all game log files on the server.</li>
+                        <li><strong>Auto:</strong> Enable live updates as games are being played.</li>
+                        <li><strong>Sync W&B:</strong> Upload these metrics to Weights & Biases for long-term experiment tracking.</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Gemini Battle Stats Panel -->
+            <div class="panel analytics-stats-panel">
+                <h2>⚔️ Статистика Gemini Battles</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotalGames">0</div>
+                        <div class="stat-label">Всего игр</div>
+                    </div>
+                    <div class="stat-card win">
+                        <div class="stat-value" id="statModelWins">0</div>
+                        <div class="stat-label">Побед модели</div>
+                    </div>
+                    <div class="stat-card loss">
+                        <div class="stat-value" id="statGeminiWins">0</div>
+                        <div class="stat-label">Побед Gemini</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statDraws">0</div>
+                        <div class="stat-label">Ничьих</div>
+                    </div>
+                    <div class="stat-card highlight">
+                        <div class="stat-value" id="statWinrate">0%</div>
+                        <div class="stat-label">Winrate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statAvgGameLength">0</div>
+                        <div class="stat-label">Ср. длина игры</div>
+                    </div>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Gemini Battle Stats</strong> - Aggregated performance data of your active model against Gemini.</p>
+                    <p><strong>Insights:</strong> Use <em>Winrate</em> and <em>Avg Game Length</em> to gauge the tactical efficiency of your model. Higher winrates against Gemini at high ELO settings indicate a robust neural network.</p>
+                </div>
+            </div>
+            
+            <!-- ELO Panel -->
+            <div class="panel analytics-elo-panel">
+                <h2>🏆 ELO Рейтинг</h2>
+                <div class="elo-display">
+                    <div class="elo-main">
+                        <span class="elo-value" id="currentElo">1500</span>
+                        <span class="elo-change" id="lastEloChange">+0</span>
+                    </div>
+                    <div class="elo-category" id="eloCategory">Начинающий</div>
+                </div>
+                <div class="elo-details">
+                    <div class="detail-row">
+                        <span>Пик:</span>
+                        <span id="peakElo">1500</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>Игр сыграно:</span>
+                        <span id="eloTotalGames">0</span>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="eloProgressChart" height="200"></canvas>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>ELO Rating Progress</strong> - A detailed look at the player's or model's skill evolution.</p>
+                    <p><strong>Metrics:</strong> Shows the current rating, the all-time peak, and a historical trend graph. This provides a clear visualization of progress over hundreds of games.</p>
+                </div>
+            </div>
+            
+            <!-- Dataset Panel -->
+            <div class="panel analytics-dataset-panel">
+                <h2>📚 Датасет для обучения</h2>
+                <div class="dataset-composition">
+                    <div class="composition-bar">
+                        <div class="bar-segment gemini" id="barGemini" style="width: 0%"></div>
+                        <div class="bar-segment self-play" id="barSelfPlay" style="width: 0%"></div>
+                        <div class="bar-segment human" id="barHuman" style="width: 0%"></div>
+                    </div>
+                    <div class="composition-legend">
+                        <span class="legend-item gemini">Gemini</span>
+                        <span class="legend-item self-play">Self-Play</span>
+                        <span class="legend-item human">Турниры</span>
+                    </div>
+                </div>
+                <div class="dataset-stats">
+                    <div class="stat-row">
+                        <span>Gemini игр:</span>
+                        <span id="datasetGeminiGames">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Self-Play игр:</span>
+                        <span id="datasetSelfPlayGames">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Всего переходов:</span>
+                        <span id="datasetTotalTransitions">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Размер на диске:</span>
+                        <span id="datasetDiskSize">0 MB</span>
+                    </div>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Training Dataset</strong> - Overview of all data collected for training neural networks.</p>
+                    <p><strong>Components:</strong></p>
+                    <ul>
+                        <li><strong>Gemini:</strong> High-quality games played by the LLM.</li>
+                        <li><strong>Self-Play:</strong> Large volumes of AI vs AI games.</li>
+                        <li><strong>Tournament:</strong> Historical expert games from the Android APK and PlayOK.</li>
+                    </ul>
+                    <p><strong>Importance:</strong> A diverse dataset prevents the AI from repeating the same mistakes and helps it discover new winning patterns.</p>
+                </div>
+            </div>
+            
+            <!-- Convergence Panel -->
+            <div class="panel analytics-convergence-panel">
+                <h2>📈 Статус обучения</h2>
+                <div class="convergence-display">
+                    <div class="convergence-status" id="convergenceStatus">❓ Мало данных</div>
+                    <div class="convergence-metrics">
+                        <div class="metric-row">
+                            <span>Дисперсия:</span>
+                            <span id="convergenceVariance">N/A</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Тренд:</span>
+                            <span id="convergenceTrend">N/A</span>
+                        </div>
+                    </div>
+                    <p class="recommendation" id="convergenceRecommendation">
+                        Нужно больше данных для анализа
+                    </p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Training Status (Convergence)</strong> - Scientific analysis of whether the AI is actually improving over time.</p>
+                    <p><strong>Metrics:</strong></p>
+                    <ul>
+                        <li><strong>Variance:</strong> Consistency of the AI performance. High variance means it's unpredictable.</li>
+                        <li><strong>Trend:</strong> Long-term direction of the ELO rating.</li>
+                    </ul>
+                    <p><strong>Recommendation:</strong> Use this to decide if you need more training epochs or if the model has "plateaued" (reached its maximum potential with current architecture).</p>
+                </div>
+            </div>
+            
+            <!-- A/B Testing Panel -->
+            <div class="panel analytics-ab-panel">
+                <h2>🧪 A/B Тестирование Schema</h2>
+                <p class="panel-description">Тестирование разных форматов данных для Gemini</p>
+                
+                <button id="btnCreateExperiment" class="btn btn-secondary">
+                    ➕ Создать эксперимент
+                </button>
+                
+                <div id="experimentsList" class="experiments-list">
+                    <p class="empty-text">Нет активных экспериментов</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Schema A/B Testing</strong> - Experimental feature to test how different data formats affect Gemini LLM performance.</p>
+                    <p><strong>Purpose:</strong> LLMs are sensitive to how the board is described (JSON vs Text vs Compact). This tool runs controlled batches of games to find the most "readable" format for the AI.</p>
+                    <p><strong>Workflow:</strong> Create an experiment, select two different schemas, and run a set of games to see which one results in higher accuracy.</p>
+                </div>
+            </div>
+            
+            <!-- Recent Games Panel -->
+            <div class="panel analytics-recent-panel">
+                <h2>🕐 Последние игры</h2>
+                <div id="recentGamesList" class="recent-games-list">
+                    <p class="empty-text">Нет сыгранных игр</p>
+                </div>
+                
+                <!-- Panel Annotation -->
+                <div class="panel-annotation">
+                    <h4>📖 About this panel</h4>
+                    <p><strong>Recent Games</strong> - Chronological feed of every game played on this server.</p>
+                    <p><strong>Audit Trail:</strong> Useful for spotting anomalies in AI behavior or verifying that training sessions are producing valid game files.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- AI Thinking Indicator -->
+        <div id="aiThinking" class="thinking-indicator hidden">
+            <div class="thinking-spinner"></div>
+            <span>ИИ думает...</span>
+        </div>
+    </div>
+
+    <!-- FAQ Modal Popup -->
+    <div id="faqModal" class="modal hidden">
+        <div class="modal-content faq-modal-content">
+            <div class="modal-header">
+                <h2>❓ FAQ: Тренировка модели</h2>
+                <button id="closeFaqModal" class="modal-close-btn">✕</button>
+            </div>
+            <div class="faq-modal-body">
+                <div class="faq-section">
+                    <h3>📊 Рекомендуемые размеры датасета</h3>
+                    <table class="faq-table">
+                        <tr><th>Тип данных</th><th>Мин.</th><th>Оптим.</th><th>Макс.</th></tr>
+                        <tr><td>Человеческие игры</td><td>500</td><td><b>2000-5000</b></td><td>50000+</td></tr>
+                        <tr><td>Self-Play игры</td><td>1000</td><td><b>10000-50000</b></td><td>∞</td></tr>
+                        <tr><td>Gemini Battle</td><td>50</td><td><b>200-500</b></td><td>1000+</td></tr>
+                        <tr><td>Всего переходов</td><td>50K</td><td><b>200K-1M</b></td><td>10M+</td></tr>
+                    </table>
+                    <p class="faq-note">У вас сейчас: ~2300 игр, ~246K переходов - <b>хороший старт!</b></p>
+                </div>
+                
+                <div class="faq-section">
+                    <h3>⚙️ Рекомендуемые параметры</h3>
+                    <table class="faq-table">
+                        <tr><th>Параметр</th><th>Мин.</th><th>Оптим.</th><th>Макс.</th></tr>
+                        <tr><td>Эпохи</td><td>10</td><td><b>50-100</b></td><td>200</td></tr>
+                        <tr><td>Batch Size</td><td>32</td><td><b>128</b></td><td>512</td></tr>
+                        <tr><td>Learning Rate</td><td>0.0001</td><td><b>0.001</b></td><td>0.01</td></tr>
+                    </table>
+                </div>
+                
+                <div class="faq-section">
+                    <h3>📈 Ожидаемые метрики</h3>
+                    <table class="faq-table">
+                        <tr><th>Эпоха</th><th>Loss</th><th>Accuracy</th></tr>
+                        <tr><td>1</td><td>2.2</td><td>~11%</td></tr>
+                        <tr><td>10</td><td>2.0</td><td>~17%</td></tr>
+                        <tr><td>25</td><td>1.5</td><td>~30%</td></tr>
+                        <tr><td>50</td><td>1.0</td><td>~40%</td></tr>
+                        <tr><td>100</td><td>0.7</td><td>~50%</td></tr>
+                    </table>
+                    <p class="faq-note">Accuracy 50-60% - отличный результат (люди тоже ошибаются!)</p>
+                </div>
+                
+                <div class="faq-section">
+                    <h3>🚀 Порядок действий</h3>
+                    <ol class="faq-steps">
+                        <li><b>Парсинг</b> → собрать данные (2300 игр)</li>
+                        <li><b>Дообучение</b> → 50 эпох, ~10 минут</li>
+                        <li><b>Проверка</b> → сыграть на уровне 5</li>
+                        <li><b>Self-Play</b> → 500+ игр для улучшения</li>
+                        <li><b>Gemini Battle</b> → проверить ELO</li>
+                        <li><b>Повторить</b> → итеративное улучшение</li>
+                    </ol>
+                </div>
+                
+                <div class="faq-section">
+                    <h3>💾 Автозагрузка модели</h3>
+                    <p>После обучения модель <b>автоматически</b> применяется для:</p>
+                    <ul>
+                        <li>✅ Игры на уровне 5 (Эксперт)</li>
+                        <li>✅ Self-Play тренировки</li>
+                        <li>✅ Gemini Battle</li>
+                    </ul>
+                    <p class="faq-note">При перезапуске сервера загружается последняя сохранённая модель автоматически!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Panel Modal -->
+    <div id="fullscreenModal" class="fullscreen-modal hidden">
+        <div class="fullscreen-modal-content">
+            <div class="fullscreen-modal-header">
+                <h2 id="fullscreenModalTitle">Panel</h2>
+                <button class="fullscreen-modal-close" onclick="closeFullscreenModal()">✕</button>
+            </div>
+            <div class="fullscreen-modal-body" id="fullscreenModalBody">
+                <!-- Content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/board-classic.js"></script>
+    <script src="js/voice.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/ai-info.js"></script>
+    <script src="js/replay.js"></script>
+    <script src="js/training.js"></script>
+    <script src="js/gemini-battle.js"></script>
+    <script src="js/analytics.js"></script>
+</body>
+</html>

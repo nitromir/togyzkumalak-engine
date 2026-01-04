@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тоғыз Құмалақ - Replay Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 2px solid #e94560;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            color: #e94560;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #aaa;
+            font-size: 1.1em;
+        }
+        
+        /* Game selector */
+        .game-selector {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .game-btn {
+            background: #16213e;
+            border: 2px solid #e94560;
+            color: #e94560;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        
+        .game-btn:hover, .game-btn.active {
+            background: #e94560;
+            color: #fff;
+        }
+        
+        /* Board */
+        .board-container {
+            background: linear-gradient(145deg, #2d3436 0%, #1e272e 100%);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+        }
+        
+        .player-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .player-label {
+            width: 100px;
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        
+        .player-label.black {
+            background: #2c3e50;
+            color: #ecf0f1;
+        }
+        
+        .player-label.white {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+        
+        .holes-row {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+        }
+        
+        .hole {
+            width: 70px;
+            height: 70px;
+            background: radial-gradient(circle at 30% 30%, #5d4e37, #3d3429);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #ffd700;
+            box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.3);
+            position: relative;
+            transition: all 0.3s;
+        }
+        
+        .hole.tuzduk {
+            background: radial-gradient(circle at 30% 30%, #c0392b, #8b0000);
+            color: #fff;
+        }
+        
+        .hole.active {
+            box-shadow: 0 0 20px #e94560, inset 0 4px 8px rgba(0, 0, 0, 0.6);
+            transform: scale(1.1);
+        }
+        
+        .hole-number {
+            position: absolute;
+            bottom: -20px;
+            font-size: 0.7em;
+            color: #888;
+        }
+        
+        .kazan {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(145deg, #d4af37, #b8860b);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #1a1a2e;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+        }
+        
+        /* Info panel */
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .step-info {
+            font-size: 1.2em;
+        }
+        
+        .current-player {
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        
+        .current-player.white {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+        
+        .current-player.black {
+            background: #2c3e50;
+            color: #ecf0f1;
+        }
+        
+        .last-action {
+            color: #e94560;
+            font-size: 1.1em;
+        }
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .control-btn {
+            background: #16213e;
+            border: 2px solid #0f3460;
+            color: #e8e8e8;
+            padding: 15px 25px;
+            cursor: pointer;
+            border-radius: 10px;
+            font-size: 1.2em;
+            transition: all 0.3s;
+        }
+        
+        .control-btn:hover {
+            background: #0f3460;
+            border-color: #e94560;
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .control-btn.play {
+            background: #27ae60;
+            border-color: #2ecc71;
+        }
+        
+        .control-btn.play:hover {
+            background: #2ecc71;
+        }
+        
+        /* Progress bar */
+        .progress-container {
+            margin-bottom: 20px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #1a1a2e;
+            border-radius: 5px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            transition: width 0.3s;
+        }
+        
+        /* Speed control */
+        .speed-control {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .speed-control label {
+            color: #aaa;
+        }
+        
+        .speed-control input {
+            width: 150px;
+        }
+        
+        /* Winner banner */
+        .winner-banner {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(90deg, #d4af37, #f1c40f, #d4af37);
+            color: #1a1a2e;
+            border-radius: 10px;
+            font-size: 1.5em;
+            font-weight: bold;
+            display: none;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        
+        /* Hole names */
+        .hole-names {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+            margin-left: 115px;
+        }
+        
+        .hole-name {
+            width: 70px;
+            text-align: center;
+            font-size: 0.7em;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 Тоғыз Құмалақ</h1>
+            <p class="subtitle">Neural Network Game Replay Viewer</p>
+        </header>
+        
+        <div class="game-selector" id="gameSelector">
+            <!-- Game buttons will be added here -->
+        </div>
+        
+        <div class="info-panel">
+            <div class="step-info">Step: <span id="stepNum">0</span> / <span id="totalSteps">0</span></div>
+            <div class="current-player white" id="currentPlayer">WHITE</div>
+            <div class="last-action">Last move: <span id="lastAction">-</span></div>
+        </div>
+        
+        <div class="board-container">
+            <!-- Black player (top) -->
+            <div class="player-row">
+                <div class="player-label black">⚫ ҚАРА<br>(Қостаушы)</div>
+                <div class="holes-row" id="blackHoles">
+                    <!-- Holes 9-1 (reversed) -->
+                </div>
+                <div class="kazan" id="blackKazan">0</div>
+            </div>
+            
+            <!-- Hole names for black -->
+            <div class="hole-names" id="blackNames"></div>
+            
+            <!-- Hole names for white -->
+            <div class="hole-names" id="whiteNames"></div>
+            
+            <!-- White player (bottom) -->
+            <div class="player-row">
+                <div class="player-label white">⚪ АҚ<br>(Бастаушы)</div>
+                <div class="holes-row" id="whiteHoles">
+                    <!-- Holes 1-9 -->
+                </div>
+                <div class="kazan" id="whiteKazan">0</div>
+            </div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="control-btn" id="btnFirst">⏮ Start</button>
+            <button class="control-btn" id="btnPrev">⏪ Back</button>
+            <button class="control-btn play" id="btnPlay">▶ Play</button>
+            <button class="control-btn" id="btnNext">⏩ Next</button>
+            <button class="control-btn" id="btnLast">⏭ End</button>
+        </div>
+        
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speedSlider" min="100" max="2000" value="500">
+            <span id="speedValue">500ms</span>
+        </div>
+        
+        <div class="winner-banner" id="winnerBanner"></div>
+    </div>
+    
+    <script>
+        // Kazakh hole names
+        const HOLE_NAMES = ['Арт', 'Тектұрмас', 'Ат өтпес', 'Атсыратар', 'Бел', 'Белбасар', 'Қандықақпан', 'Көкмойын', 'Маңдай'];
+        
+        let games = [];
+        let currentGame = null;
+        let currentStep = 0;
+        let isPlaying = false;
+        let playInterval = null;
+        let playSpeed = 500;
+        
+        // Load replay data
+        async function loadReplay() {
+            try {
+                const response = await fetch('replay.json');
+                games = await response.json();
+                console.log('Loaded', games.length, 'games');
+                initGameSelector();
+                if (games.length > 0) {
+                    selectGame(0);
+                }
+            } catch (error) {
+                console.error('Failed to load replay.json:', error);
+                alert('Failed to load replay.json. Please run record_game.py first.');
+            }
+        }
+        
+        // Initialize game selector buttons
+        function initGameSelector() {
+            const selector = document.getElementById('gameSelector');
+            selector.innerHTML = '';
+            
+            games.forEach((game, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'game-btn';
+                btn.textContent = `Game ${game.game_id} (${game.winner})`;
+                btn.onclick = () => selectGame(index);
+                selector.appendChild(btn);
+            });
+        }
+        
+        // Select a game to view
+        function selectGame(index) {
+            currentGame = games[index];
+            currentStep = 0;
+            
+            // Update selector buttons
+            document.querySelectorAll('.game-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', i === index);
+            });
+            
+            // Update total steps
+            document.getElementById('totalSteps').textContent = currentGame.total_steps;
+            
+            // Hide winner banner
+            document.getElementById('winnerBanner').style.display = 'none';
+            
+            // Initialize board
+            initBoard();
+            renderState();
+        }
+        
+        // Initialize the board display
+        function initBoard() {
+            const blackHoles = document.getElementById('blackHoles');
+            const whiteHoles = document.getElementById('whiteHoles');
+            const blackNames = document.getElementById('blackNames');
+            const whiteNames = document.getElementById('whiteNames');
+            
+            blackHoles.innerHTML = '';
+            whiteHoles.innerHTML = '';
+            blackNames.innerHTML = '';
+            whiteNames.innerHTML = '';
+            
+            // Black holes (9 to 1, reversed display)
+            for (let i = 8; i >= 0; i--) {
+                const hole = document.createElement('div');
+                hole.className = 'hole';
+                hole.id = `black-hole-${i}`;
+                hole.innerHTML = `<span>9</span><span class="hole-number">${i + 1}</span>`;
+                blackHoles.appendChild(hole);
+                
+                const name = document.createElement('div');
+                name.className = 'hole-name';
+                name.textContent = HOLE_NAMES[8 - i];
+                blackNames.appendChild(name);
+            }
+            
+            // White holes (1 to 9)
+            for (let i = 0; i < 9; i++) {
+                const hole = document.createElement('div');
+                hole.className = 'hole';
+                hole.id = `white-hole-${i}`;
+                hole.innerHTML = `<span>9</span><span class="hole-number">${i + 1}</span>`;
+                whiteHoles.appendChild(hole);
+                
+                const name = document.createElement('div');
+                name.className = 'hole-name';
+                name.textContent = HOLE_NAMES[i];
+                whiteNames.appendChild(name);
+            }
+        }
+        
+        // Render the current state
+        function renderState() {
+            if (!currentGame) return;
+            
+            const state = currentGame.states[currentStep];
+            
+            // Update holes
+            for (let i = 0; i < 9; i++) {
+                const whiteHole = document.getElementById(`white-hole-${i}`);
+                const blackHole = document.getElementById(`black-hole-${i}`);
+                
+                // White holes
+                const whiteValue = state.white.holes[i];
+                whiteHole.querySelector('span').textContent = whiteValue === -1 ? 'X' : whiteValue;
+                whiteHole.classList.toggle('tuzduk', whiteValue === -1);
+                
+                // Black holes
+                const blackValue = state.black.holes[i];
+                blackHole.querySelector('span').textContent = blackValue === -1 ? 'X' : blackValue;
+                blackHole.classList.toggle('tuzduk', blackValue === -1);
+                
+                // Highlight last action
+                whiteHole.classList.remove('active');
+                blackHole.classList.remove('active');
+            }
+            
+            // Highlight the hole that was played
+            if (state.action !== null) {
+                const player = state.player;
+                const holeId = `${player}-hole-${state.action}`;
+                const hole = document.getElementById(holeId);
+                if (hole) hole.classList.add('active');
+            }
+            
+            // Update kazans
+            document.getElementById('whiteKazan').textContent = state.white.kazan;
+            document.getElementById('blackKazan').textContent = state.black.kazan;
+            
+            // Update info
+            document.getElementById('stepNum').textContent = currentStep;
+            
+            const playerLabel = document.getElementById('currentPlayer');
+            playerLabel.textContent = state.current_player.toUpperCase();
+            playerLabel.className = 'current-player ' + state.current_player;
+            
+            document.getElementById('lastAction').textContent = 
+                state.action !== null ? `${state.player} → Hole ${state.action + 1}` : '-';
+            
+            // Update progress bar
+            const progress = (currentStep / currentGame.total_steps) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+            
+            // Show winner at the end
+            if (currentStep === currentGame.total_steps) {
+                const banner = document.getElementById('winnerBanner');
+                banner.textContent = `🏆 Winner: ${currentGame.winner} (${currentGame.final_score.white} : ${currentGame.final_score.black}) 🏆`;
+                banner.style.display = 'block';
+            } else {
+                document.getElementById('winnerBanner').style.display = 'none';
+            }
+        }
+        
+        // Navigation functions
+        function goToStep(step) {
+            if (!currentGame) return;
+            currentStep = Math.max(0, Math.min(step, currentGame.total_steps));
+            renderState();
+        }
+        
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            const btn = document.getElementById('btnPlay');
+            
+            if (isPlaying) {
+                btn.textContent = '⏸ Pause';
+                btn.style.background = '#e74c3c';
+                playInterval = setInterval(() => {
+                    if (currentStep < currentGame.total_steps) {
+                        currentStep++;
+                        renderState();
+                    } else {
+                        togglePlay(); // Stop at the end
+                    }
+                }, playSpeed);
+            } else {
+                btn.textContent = '▶ Play';
+                btn.style.background = '#27ae60';
+                clearInterval(playInterval);
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('btnFirst').onclick = () => goToStep(0);
+        document.getElementById('btnPrev').onclick = () => goToStep(currentStep - 1);
+        document.getElementById('btnPlay').onclick = togglePlay;
+        document.getElementById('btnNext').onclick = () => goToStep(currentStep + 1);
+        document.getElementById('btnLast').onclick = () => goToStep(currentGame ? currentGame.total_steps : 0);
+        
+        document.getElementById('progressBar').onclick = (e) => {
+            if (!currentGame) return;
+            const rect = e.target.getBoundingClientRect();
+            const percent = (e.clientX - rect.left) / rect.width;
+            goToStep(Math.round(percent * currentGame.total_steps));
+        };
+        
+        document.getElementById('speedSlider').oninput = (e) => {
+            playSpeed = parseInt(e.target.value);
+            document.getElementById('speedValue').textContent = playSpeed + 'ms';
+            
+            // Restart interval if playing
+            if (isPlaying) {
+                clearInterval(playInterval);
+                playInterval = setInterval(() => {
+                    if (currentStep < currentGame.total_steps) {
+                        currentStep++;
+                        renderState();
+                    } else {
+                        togglePlay();
+                    }
+                }, playSpeed);
+            }
+        };
+        
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'ArrowLeft':
+                    goToStep(currentStep - 1);
+                    break;
+                case 'ArrowRight':
+                    goToStep(currentStep + 1);
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    togglePlay();
+                    break;
+                case 'Home':
+                    goToStep(0);
+                    break;
+                case 'End':
+                    goToStep(currentGame ? currentGame.total_steps : 0);
+                    break;
+            }
+        });
+        
+        // Load on page ready
+        loadReplay();
+    </script>
+</body>
+</html>
+

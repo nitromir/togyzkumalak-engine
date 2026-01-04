@@ -1,0 +1,60 @@
+# ==============================================================================
+# Docker Ignore File
+# ==============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation (not needed in container)
+docs/
+*.md
+!requirements.txt
+
+# Temporary files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Large model files (will be downloaded or mounted)
+# Uncomment if you want to exclude models from build
+# models/*.pt
+# models/*.pth.tar
+# models/alphazero/
+
+# Test files
+tests/
+*_test.py
+test_*.py
+
+# Local configs
+.env.local
+.env.development
+config.local.py

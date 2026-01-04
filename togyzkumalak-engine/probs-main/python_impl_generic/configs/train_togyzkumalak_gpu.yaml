@@ -1,0 +1,48 @@
+# PROBS Training Config for Togyzkumalak (GPU version)
+# Оптимизирован для обучения на GPU с большими батчами
+# ВАЖНО: self_play_threads должен быть 1 при использовании GPU (ограничение PyTorch)
+
+name: train_togyzkumalak_gpu
+env:
+  name: togyzkumalak
+  n_max_episode_steps: 200
+
+cmd: train
+
+infra:
+  log: tf
+  device: cuda               # GPU
+  sub_processes_cnt: 4       # Параллельные процессы для Q-обучения
+  self_play_threads: 1       # ВАЖНО: 1 для GPU (PyTorch не поддерживает многопоточность на GPU)
+  mem_max_episodes: 50000    # Большой буфер для GPU
+
+train:
+  n_high_level_iterations: 200     # Больше итераций для GPU
+  v_train_episodes: 1000           # Больше данных для V (GPU быстрее)
+  q_train_episodes: 500            # Больше данных для Q
+  q_dataset_episodes_sub_iter: 2   # Разбиваем Q-датасет на подитерации (экономия RAM)
+  dataset_drop_ratio: 0.5          # Дропаут для предотвращения переобучения
+  checkpoints_dir: checkpoints/togyzkumalak_gpu
+  train_batch_size: 256            # Большой батч для GPU
+  self_learning_batch_size: 256
+  get_q_dataset_batch_size: 128
+  num_q_s_a_calls: 40              # Глубже beam search на GPU
+  max_depth: 60                    # Глубже дерево
+  alphazero_move_num_sampling_moves: 8    # Больше exploration
+  q_add_hardest_nodes_per_step: 10        # Больше сложных узлов
+
+evaluate:
+  evaluate_n_games: 50       # Больше игр для статистически значимой оценки
+  randomize_n_turns: 2
+  enemy:
+    kind: one_step_lookahead # Более сильный противник (не random!)
+
+model:
+  value:
+    class: ValueModelTK_v1
+    learning_rate: 0.0003    # Уменьшен для стабильности
+    weight_decay: 0.0001
+  self_learner:
+    class: SelfLearningModelTK_v1
+    learning_rate: 0.0003
+    weight_decay: 0.0001

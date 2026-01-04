@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+.env
+
+# Virtual environment
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Models (large files)
+*.pt
+*.pth
+*.onnx
+*.pkl
+!models/.gitkeep
+
+# Training data (large files - generate locally with: python scripts/data_parsers.py)
+**/training_data/*.jsonl
+togyzkumalak-engine/training_data/human_transitions.jsonl
+togyzkumalak-engine/training_data/human_games.jsonl
+togyzkumalak-engine/training_data/transitions_compact.jsonl
+
+# Environment variables
+.env
+.env.local

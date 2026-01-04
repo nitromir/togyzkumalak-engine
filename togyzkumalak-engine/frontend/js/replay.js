@@ -1,0 +1,603 @@
+/**
+ * Togyzkumalak Engine - Replay Viewer
+ * Handles loading and playing back recorded game simulations.
+ */
+
+class ReplayViewer {
+    constructor() {
+        this.replays = [];
+        this.currentReplay = null;
+        this.currentStep = 0;
+        this.isPlaying = false;
+        this.playInterval = null;
+        this.playSpeed = 500;
+        
+        // Canvas for replay board
+        this.canvas = document.getElementById('replayBoard');
+        this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+        
+        // Board drawing config (same as ClassicBoard)
+        this.padding = 40;
+        this.pitWidth = 70;
+        this.pitHeight = 120;
+        this.gap = 15;
+        
+        this.colors = {
+            board: '#0f172a',
+            pit: '#1e293b',
+            pitBorder: '#00f2ff',
+            tuzduk: 'rgba(255, 204, 0, 0.4)',
+            kumalak: '#e2e8f0',
+            kumalakHighlight: '#ffffff',
+            text: '#00f2ff',
+            textLight: '#94a3b8',
+            lastMove: '#ff8800',
+            redMarker: '#ff0055'
+        };
+        
+        this.init();
+    }
+
+    init() {
+        this.bindModeSwitch();
+        this.bindControls();
+        this.loadReplayList();
+    }
+
+    bindModeSwitch() {
+        const modeTabs = document.querySelectorAll('.mode-tab');
+        modeTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                modeTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                const mode = tab.dataset.mode;
+                document.getElementById('playMode').classList.toggle('hidden', mode !== 'play');
+                document.getElementById('replaysMode').classList.toggle('hidden', mode !== 'replays');
+                document.getElementById('trainingMode').classList.toggle('hidden', mode !== 'training');
+                
+                // Handle Gemini Battle mode
+                const geminiBattleMode = document.getElementById('geminiBattleMode');
+                if (geminiBattleMode) {
+                    geminiBattleMode.classList.toggle('hidden', mode !== 'gemini-battle');
+                }
+                
+                // Handle Analytics mode
+                const analyticsMode = document.getElementById('analyticsMode');
+                if (analyticsMode) {
+                    analyticsMode.classList.toggle('hidden', mode !== 'analytics');
+                }
+                
+                if (mode === 'replays') {
+                    this.loadReplayList();
+                } else if (mode === 'training') {
+                    // Refresh training data when switching to training mode
+                    if (window.trainingController) {
+                        trainingController.loadModels();
+                        trainingController.loadSessions();
+                    }
+                } else if (mode === 'analytics') {
+                    // Load real analytics data
+                    if (window.analyticsController) {
+                        analyticsController.loadAllMetrics();
+                    }
+                    if (window.abTestController) {
+                        abTestController.loadExperiments();
+                    }
+                }
+            });
+        });
+    }
+
+    bindControls() {
+        const btnFirst = document.getElementById('btnReplayFirst');
+        const btnPrev = document.getElementById('btnReplayPrev');
+        const btnPlay = document.getElementById('btnReplayPlay');
+        const btnNext = document.getElementById('btnReplayNext');
+        const btnLast = document.getElementById('btnReplayLast');
+        const speedSlider = document.getElementById('replaySpeed');
+        const progressBar = document.getElementById('replayProgressBar');
+
+        if (btnFirst) btnFirst.onclick = () => this.goToStep(0);
+        if (btnPrev) btnPrev.onclick = () => this.goToStep(this.currentStep - 1);
+        if (btnPlay) btnPlay.onclick = () => this.togglePlay();
+        if (btnNext) btnNext.onclick = () => this.goToStep(this.currentStep + 1);
+        if (btnLast) btnLast.onclick = () => this.goToStep(this.currentReplay ? this.currentReplay.total_steps : 0);
+        
+        if (speedSlider) {
+            speedSlider.oninput = (e) => {
+                this.playSpeed = parseInt(e.target.value);
+                document.getElementById('replaySpeedValue').textContent = this.playSpeed + 'ms';
+                if (this.isPlaying) {
+                    this.restartPlayInterval();
+                }
+            };
+        }
+
+        if (progressBar) {
+            progressBar.onclick = (e) => {
+                if (!this.currentReplay) return;
+                const rect = e.target.getBoundingClientRect();
+                const percent = (e.clientX - rect.left) / rect.width;
+                this.goToStep(Math.round(percent * this.currentReplay.total_steps));
+            };
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('replaysMode').classList.contains('hidden')) return;
+            
+            switch (e.key) {
+                case 'ArrowLeft':
+                    this.goToStep(this.currentStep - 1);
+                    break;
+                case 'ArrowRight':
+                    this.goToStep(this.currentStep + 1);
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    this.togglePlay();
+                    break;
+            }
+        });
+    }
+
+    async loadReplayList() {
+        const listContainer = document.getElementById('replayList');
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '<p class="placeholder">Загрузка...</p>';
+
+        try {
+            const response = await fetch('/api/replays');
+            const data = await response.json();
+
+            if (data.error) {
+                listContainer.innerHTML = `<p class="error">Ошибка: ${data.error}</p>`;
+                return;
+            }
+
+            if (data.replays.length === 0) {
+                listContainer.innerHTML = '<p class="placeholder">Нет записанных партий. Запустите python examples/record_game.py для записи.</p>';
+                return;
+            }
+
+            this.replays = data.replays;
+            listContainer.innerHTML = '';
+
+            data.replays.forEach(replay => {
+                const btn = document.createElement('button');
+                btn.className = 'replay-btn';
+                
+                // Model info for gym simulations
+                const modelName = replay.model_name || 'policy_net';
+                const modelIcon = replay.model_type === 'alphazero' ? '🦾' : '🧠';
+                
+                btn.innerHTML = `
+                    <span class="replay-id">Партия #${replay.game_id}</span>
+                    <span class="replay-winner ${replay.winner.toLowerCase()}">${replay.winner}</span>
+                    <span class="replay-score">${replay.final_score.white}:${replay.final_score.black}</span>
+                    <span class="replay-steps">${replay.total_steps} ходов</span>
+                    <span class="replay-model">${modelIcon} ${modelName}</span>
+                `;
+                btn.onclick = () => this.loadReplay(replay.game_id);
+                listContainer.appendChild(btn);
+            });
+
+        } catch (error) {
+            console.error('Failed to load replays:', error);
+            listContainer.innerHTML = '<p class="error">Не удалось загрузить список партий</p>';
+        }
+        
+        // Also load Gemini Battle replays
+        await this.loadGeminiBattleReplays();
+    }
+
+    async loadGeminiBattleReplays() {
+        const listContainer = document.getElementById('geminiBattleReplayList');
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '<p class="placeholder">Загрузка...</p>';
+
+        try {
+            const response = await fetch('/api/gemini-battle/replays');
+            const data = await response.json();
+
+            if (data.replays.length === 0) {
+                listContainer.innerHTML = '<p class="placeholder">Нет игр против Gemini. Запустите батл во вкладке "Gemini Battle".</p>';
+                return;
+            }
+
+            listContainer.innerHTML = '';
+
+            data.replays.forEach(replay => {
+                const btn = document.createElement('button');
+                btn.className = 'replay-btn gemini-battle-btn';
+                const winnerClass = replay.winner === replay.model_color ? 'win' : 'loss';
+                const winnerText = replay.winner === replay.model_color ? '✅ WIN' : '❌ LOSS';
+                const eloChange = replay.elo_change > 0 ? `+${replay.elo_change}` : replay.elo_change;
+                const eloClass = replay.elo_change >= 0 ? 'elo-up' : 'elo-down';
+                
+                // Model info
+                const modelName = replay.model_name || 'default';
+                const modelIcon = replay.model_type === 'alphazero' ? '🦾' : '🧠';
+                
+                btn.innerHTML = `
+                    <span class="replay-id">Игра #${replay.game_id}</span>
+                    <span class="replay-winner ${winnerClass}">${winnerText}</span>
+                    <span class="replay-score">${replay.final_score?.white_kazan || 0}:${replay.final_score?.black_kazan || 0}</span>
+                    <span class="replay-elo ${eloClass}">${eloChange} ELO</span>
+                    <span class="replay-steps">${replay.total_moves} ходов</span>
+                    <span class="replay-model">${modelIcon} ${modelName} vs 🤖 Gemini</span>
+                `;
+                btn.onclick = () => this.showGeminiBattleDetails(replay.filename);
+                listContainer.appendChild(btn);
+            });
+
+        } catch (error) {
+            console.error('Failed to load Gemini battle replays:', error);
+            listContainer.innerHTML = '<p class="error">Не удалось загрузить игры против Gemini</p>';
+        }
+    }
+
+    async showGeminiBattleDetails(filename) {
+        try {
+            const response = await fetch(`/api/gemini-battle/replays/${filename}`);
+            if (!response.ok) throw new Error('Failed to load game');
+            
+            const gameData = await response.json();
+            
+            // Show game details in a modal or info panel
+            const infoPanel = document.getElementById('replayInfo');
+            if (infoPanel) {
+                const winnerClass = gameData.winner === gameData.model_color ? 'win' : 'loss';
+                const eloChange = gameData.elo_change > 0 ? `+${gameData.elo_change}` : gameData.elo_change;
+                
+                infoPanel.innerHTML = `
+                    <div class="info-row"><strong>🤖 Батл против Gemini</strong></div>
+                    <div class="info-row"><strong>Игра:</strong> #${gameData.game_id} (${gameData.session_id})</div>
+                    <div class="info-row"><strong>Дата:</strong> ${gameData.timestamp}</div>
+                    <div class="info-row"><strong>Модель играла:</strong> ${gameData.model_color.toUpperCase()}</div>
+                    <div class="info-row"><strong>Победитель:</strong> <span class="${winnerClass}">${gameData.winner.toUpperCase()}</span></div>
+                    <div class="info-row"><strong>Счёт:</strong> ${gameData.final_score?.white_kazan || 0}:${gameData.final_score?.black_kazan || 0}</div>
+                    <div class="info-row"><strong>Ходов:</strong> ${gameData.total_moves}</div>
+                    <div class="info-row"><strong>Изменение ELO:</strong> ${eloChange}</div>
+                    <div class="info-row"><strong>ELO после:</strong> ${gameData.model_elo_after}</div>
+                `;
+            }
+            
+            // Show move history in last action panel
+            const lastAction = document.getElementById('replayLastAction');
+            if (lastAction && gameData.moves && gameData.moves.length > 0) {
+                const movesHtml = gameData.moves.slice(-10).map(m => 
+                    `<div class="move-item">${m.number}. ${m.player}: ${m.notation} - ${m.explanation}</div>`
+                ).join('');
+                lastAction.innerHTML = `<div class="moves-summary">Последние 10 ходов:<br>${movesHtml}</div>`;
+            }
+            
+            // Note: Full board visualization requires state reconstruction
+            // For now, show info only. Board replay needs states to be saved.
+            
+        } catch (error) {
+            console.error('Failed to load Gemini battle details:', error);
+            alert('Не удалось загрузить детали игры');
+        }
+    }
+
+    async loadReplay(gameId) {
+        try {
+            const response = await fetch(`/api/replays/${gameId}`);
+            if (!response.ok) throw new Error('Failed to load replay');
+            
+            const rawReplay = await response.json();
+            this.currentReplay = this.transformReplayData(rawReplay);
+            this.currentStep = 0;
+
+            // Show viewer
+            document.getElementById('replayViewer').classList.remove('hidden');
+
+            // Update info panel
+            const infoPanel = document.getElementById('replayInfo');
+            if (infoPanel) {
+                infoPanel.innerHTML = `
+                    <div class="info-row"><strong>Партия:</strong> #${this.currentReplay.game_id}</div>
+                    <div class="info-row"><strong>Дата:</strong> ${this.currentReplay.timestamp}</div>
+                    <div class="info-row"><strong>Победитель:</strong> <span class="${this.currentReplay.winner.toLowerCase()}">${this.currentReplay.winner}</span></div>
+                    <div class="info-row"><strong>Финальный счёт:</strong> ${this.currentReplay.final_score.white}:${this.currentReplay.final_score.black}</div>
+                    <div class="info-row"><strong>Всего ходов:</strong> ${this.currentReplay.total_steps}</div>
+                `;
+            }
+
+            // Highlight selected replay
+            document.querySelectorAll('.replay-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', this.replays[i]?.game_id === gameId);
+            });
+
+            this.renderState();
+
+        } catch (error) {
+            console.error('Failed to load replay:', error);
+            alert('Не удалось загрузить партию');
+        }
+    }
+
+    /**
+     * Transform replay data from gym format (white_pits, black_pits) 
+     * to renderer format (white.holes, black.holes)
+     */
+    transformReplayData(rawReplay) {
+        // If already in correct format, return as-is
+        if (rawReplay.states && rawReplay.states[0]?.white?.holes) {
+            return rawReplay;
+        }
+
+        // Transform states from gym format
+        const transformedStates = rawReplay.states.map(state => {
+            // Handle tuzduk: replace pit value with -1 if it's a tuzduk
+            const whitePits = [...state.white_pits];
+            const blackPits = [...state.black_pits];
+            
+            // Mark tuzduk positions with -1
+            if (state.white_tuzduk !== null && state.white_tuzduk !== undefined) {
+                blackPits[state.white_tuzduk] = -1;
+            }
+            if (state.black_tuzduk !== null && state.black_tuzduk !== undefined) {
+                whitePits[state.black_tuzduk] = -1;
+            }
+
+            return {
+                white: {
+                    holes: whitePits,
+                    kazan: state.white_kazan
+                },
+                black: {
+                    holes: blackPits,
+                    kazan: state.black_kazan
+                },
+                current_player: state.current_player,
+                action: state.action,
+                player: state.player,
+                step: state.step
+            };
+        });
+
+        return {
+            ...rawReplay,
+            states: transformedStates
+        };
+    }
+
+    goToStep(step) {
+        if (!this.currentReplay) return;
+        this.currentStep = Math.max(0, Math.min(step, this.currentReplay.total_steps));
+        this.renderState();
+    }
+
+    togglePlay() {
+        this.isPlaying = !this.isPlaying;
+        const btn = document.getElementById('btnReplayPlay');
+        
+        if (this.isPlaying) {
+            btn.textContent = '⏸ Пауза';
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-danger');
+            this.restartPlayInterval();
+        } else {
+            btn.textContent = '▶️ Воспроизвести';
+            btn.classList.remove('btn-danger');
+            btn.classList.add('btn-primary');
+            clearInterval(this.playInterval);
+        }
+    }
+
+    restartPlayInterval() {
+        clearInterval(this.playInterval);
+        this.playInterval = setInterval(() => {
+            if (this.currentStep < this.currentReplay.total_steps) {
+                this.currentStep++;
+                this.renderState();
+            } else {
+                this.togglePlay(); // Stop at end
+            }
+        }, this.playSpeed);
+    }
+
+    renderState() {
+        if (!this.currentReplay || !this.ctx) return;
+
+        const state = this.currentReplay.states[this.currentStep];
+        if (!state) return;
+
+        // Clear canvas
+        this.ctx.fillStyle = this.colors.board;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw rows
+        this.drawRow(0, state.black.holes, 'black', state);
+        this.drawRow(1, state.white.holes, 'white', state);
+
+        // Update UI
+        document.getElementById('replayStepCounter').textContent = `Шаг: ${this.currentStep} / ${this.currentReplay.total_steps}`;
+        document.getElementById('replayWhiteScore').textContent = `Казан: ${state.white.kazan}`;
+        document.getElementById('replayBlackScore').textContent = `Казан: ${state.black.kazan}`;
+        
+        const playerIndicator = document.getElementById('replayCurrentPlayer');
+        playerIndicator.textContent = state.current_player.toUpperCase();
+        playerIndicator.className = 'turn-indicator ' + state.current_player;
+
+        // Progress bar
+        const progress = (this.currentStep / this.currentReplay.total_steps) * 100;
+        document.getElementById('replayProgressFill').style.width = progress + '%';
+
+        // Last action
+        const lastAction = document.getElementById('replayLastAction');
+        if (state.action !== null) {
+            lastAction.textContent = `${state.player.toUpperCase()} → Лунка ${state.action + 1}`;
+        } else {
+            lastAction.textContent = 'Начало партии';
+        }
+
+        // Winner banner
+        const banner = document.getElementById('replayWinnerBanner');
+        if (this.currentStep === this.currentReplay.total_steps) {
+            banner.textContent = `🏆 Победитель: ${this.currentReplay.winner} (${this.currentReplay.final_score.white}:${this.currentReplay.final_score.black}) 🏆`;
+            banner.classList.remove('hidden');
+        } else {
+            banner.classList.add('hidden');
+        }
+    }
+
+    drawRow(rowIndex, pits, player, state) {
+        const isBottom = rowIndex === 1;
+        const y = isBottom ? 280 : 50;
+        
+        for (let i = 0; i < 9; i++) {
+            const pitIndex = player === 'black' ? 8 - i : i;
+            const x = this.padding + i * (this.pitWidth + this.gap);
+            const value = pits[pitIndex];
+            const isTuzduk = value === -1;
+
+            // Draw pit
+            this.ctx.fillStyle = isTuzduk ? this.colors.tuzduk : this.colors.pit;
+            this.ctx.strokeStyle = this.colors.pitBorder;
+            this.ctx.lineWidth = 2;
+            this.roundRect(this.ctx, x, y, this.pitWidth, this.pitHeight, 8, true, true);
+
+            // Pit number
+            this.ctx.fillStyle = this.colors.textLight;
+            this.ctx.font = '11px Segoe UI';
+            this.ctx.textAlign = 'center';
+            const labelY = isBottom ? y + this.pitHeight + 18 : y - 8;
+            this.ctx.fillText(pitIndex + 1, x + this.pitWidth / 2, labelY);
+
+            // Value
+            this.ctx.fillStyle = this.colors.text;
+            this.ctx.font = 'bold 18px Segoe UI';
+            const countY = isBottom ? y - 12 : y + this.pitHeight + 22;
+            this.ctx.fillText(isTuzduk ? 'T' : value.toString(), x + this.pitWidth / 2, countY);
+
+            // Draw kumalaks
+            if (!isTuzduk && value > 0) {
+                this.drawStackedKumalaks(x, y, value);
+            }
+
+            // Highlight last action
+            if (state.action === pitIndex && state.player === player) {
+                this.ctx.strokeStyle = this.colors.lastMove;
+                this.ctx.lineWidth = 4;
+                this.ctx.strokeRect(x - 4, y - 4, this.pitWidth + 8, this.pitHeight + 8);
+            }
+        }
+    }
+
+    drawStackedKumalaks(pitX, pitY, count) {
+        const kumalakRadius = 9;
+        const pitCenterX = pitX + this.pitWidth / 2;
+        const pitCenterY = pitY + this.pitHeight / 2;
+        const maxVisual = 15;
+        const displayCount = Math.min(count, maxVisual);
+
+        const seed = pitX * 17 + pitY * 31;
+        const pseudoRandom = (i) => {
+            const x = Math.sin(seed + i * 9999) * 10000;
+            return x - Math.floor(x);
+        };
+
+        const positions = [];
+        
+        if (displayCount === 1) {
+            positions.push({ x: pitCenterX, y: pitCenterY, z: 0 });
+        } else if (displayCount === 2) {
+            positions.push({ x: pitCenterX - 10, y: pitCenterY - 6, z: 0 });
+            positions.push({ x: pitCenterX + 10, y: pitCenterY + 6, z: 1 });
+        } else {
+            const rows = Math.ceil(displayCount / 2);
+            let idx = 0;
+            for (let row = 0; row < rows && idx < displayCount; row++) {
+                const itemsInRow = Math.min(2, displayCount - idx);
+                const rowY = pitY + 20 + row * 12;
+                const startX = pitCenterX - ((itemsInRow - 1) * 22 / 2);
+                for (let col = 0; col < itemsInRow && idx < displayCount; col++) {
+                    positions.push({
+                        x: startX + col * 22 + (pseudoRandom(idx) * 3 - 1.5),
+                        y: rowY + (pseudoRandom(idx + 30) * 2),
+                        z: idx
+                    });
+                    idx++;
+                }
+            }
+        }
+
+        positions.sort((a, b) => a.z - b.z);
+
+        for (let i = 0; i < positions.length; i++) {
+            const pos = positions[i];
+            this.drawKumalak(pos.x, pos.y, kumalakRadius, i === positions.length - 1);
+        }
+
+        if (count > maxVisual) {
+            this.ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            this.ctx.font = 'bold 12px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(`+${count - maxVisual}`, pitCenterX, pitY + this.pitHeight - 10);
+        }
+    }
+
+    drawKumalak(x, y, radius, isTop) {
+        // Shadow
+        this.ctx.beginPath();
+        this.ctx.arc(x + 2, y + 2, radius, 0, Math.PI * 2);
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        this.ctx.fill();
+
+        // Body
+        const gradient = this.ctx.createRadialGradient(x - 2, y - 2, 0, x, y, radius);
+        gradient.addColorStop(0, this.colors.kumalakHighlight);
+        gradient.addColorStop(0.7, this.colors.kumalak);
+        gradient.addColorStop(1, '#1a1a1a');
+        
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.fillStyle = gradient;
+        this.ctx.fill();
+        this.ctx.strokeStyle = '#1a1a1a';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
+
+        // Highlight
+        this.ctx.beginPath();
+        this.ctx.arc(x - 3, y - 3, 2, 0, Math.PI * 2);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        this.ctx.fill();
+
+        // Red marker
+        if (isTop) {
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, 3, 0, Math.PI * 2);
+            this.ctx.fillStyle = this.colors.redMarker;
+            this.ctx.fill();
+        }
+    }
+
+    roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        if (fill) ctx.fill();
+        if (stroke) ctx.stroke();
+    }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.replayViewer = new ReplayViewer();
+});
+

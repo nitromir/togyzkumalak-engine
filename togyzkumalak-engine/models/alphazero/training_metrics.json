@@ -1,0 +1,10 @@
+{
+  "config": {
+    "num_iterations": 50,
+    "num_episodes": 20,
+    "num_mcts_sims": 50,
+    "batch_size": 32,
+    "hidden_size": 256
+  },
+  "metrics": []
+}
