@@ -178,6 +178,15 @@ def run_optimized_training():
                 model_keeper.schedulers[model_key] = scheduler
                 print(f"📈 LR scheduler для {model_key}: {optimizer.param_groups[0]['lr']:.6f} → 1e-5")
 
+        # Инициализируем TensorBoard для логирования метрик
+        if config['infra'].get('log', 'none') == 'tf':
+            helpers.TENSORBOARD = helpers.TensorboardSummaryWriter()
+        elif config['infra'].get('log', 'none') == 'mem':
+            helpers.TENSORBOARD = helpers.MemorySummaryWriter()
+        else:
+            helpers.TENSORBOARD = helpers.MemorySummaryWriter()  # По умолчанию используем MemorySummaryWriter
+        print(f"📊 TensorBoard: {helpers.TENSORBOARD.__class__.__name__}")
+
         # Противник для оценки
         enemy = probs_impl_common.create_agent(config["evaluate"]["enemy"], config['env']['name'], device)
         print(f"👥 Противник для оценки: {config['evaluate']['enemy']['kind']}")
