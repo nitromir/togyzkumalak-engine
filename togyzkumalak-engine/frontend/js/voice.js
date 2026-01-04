@@ -12,7 +12,6 @@ class VoiceService {
         this.isPaused = false;
         this.isRecording = false;
         this.playbackId = 0;
-        this.voiceMode = 'hybrid'; // 'hybrid', 'fast', 'cool'
         
         // Native Speech Synthesis
         this.synth = window.speechSynthesis;
@@ -29,6 +28,9 @@ class VoiceService {
         // Sentence processing for Hybrid TTS
         this.sentenceIndex = 0;
         this.isProcessingQueue = false;
+        this.voiceMode = 'fast'; // 'fast' (Native) or 'cool' (Gemini TTS)
+        this.sentenceQueue = []; // Queue for sequential playback
+        this.isPlayingSentence = false; // Track if currently playing a sentence
         
         // STT
         this.mediaRecorder = null;
@@ -81,33 +83,75 @@ class VoiceService {
             this.elements.recordBtn.addEventListener('mouseup', () => this.stopRecording());
             this.elements.recordBtn.addEventListener('mouseleave', () => { if (this.isRecording) this.stopRecording(); });
         }
-
-        // Voice mode selector
-        const voiceModeSelect = document.getElementById('voiceModeSelect');
-        if (voiceModeSelect) {
-            voiceModeSelect.value = this.voiceMode;
-            voiceModeSelect.addEventListener('change', (e) => {
-                this.voiceMode = e.target.value;
-                localStorage.setItem('voiceMode', this.voiceMode);
-                console.log(`[Voice] Mode changed to: ${this.voiceMode}`);
-            });
-        }
-
-        // Load saved voice mode
-        const savedMode = localStorage.getItem('voiceMode');
-        if (savedMode) {
-            this.voiceMode = savedMode;
-            if (voiceModeSelect) voiceModeSelect.value = savedMode;
-        }
     }
     
     toggleVoice() {
-        this.isVoiceEnabled = !this.isVoiceEnabled;
-        if (this.elements.toggleBtn) {
-            // Toggle class for SVG icon visibility (no text change needed)
-            this.elements.toggleBtn.classList.toggle('voice-on', this.isVoiceEnabled);
+        // Show voice mode selection menu
+        if (!this.isVoiceEnabled) {
+            // If voice is disabled, just enable it with current mode
+            this.isVoiceEnabled = true;
+            if (this.elements.toggleBtn) {
+                this.elements.toggleBtn.classList.add('voice-on');
+            }
+            return;
         }
-        if (!this.isVoiceEnabled) this.stopPlayback();
+
+        // If voice is enabled, show mode selection
+        this.showVoiceModeMenu();
+    }
+
+    showVoiceModeMenu() {
+        // Remove existing menu if any
+        const existingMenu = document.getElementById('voiceModeMenu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+
+        // Create new menu
+        const menu = document.createElement('div');
+        menu.id = 'voiceModeMenu';
+        menu.className = 'voice-mode-menu';
+            menu.innerHTML = `
+                <div class="voice-mode-option ${this.voiceMode === 'fast' ? 'active' : ''}" data-mode="fast">
+                    <span class="mode-icon">⚡</span>
+                    <span class="mode-name">Fast (Native)</span>
+                </div>
+                <div class="voice-mode-option ${this.voiceMode === 'cool' ? 'active' : ''}" data-mode="cool">
+                    <span class="mode-icon">🎵</span>
+                    <span class="mode-name">Cool (Gemini TTS)</span>
+                </div>
+            `;
+            document.body.appendChild(menu);
+
+            // Position menu near button
+            if (this.elements.toggleBtn) {
+                const rect = this.elements.toggleBtn.getBoundingClientRect();
+                menu.style.position = 'fixed';
+                menu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+                menu.style.left = `${rect.left + window.scrollX}px`;
+            }
+
+            // Handle clicks
+            menu.querySelectorAll('.voice-mode-option').forEach(option => {
+                option.addEventListener('click', (e) => {
+                    const mode = e.currentTarget.dataset.mode;
+                    this.voiceMode = mode;
+                    this.sentenceIndex = 0; // Reset for new mode
+                    menu.remove();
+                    this.updateStatus(`Режим: ${mode === 'fast' ? 'Fast' : 'Cool'}`);
+                });
+            });
+
+            // Close menu on outside click
+            setTimeout(() => {
+                const closeMenu = (e) => {
+                    if (!menu.contains(e.target) && e.target !== this.elements.toggleBtn) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                };
+                document.addEventListener('click', closeMenu);
+            }, 100);
     }
     
     togglePause() {
@@ -134,6 +178,8 @@ class VoiceService {
         this.currentAudioData = new Uint8Array(0);
         this.audioChunks = [];
         this.sentenceIndex = 0;
+        this.sentenceQueue = []; // Clear sentence queue
+        this.isPlayingSentence = false; // Reset playing state
         this.isPaused = false;
         
         if (this.elements.pauseBtn) {
@@ -151,28 +197,77 @@ class VoiceService {
         fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:125',message:'queueSpeak',data:{sentence,sentenceIndex:this.sentenceIndex,playbackId:this.playbackId,voiceMode:this.voiceMode},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'1'})}).catch(()=>{});
         // #endregion
         if (!this.isVoiceEnabled || !sentence) return;
-
-        // Choose voice method based on selected mode
-        switch (this.voiceMode) {
-            case 'fast':
-                // Only native speech synthesis
-                this.speakNative(sentence, this.playbackId);
-                break;
-            case 'cool':
-                // Only Gemini TTS
-                this.speakGoogle(sentence, this.playbackId);
-                break;
-            case 'hybrid':
-            default:
-                // Hybrid: First sentences fast, rest cool (original logic)
-                if (this.sentenceIndex < 4) {
-                    this.speakNative(sentence, this.playbackId);
-                } else {
-                    this.speakGoogle(sentence, this.playbackId);
-                }
-                break;
-        }
+        
+        // Add sentence to queue
+        this.sentenceQueue.push(sentence);
         this.sentenceIndex++;
+        
+        // Process queue if not already playing
+        if (!this.isPlayingSentence) {
+            this.processSentenceQueue();
+        }
+    }
+
+    async processSentenceQueue() {
+        if (this.sentenceQueue.length === 0) {
+            this.isPlayingSentence = false;
+            return;
+        }
+
+        this.isPlayingSentence = true;
+        const sentence = this.sentenceQueue.shift();
+        const pid = this.playbackId;
+
+        // Use selected voice mode
+        if (this.voiceMode === 'fast') {
+            // Wait for Native to finish
+            await this.speakNativeAsync(sentence, pid);
+        } else {
+            // Cool mode: Use Gemini TTS with chunking
+            await this.speakGoogleAsync(sentence, pid);
+        }
+
+        // Process next sentence
+        if (this.playbackId === pid) {
+            this.processSentenceQueue();
+        } else {
+            this.isPlayingSentence = false;
+        }
+    }
+
+    async speakNativeAsync(text, pid) {
+        return new Promise((resolve) => {
+            const clean = this.cleanText(text);
+            if (!clean) {
+                resolve();
+                return;
+            }
+
+            const utterance = new SpeechSynthesisUtterance(clean);
+            if (this.nativeVoice) utterance.voice = this.nativeVoice;
+            utterance.lang = 'ru-RU';
+            utterance.rate = 1.1;
+
+            utterance.onstart = () => {
+                if (this.playbackId !== pid) {
+                    this.synth.cancel();
+                    resolve();
+                    return;
+                }
+                this.updateStatus('Озвучка (Fast)...');
+                if (this.elements.pauseBtn) this.elements.pauseBtn.disabled = false;
+            };
+
+            utterance.onend = () => {
+                resolve();
+            };
+
+            utterance.onerror = () => {
+                resolve();
+            };
+
+            this.synth.speak(utterance);
+        });
     }
 
     /**
@@ -209,9 +304,18 @@ class VoiceService {
         this.synth.speak(utterance);
     }
 
-    async speakGoogle(text, pid) {
+    async speakGoogleAsync(text, pid) {
+        return new Promise((resolve) => {
+            this.speakGoogle(text, pid, resolve);
+        });
+    }
+
+    async speakGoogle(text, pid, onComplete = null) {
         const clean = this.cleanText(text);
-        if (!clean) return;
+        if (!clean) {
+            if (onComplete) onComplete();
+            return;
+        }
 
         // #region agent log
         fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:175',message:'speakGoogle entry',data:{clean,pid,sentenceIndex:this.sentenceIndex},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
@@ -232,7 +336,10 @@ class VoiceService {
             fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:185',message:'speakGoogle response',data:{status:response.status,ok:response.ok,pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
             // #endregion
 
-            if (!response.ok) return;
+            if (!response.ok) {
+                if (onComplete) onComplete();
+                return;
+            }
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -243,6 +350,7 @@ class VoiceService {
                     fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:195',message:'speakGoogle cancelled due to playbackId mismatch',data:{current:this.playbackId,pid},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
                     // #endregion
                     await reader.cancel();
+                    if (onComplete) onComplete();
                     return;
                 }
                 const { done, value } = await reader.read();
@@ -287,12 +395,18 @@ class VoiceService {
                 await this.tryDecodeAndPlayIncremental(pid, true);
             }
             
+            // Wait for all audio to finish playing
             const check = () => {
-                if (this.playbackId !== pid) return;
-                if (!this.synth.speaking && this.audioQueue.length > 0 && !this.currentSource) {
-                    this.playNextChunk(pid);
-                } else if (this.synth.speaking || this.currentSource || this.audioQueue.length > 0) {
+                if (this.playbackId !== pid) {
+                    if (onComplete) onComplete();
+                    return;
+                }
+                // In cool mode, we only check audioQueue (no synth.speaking check)
+                if (this.audioQueue.length > 0 || this.currentSource) {
                     setTimeout(check, 100);
+                } else {
+                    // All audio finished
+                    if (onComplete) onComplete();
                 }
             };
             check();
@@ -300,6 +414,7 @@ class VoiceService {
             // #region agent log
             fetch('http://127.0.0.1:7243/ingest/c331841f-7e4f-4c50-9c5e-a68c9827234e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'voice.js:245',message:'speakGoogle fatal error',data:{err:e.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'2'})}).catch(()=>{});
             // #endregion
+            if (onComplete) onComplete();
         }
     }
 

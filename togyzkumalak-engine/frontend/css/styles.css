@@ -1031,27 +1031,6 @@ body::after {
     opacity: 0.6;
 }
 
-.voice-mode-select {
-    font-size: 12px;
-    padding: 4px 8px;
-    height: 32px;
-    border-radius: 6px;
-    background: var(--bg-tertiary);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--text-primary);
-    cursor: pointer;
-    min-width: 120px;
-}
-
-.voice-mode-select:hover {
-    background: var(--bg-hover);
-}
-
-.voice-mode-select:focus {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 1px;
-}
-
 .voice-controls .btn-icon.recording {
     background: #e74c3c;
     animation: pulse-record 1s infinite;
@@ -1103,6 +1082,46 @@ body::after {
 
 .btn-voice-toggle:not(.voice-on) .voice-off-icon {
     display: block;
+}
+
+/* Voice mode selection menu */
+.voice-mode-menu {
+    position: absolute;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    z-index: 1000;
+    min-width: 180px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.voice-mode-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.voice-mode-option:hover {
+    background: var(--bg-tertiary);
+}
+
+.voice-mode-option.active {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.voice-mode-option .mode-icon {
+    font-size: 18px;
+}
+
+.voice-mode-option .mode-name {
+    font-size: 14px;
+    font-weight: 500;
 }
 
 .voice-status.listening {
