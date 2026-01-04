@@ -309,7 +309,7 @@ class GeminiAnalyzer:
         
         try:
             gen_cfg = self._build_generate_config(
-                max_output_tokens=4000,  # Increased for comprehensive analysis: ~20 paragraphs
+                max_output_tokens=8000,  # Maximum for comprehensive analysis: ~40 paragraphs
                 temperature=0.6,
             )
 
@@ -381,7 +381,7 @@ class GeminiAnalyzer:
         
         try:
             gen_cfg = self._build_generate_config(
-                max_output_tokens=3000,  # Increased for detailed move suggestions: ~15 paragraphs
+                max_output_tokens=6000,  # Maximum for detailed move suggestions: ~30 paragraphs
                 temperature=0.4,
             )
             

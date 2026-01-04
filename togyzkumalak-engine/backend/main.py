@@ -526,9 +526,13 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
                     
                     await websocket.send_json({"type": "analysis_start"})
                     full_text = ""
+                    chunk_count = 0
                     async for chunk in gemini_analyzer.analyze_position_stream(board_state, history, model_probs):
+                        chunk_count += 1
                         full_text += chunk
+                        print(f"[WebSocket] Sending analysis chunk {chunk_count}: '{chunk[:50]}...' (total_len: {len(full_text)})")
                         await websocket.send_json({"type": "analysis_chunk", "chunk": chunk})
+                    print(f"[WebSocket] Analysis complete: {chunk_count} chunks, total length: {len(full_text)}")
                     await websocket.send_json({"type": "analysis_end", "full_text": full_text})
             
             elif data["type"] == "request_suggestion":

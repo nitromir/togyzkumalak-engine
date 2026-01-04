@@ -484,6 +484,7 @@ class TogyzkumalakApp {
             case 'analysis_chunk':
                 // Accumulate text silently
                 this.accumulatedText += data.chunk;
+                console.log(`[Frontend] Received analysis chunk: '${data.chunk}' (accumulated: ${this.accumulatedText.length} chars)`);
                 // Progressive TTS still works in background
                 this.processProgressiveTTS(data.chunk);
                 break;
@@ -491,10 +492,13 @@ class TogyzkumalakApp {
             case 'analysis_end':
                 this.isStreaming = false;
                 this.elements.btnAnalyze.disabled = false;
-                
+
+                console.log(`[Frontend] Analysis ended. Full text length: ${data.full_text?.length || 0}, accumulated: ${this.accumulatedText.length}`);
+
                 // Now show the BEAUTIFULLY formatted text all at once
                 const resEl = this.elements.analysisContent.querySelector('.analysis-result');
                 const fullTxt = data.full_text || this.accumulatedText;
+                console.log(`[Frontend] Final text to display: '${fullTxt.substring(0, 200)}...'`);
                 if (resEl) {
                     resEl.innerHTML = this.formatAnalysis(fullTxt);
                 }
