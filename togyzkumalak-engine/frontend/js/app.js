@@ -565,7 +565,7 @@ class TogyzkumalakApp {
                 this.elements.analysisContent.innerHTML = `
                     <div class="analysis-result">
                         <div class="analysis-preloader">
-                            ${this.getMesmerizingLoaderHtml('AI анализирует позицию...')}
+                            ${this.getMesmerizingLoaderHtml('AI анализирует<br>позицию...')}
                         </div>
                     </div>`;
                 this.elements.btnAnalyze.disabled = true;
