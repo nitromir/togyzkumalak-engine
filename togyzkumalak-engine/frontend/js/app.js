@@ -1390,9 +1390,10 @@ function initThemeSwitcher() {
     
     const themes = [
         { id: 'default', name: 'Киберпанк' },
-        { id: 'purple', name: 'Пурпур' },
+        { id: 'purple', name: 'Фиолетово-Бардовый' },
         { id: 'coffee', name: 'Кофе' },
-        { id: 'green', name: 'Лесная' }
+        { id: 'green', name: 'Лесная' },
+        { id: 'monochrome', name: 'Монохром' }
     ];
     
     // Load saved theme
