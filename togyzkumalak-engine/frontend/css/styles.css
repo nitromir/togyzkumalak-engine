@@ -277,7 +277,7 @@
 }
 
 body {
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     overflow-x: hidden; /* Убираем горизонтальный скролл */
@@ -4557,6 +4557,55 @@ body::after {
     .ai-info-panel {
         display: none !important;
     }
+}
+
+/* ============================================
+   FONT HIERARCHY SYSTEM
+   ============================================ */
+
+/* Large headings use Chess Sans */
+h1, h2, h3, h4, h5, h6,
+.panel h2, .panel h3,
+.logo h1,
+.btn-large,
+.level-btn,
+.color-btn,
+.ai-info-content h3 {
+    font-family: 'Chess Sans', sans-serif !important;
+}
+
+/* Subheadings and smaller titles use sans-serif */
+h4, h5, h6,
+.panel-annotation h4,
+.section-title,
+.stat-label,
+.model-label,
+.faq-q,
+.training-metric .label,
+.config-label {
+    font-family: sans-serif !important;
+}
+
+/* Regular text and header buttons use Segoe UI */
+body,
+p, span, div,
+.btn, .btn-icon, .btn-voice-toggle,
+.header-stats,
+.voice-status,
+.replay-info,
+.analysis-content,
+.faq-a,
+.input-field,
+.checkbox-label {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Specific overrides for monospace text */
+.analysis-panel .move-list,
+.faq-table,
+.data-file-info,
+.human-training-config pre {
+    font-family: 'Fira Code', 'Monaco', monospace !important;
 }
 
 /* Принудительно включаем скролл на body */
